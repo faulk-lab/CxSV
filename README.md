@@ -143,6 +143,13 @@ install.packages(c(
 exceed GitHub's size limits, so they're fetched/regenerated locally instead
 of committed. Paths are set in `config/config.yaml → annotation:`.
 
+The pre-generated `resources/` files (already in the naming/format the
+pipeline expects) are available for direct download here:
+[arcticsynology.synology.me](https://arcticsynology.synology.me:5001/d/s/192nJPzqq5CpT5HWgZE0M7G3v7RR9FyA/VtNjg_kikWCKrrMjMe8bgTxjbr77P_uH-j7XAlKzMWA0).
+Download and extract into `resources/` before running the pipeline.
+
+Alternatively, regenerate them yourself from the original sources:
+
 | Resource | Source | Format |
 |----------|--------|--------|
 | `genes.final.bed`   | UCSC Table Browser → knownGene → BED         | chr start end gene_name |
