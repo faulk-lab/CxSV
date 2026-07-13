@@ -1,0 +1,20 @@
+# =============================================================================
+# 1000G-ONT Remote Download — OPTIONAL, separate from the main pipeline
+# =============================================================================
+# This config is only used by scripts/download_1000g_bams.sh. It has nothing
+# to do with running the Snakemake pipeline itself — the pipeline only ever
+# reads BAMs from bamfiles/ (config/config.yaml → data_dir), regardless of
+# whether they got there via this download step or you copied your own in.
+# The pipeline has no filename convention; url_template/bai_template below
+# just describe how the 1000G-ONT bucket itself names its files remotely —
+# downloaded BAMs are saved locally as plain {sample}.bam.
+#
+# Usage:
+#   bash scripts/download_1000g_bams.sh
+# =============================================================================
+
+base_url:     "https://s3.amazonaws.com/1000g-ont"
+prefix:       "ALIGNMENT_AND_ASSEMBLY_DATA/FIRST_100/NAPU_PIPELINE/CHM13"
+url_template: "https://s3.amazonaws.com/1000g-ont/ALIGNMENT_AND_ASSEMBLY_DATA/FIRST_100/NAPU_PIPELINE/CHM13/{sample}/{sample}_PMDV_FINAL.haplotagged.bam"
+bai_template: "https://s3.amazonaws.com/1000g-ont/ALIGNMENT_AND_ASSEMBLY_DATA/FIRST_100/NAPU_PIPELINE/CHM13/{sample}/{sample}_PMDV_FINAL.haplotagged.bam.bai"
+sample_list:  "config/samples.txt"

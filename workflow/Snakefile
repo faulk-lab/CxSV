@@ -1,0 +1,93 @@
+"""
+Long-Read CxSV Detection Pipeline — Local BAM Mode
+====================================================
+Snakemake workflow for detecting complex structural variants (CxSVs)
+from long-read sequencing data using a three-caller ensemble approach.
+
+This version is LOCAL FILES ONLY.
+No remote streaming, no FIFOs, no sentinels — all complexity removed.
+
+Workflow:
+    1. bash scripts/run_pipeline.sh
+       - Runs the full Snakemake pipeline against whatever BAMs are in
+         bamfiles/ — your own, or downloaded via the optional, separate
+         scripts/download_1000g_bams.sh helper.
+       - Creates a .bam.bai index for each BAM automatically.
+
+Run from the project root — all paths in config/config.yaml are relative
+to it (bamfiles/, results/, workflow/scripts/, resources/, hs1.fa).
+
+Any *.bam file in bamfiles/ is picked up — no filename convention required.
+
+All three callers are active: Sniffles2, CuteSV, SVIM.
+CuteSV works correctly with local files (the index issue only
+affects HTTPS streaming — not relevant here).
+
+Reference: hs1.fa (CHM13v2.0 / T2T-CHM13v2)
+"""
+import os
+import sys
+
+configfile: "config/config.yaml"
+
+# ─── Globals ──────────────────────────────────────────────────────────────────
+RESULTS   = config["results_dir"]
+SCRIPTS   = config["scripts_dir"]
+REFERENCE = config["reference"]
+DATA      = config["data_dir"]
+
+# ─── Sample Discovery ─────────────────────────────────────────────────────────
+# Any *.bam file works — no naming scheme required. The sample ID is just
+# the filename with the .bam extension stripped (e.g. HG00121.bam -> HG00121).
+_wc     = glob_wildcards(os.path.join(DATA, "{sample}.bam"))
+SAMPLES = _wc.sample
+
+if not SAMPLES:
+    raise ValueError(
+        f"\nNo BAM files found in '{DATA}/'.\n"
+        f"Put any .bam file(s) there, or run scripts/download_1000g_bams.sh first.\n"
+    )
+
+print(f"[local mode] {len(SAMPLES)} samples found in {DATA}/", file=sys.stderr)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# RULES — split by pipeline phase, see workflow/rules/
+# ═══════════════════════════════════════════════════════════════════════════════
+include: "rules/indexing.smk"
+include: "rules/calling.smk"
+include: "rules/filtering_merging.smk"
+include: "rules/cxsv_discovery.smk"
+include: "rules/annotation.smk"
+include: "rules/summary.smk"
+include: "rules/plotting.smk"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MASTER RULE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+rule all:
+    input:
+        # Per-sample outputs
+        expand(f"{RESULTS}/per_sample/{{sample}}_merged_sv.vcf",  sample=SAMPLES),
+        expand(f"{RESULTS}/per_sample/{{sample}}_cxsv_only.vcf",  sample=SAMPLES),
+        expand(f"{RESULTS}/per_sample/{{sample}}_sv_summary.txt", sample=SAMPLES),
+        # Population-level call sets
+        f"{RESULTS}/final/long_read_filtered.vcf",
+        f"{RESULTS}/final/consensus.vcf",
+        f"{RESULTS}/final/cxsv_only.vcf",
+        # CxSV master table and population BED
+        f"{RESULTS}/final/cxsv_master_table.tsv",
+        f"{RESULTS}/final/cxsv_population.bed",
+        # Summary counts
+        f"{RESULTS}/final/sv_counts.tsv",
+        f"{RESULTS}/final/cxsv_count.txt",
+        # Plots
+        f"{RESULTS}/plots/sv_count_by_type.pdf",
+        f"{RESULTS}/plots/sv_size_distribution.pdf",
+        f"{RESULTS}/plots/cxsv_venn.pdf",
+        f"{RESULTS}/plots/breakpoint_resolution.pdf",
+        f"{RESULTS}/plots/genomic_context.pdf",
+        f"{RESULTS}/plots/complexity_class_heatmap.pdf",
+        f"{RESULTS}/plots/chromosome_density.pdf"

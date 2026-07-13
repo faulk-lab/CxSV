@@ -1,0 +1,33 @@
+# ─── Pipeline inputs (user-supplied or downloaded, too large for git) ────────
+bamfiles/*.bam
+bamfiles/*.bam.bai
+hs1.fa
+hs1.fa.fai
+
+# Annotation resources are fetched/regenerated locally (see README) — some
+# exceed GitHub's file size limit (e.g. repeats.final.bed is ~135 MB).
+resources/*
+!resources/.gitkeep
+
+# ─── Pipeline outputs ─────────────────────────────────────────────────────────
+results/
+logs/
+
+# ─── Snakemake run state ──────────────────────────────────────────────────────
+.snakemake/
+
+# ─── R ─────────────────────────────────────────────────────────────────────
+.Rhistory
+.RData
+.Rproj.user/
+
+# ─── Python ────────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+
+# ─── OS / editor cruft ────────────────────────────────────────────────────────
+.DS_Store
+*.swp
+
+# ─── Local tool config (machine-specific, not project source) ───────────────
+.claude/

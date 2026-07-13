@@ -1,0 +1,60 @@
+# =============================================================================
+# CxSV Long-Read Detection Pipeline — Configuration
+#
+# This file configures the core Snakemake pipeline only. It assumes BAMs are
+# already sitting in `bamfiles/` — either your own, or downloaded via the
+# optional `scripts/download_1000g_bams.sh` helper (see config/remote_1000g.yaml
+# and the README for that separate, optional step).
+# =============================================================================
+
+# ─── Local Paths ─────────────────────────────────────────────────────────────
+# All paths below are relative to the project root — the pipeline assumes
+# you run `snakemake` (or scripts/run_pipeline.sh) from this directory.
+data_dir:    "bamfiles"
+results_dir: "results"
+scripts_dir: "workflow/scripts"
+
+# Reference genome (CHM13v2.0 / hs1 — must be local, not remote)
+reference: "hs1.fa"
+
+# ─── Annotation Resources ────────────────────────────────────────────────────
+annotation:
+  genes_bed:    "resources/genes.final.bed"
+  exons_bed:    "resources/exons.filtered.bed"
+  repeats_bed:  "resources/repeats.final.bed"
+  segdup_bed:   "resources/segdup.final.bed"
+  promoter_window: 2000
+
+# ─── Thread Allocation ────────────────────────────────────────────────────────
+threads:
+  samtools:   8
+  sv_callers: 32
+
+# ─── SV Calling Parameters ───────────────────────────────────────────────────
+sv_params:
+  min_sv_len:           50
+  min_support:           3
+  min_mapq:             20
+  cluster_max_distance: 1000
+
+# ─── Quality Filtering ───────────────────────────────────────────────────────
+filter_params:
+  min_qual:       10
+  svim_min_qual:   5
+
+# ─── SURVIVOR Merging ─────────────────────────────────────────────────────────
+survivor_params:
+  max_dist:              300
+  min_callers:             1
+  min_callers_consensus:   2
+
+# ─── CxSV Classification ─────────────────────────────────────────────────────
+cxsv_params:
+  cluster_distance:  50000
+  min_breakpoints:       3
+  bnd_window:            1
+
+  chromoanag_min_window: 10000
+  chromoanag_max_window: 50000
+  chromoanag_min_svs:        3
+  max_cluster_size: 500000
