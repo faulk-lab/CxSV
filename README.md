@@ -4,7 +4,14 @@ A Snakemake pipeline that detects complex structural variants (CxSVs) from
 long-read sequencing data (PacBio / Oxford Nanopore) using an ensemble of
 three callers: **Sniffles2**, **CuteSV**, and **SVIM**.
 
-Clone this repo, drop BAMs into `bamfiles/`, and run one script.
+Clone this repo, drop BAMs into `bamfiles/<cohort>/`, and run one script.
+
+The pipeline distinguishes two kinds of cohorts (see
+[Public vs. Private CxSVs](#public-vs-private-cxsvs-cohorts) below):
+**reference** cohorts (e.g. 1000 Genomes and other non-pathogenic samples)
+build a pooled master list of common/benign CxSVs, and **query** cohorts
+(e.g. patient samples) get filtered against that list, surfacing only CxSVs
+*not* seen in the healthy-population reference — candidate pathogenic calls.
 
 ---
 
@@ -13,7 +20,7 @@ Clone this repo, drop BAMs into `bamfiles/`, and run one script.
 ```
 CxSV/
 ├── config/
-│   ├── config.yaml          ← main pipeline config (relative paths, see below)
+│   ├── config.yaml          ← main pipeline config: cohorts, paths, params
 │   ├── samples.txt           ← sample IDs (only needed for the optional 1000G download)
 │   └── remote_1000g.yaml     ← optional: 1000G-ONT download settings
 ├── workflow/
@@ -25,21 +32,27 @@ CxSV/
 │   │   ├── cxsv_discovery.smk
 │   │   ├── annotation.smk
 │   │   ├── summary.smk
-│   │   └── plotting.smk
+│   │   ├── plotting.smk
+│   │   └── private_filter.smk    ← query cohorts only, see below
 │   └── scripts/              ← scripts invoked by Snakemake rules
 │       ├── vcf_to_bed.py, classify_cxsv.py, extract_cxsv_vcf.py,
 │       │   annotate_cxsv.py, summarize_sv.py
+│       ├── filter_vcf_by_bed.py, filter_table_by_bed.py  ← private-filter helpers
 │       ├── plot_utils.R      ← shared VCF parsing / palette / theme helpers
 │       └── plot_*.R          ← one script per figure
 ├── scripts/                  ← operational scripts (not called by Snakemake)
-│   ├── run_pipeline.sh       ← runs the pipeline against bamfiles/
+│   ├── run_pipeline.sh       ← runs the pipeline for one --cohort
+│   ├── build_public_reference.py ← pools reference cohorts into the master CxSV list
 │   ├── download_1000g_bams.sh← OPTIONAL: fetch 1000G-ONT BAMs
 │   └── fetch_sample_list.py  ← OPTIONAL: discover 1000G-ONT sample IDs
-├── bamfiles/                  ← put your BAMs here (gitignored)
+├── bamfiles/
+│   ├── 1000g/                 ← example reference cohort (gitignored)
+│   └── pos_control/           ← example query cohort (gitignored)
 ├── resources/                 ← annotation BEDs (gitignored — see below)
 ├── hs1.fa, hs1.fa.fai          ← reference genome (gitignored — see below)
-├── results/                   ← pipeline outputs (gitignored)
-└── logs/                      ← per-rule logs (gitignored)
+└── results/                   ← pipeline outputs (gitignored)
+    ├── 1000g/, pos_control/, ...   ← per-cohort outputs (incl. logs/)
+    └── _public_reference/          ← pooled master_cxsv.bed
 ```
 
 ---
@@ -49,47 +62,121 @@ CxSV/
 The pipeline assumes you run it **from the project root** — every path in
 `config/config.yaml` is relative to it.
 
-### 1. Get BAMs into `bamfiles/`
+### 1. Register a cohort
+
+Add it to `config/config.yaml → cohorts:`, tagged `role: reference` (healthy/
+non-pathogenic samples, e.g. 1000 Genomes) or `role: query` (patient samples
+to be filtered against the reference):
+
+```yaml
+cohorts:
+  "1000g":        { role: reference }
+  patient_batchA: { role: query }
+```
+
+### 2. Get BAMs into `bamfiles/<cohort>/`
 
 Either:
 
-- **Use your own long-read BAMs** — copy or symlink any `*.bam` file(s) in
-  (coordinate-sorted). Any filename works — no naming scheme required. The
-  sample ID used throughout the pipeline's output is just the filename with
-  `.bam` stripped (e.g. `patient42.bam` → sample `patient42`), or
+- **Use your own long-read BAMs** — copy or symlink any `*.bam` file(s) into
+  `bamfiles/<cohort>/` (coordinate-sorted). Any filename works — no naming
+  scheme required. The sample ID used throughout the pipeline's output is
+  just the filename with `.bam` stripped (e.g. `patient42.bam` → sample
+  `patient42`), or
 - **Download the 1000G-ONT test set** (optional, separate step — see
   [Optional: 1000G-ONT Download](#optional-1000g-ont-download) below).
 
-### 2. Get the reference and annotation resources
+### 3. Get the reference and annotation resources
 
 - `hs1.fa` (CHM13v2.0 / T2T-CHM13v2) — download from the
   [T2T consortium](https://github.com/marbl/CHM13) and index with
   `samtools faidx hs1.fa`.
 - `resources/*.bed` — see [Annotation Resources](#annotation-resources) below.
 
-### 3. Run the pipeline
+### 4. Run the pipeline, per cohort
 
 ```bash
 conda activate snakemake_env
-bash scripts/run_pipeline.sh
+bash scripts/run_pipeline.sh --cohort 1000g
+bash scripts/run_pipeline.sh --cohort patient_batchA
 ```
 
 This dry-runs the DAG, then runs the full pipeline with `--keep-going`. To
 resume an interrupted run:
 
 ```bash
-bash scripts/run_pipeline.sh --resume
+bash scripts/run_pipeline.sh --cohort 1000g --resume
 ```
 
 Or drive Snakemake directly (equivalent, since `workflow/Snakefile` is
 auto-discovered from the project root):
 
 ```bash
-snakemake -n --cores 1                    # dry run
-snakemake --cores 32                      # full run
-snakemake --cores 1 \
+snakemake --config active_cohort=1000g -n --cores 1     # dry run
+snakemake --config active_cohort=1000g --cores 32       # full run
+snakemake --config active_cohort=1000g --cores 1 \
   --cluster "sbatch -p short -c {threads} --mem=32G -t 4:00:00" \
-  --jobs 20                               # SLURM example
+  --jobs 20                                             # SLURM example
+```
+
+If a **query** cohort's results include private-CxSV outputs, you'll need
+the reference master list built first — see the next section.
+
+---
+
+## Public vs. Private CxSVs (Cohorts)
+
+Every cohort runs through the identical per-sample/per-cohort pipeline
+(indexing → calling → filtering/merging → CxSV discovery → annotation →
+summary → plots) into its own `results/<cohort>/`, completely independent of
+every other cohort — adding a new patient batch never touches an earlier
+one's results, and growing the reference set never forces a full patient
+re-run.
+
+**`role: reference`** cohorts (1000 Genomes, other non-pathogenic datasets)
+are meant to be pooled into one master list of CxSVs expected in a healthy
+population. Once you've run every reference cohort you want included:
+
+```bash
+python scripts/build_public_reference.py
+```
+
+This reads `config/config.yaml → cohorts:`, pools every `role: reference`
+cohort's `results/<cohort>/final/cxsv_population.bed`, and merges them
+(`sort` + `bedtools merge`) into `results/_public_reference/master_cxsv.bed`.
+Re-run it any time you add a reference cohort or more samples to an existing
+one — already-completed cohort runs are untouched.
+
+**`role: query`** cohorts (patient samples) get three extra outputs once the
+master list exists, from `workflow/rules/private_filter.smk`:
+
+| File | Description |
+|------|--------------|
+| `final/private_cxsv_population.bed` | Cohort's CxSV loci **not** in the reference (candidate pathogenic) |
+| `final/public_overlap_cxsv_population.bed` | Cohort's CxSV loci that **are** in the reference (likely benign; QC) |
+| `final/private_cxsv_master_table.tsv` | Annotated master table, private subset only |
+| `per_sample/{sample}_private_cxsv.vcf` | **Primary per-patient deliverable** — that sample's CxSV calls with anything matching the reference removed |
+
+Matching uses a slop window, not exact overlap (`public_reference.match_window`
+in `config.yaml`, default **1000 bp**) — CxSV loci are already clustered
+regions (see `cxsv_params.cluster_distance`, 50 kb), so this only needs to
+absorb boundary differences between independently-run cohorts, not merge
+genuinely distinct loci. It sits between SURVIVOR's 300 bp per-call merge
+tolerance (`survivor_params.max_dist`) and the much wider 50 kb CxSV
+clustering window. Widen it if you're seeing likely-benign loci show up as
+private just because of a few kb of breakpoint disagreement between cohorts;
+narrow it if distinct nearby loci are getting incorrectly filtered out as
+"seen in the reference."
+
+```bash
+# 1. Run every reference cohort
+bash scripts/run_pipeline.sh --cohort 1000g
+
+# 2. Build (or rebuild) the pooled master list
+python scripts/build_public_reference.py
+
+# 3. Run a query cohort — private-CxSV outputs are produced automatically
+bash scripts/run_pipeline.sh --cohort pos_control
 ```
 
 ---
@@ -97,13 +184,14 @@ snakemake --cores 1 \
 ## Optional: 1000G-ONT Download
 
 This is entirely separate from running the pipeline — it just populates
-`bamfiles/` from the public 1000G-ONT S3 bucket. Skip it if you're using
-your own BAMs.
+`bamfiles/<cohort>/` from the public 1000G-ONT S3 bucket. Skip it if you're
+using your own BAMs.
 
 ```bash
-python scripts/fetch_sample_list.py      # writes config/samples.txt
-bash scripts/download_1000g_bams.sh      # downloads BAMs into bamfiles/
-bash scripts/run_pipeline.sh             # then run the pipeline as usual
+python scripts/fetch_sample_list.py                 # writes config/samples.txt
+bash scripts/download_1000g_bams.sh                 # downloads into bamfiles/1000g/
+bash scripts/download_1000g_bams.sh --cohort other  # or into bamfiles/other/
+bash scripts/run_pipeline.sh --cohort 1000g         # then run the pipeline as usual
 ```
 
 Bucket/prefix/URL-template settings live in `config/remote_1000g.yaml` — edit
@@ -164,15 +252,18 @@ Alternatively, regenerate them yourself from the original sources:
 
 ## Output Files
 
-### Per-Sample (`results/per_sample/`)
+Everything below lives under `results/<cohort>/` for the cohort you ran.
+
+### Per-Sample (`per_sample/`)
 
 | File                      | Description                       |
 |---------------------------|------------------------------------|
 | `{sample}_merged_sv.vcf`  | SURVIVOR merged long-read VCF     |
 | `{sample}_cxsv_only.vcf`  | CxSV subset of merged VCF         |
 | `{sample}_sv_summary.txt` | SV counts per caller + CxSV count |
+| `{sample}_private_cxsv.vcf` | **query cohorts only** — `{sample}_cxsv_only.vcf` with anything matching the reference master list removed; see [Public vs. Private CxSVs](#public-vs-private-cxsvs-cohorts) |
 
-### Final Call Sets (`results/final/`)
+### Final Call Sets (`final/`)
 
 | File                     | Description                             |
 |--------------------------|-------------------------------------------|
@@ -180,11 +271,20 @@ Alternatively, regenerate them yourself from the original sources:
 | `consensus.vcf`          | SVs supported by ≥2 callers             |
 | `cxsv_only.vcf`          | CxSV-only VCF                           |
 | `cxsv_master_table.tsv`  | 15-column annotated CxSV table          |
-| `cxsv_population.bed`    | Population-level CxSV BED for filtering |
+| `cxsv_population.bed`    | Population-level CxSV BED — for `reference` cohorts, this is what `build_public_reference.py` pools |
 | `sv_counts.tsv`          | SV counts by type                       |
 | `cxsv_count.txt`         | Total CxSV locus count                  |
+| `private_cxsv_population.bed` | **query cohorts only** — cohort's CxSV loci not in the reference |
+| `public_overlap_cxsv_population.bed` | **query cohorts only** — cohort's CxSV loci that are in the reference (QC) |
+| `private_cxsv_master_table.tsv` | **query cohorts only** — annotated master table, private subset only |
 
-### Plots (`results/plots/`)
+### Pooled Reference (`results/_public_reference/`)
+
+| File                | Description                                          |
+|---------------------|-------------------------------------------------------|
+| `master_cxsv.bed`   | Merged CxSV loci across every `role: reference` cohort, built by `scripts/build_public_reference.py` |
+
+### Plots (`plots/`)
 
 | File                           | Description                              |
 |---------------------------------|-------------------------------------------|
@@ -233,13 +333,19 @@ loci are retained (most CxSVs are expected there).
 
 ## Troubleshooting FAQ
 
+### `active_cohort '<name>' is not registered in config['cohorts']`.
+
+**Cause:** `--cohort <name>` (or `--config active_cohort=<name>`) doesn't
+match anything under `config/config.yaml → cohorts:`. **Fix:** add it there
+first, e.g. `patient_batchA: { role: query }`, or check for a typo — running
+`bash scripts/run_pipeline.sh` with no `--cohort` prints the registered list.
+
 ### `glob_wildcards` finds no samples — pipeline exits immediately.
 
-**Cause:** BAM files not in `bamfiles/` or wrong extension. **Fix:**
+**Cause:** BAM files not in `bamfiles/<cohort>/` or wrong extension. **Fix:**
 
 ```bash
-ls bamfiles/*.bam     # Should list your BAMs
-# Edit config/config.yaml → data_dir if files are elsewhere
+ls bamfiles/<cohort>/*.bam     # Should list your BAMs
 ```
 
 ### Sniffles2 fails with "ERROR: Index file not found".
@@ -248,22 +354,22 @@ ls bamfiles/*.bam     # Should list your BAMs
 not coordinate-sorted. **Fix:**
 
 ```bash
-samtools sort -o bamfiles/SAMPLE_sorted.bam bamfiles/SAMPLE.bam
-samtools index bamfiles/SAMPLE_sorted.bam
+samtools sort -o bamfiles/<cohort>/SAMPLE_sorted.bam bamfiles/<cohort>/SAMPLE.bam
+samtools index bamfiles/<cohort>/SAMPLE_sorted.bam
 ```
 
 ### CuteSV produces an empty VCF.
 
-**Cause 1:** Working directory (`results/callers/SAMPLE_cutesv_work/`)
+**Cause 1:** Working directory (`results/<cohort>/callers/SAMPLE_cutesv_work/`)
 already exists with stale temp files from a previous failed run. **Fix:**
 
 ```bash
-rm -rf results/callers/SAMPLE_cutesv_work/
-bash scripts/run_pipeline.sh --resume
+rm -rf results/<cohort>/callers/SAMPLE_cutesv_work/
+bash scripts/run_pipeline.sh --cohort <cohort> --resume
 ```
 
 **Cause 2:** Coverage too low — CuteSV requires ≥5–10× for reliable calls.
-Check with `samtools coverage bamfiles/SAMPLE.bam`.
+Check with `samtools coverage bamfiles/<cohort>/SAMPLE.bam`.
 
 ### SVIM outputs `variants.vcf` but needs a very high QUAL threshold.
 
@@ -278,7 +384,7 @@ appropriate for most datasets but may be too strict for low-coverage data.
 ≥1 record per input VCF. **Fix:**
 
 ```bash
-bcftools view -H results/callers/SAMPLE_cutesv_filtered.vcf | wc -l
+bcftools view -H results/<cohort>/callers/SAMPLE_cutesv_filtered.vcf | wc -l
 ```
 
 If 0, lower filter thresholds or check the caller logs.
@@ -333,16 +439,33 @@ install.packages("ggVennDiagram")
 mount). **Fix:**
 
 ```bash
-snakemake --touch --cores 1     # Mark all outputs up-to-date
-snakemake --cores 32            # Rerun only missing outputs
+snakemake --touch --config active_cohort=<cohort> --cores 1   # Mark up-to-date
+snakemake --config active_cohort=<cohort> --cores 32          # Rerun only missing outputs
 ```
 
 ### CxSV count is 0 even though the pipeline completed.
 
 **Cause:** Cluster parameters are too strict for your data. **Diagnosis:**
-check `results/final/cxsv_summary.tsv` — are there rows with
+check `results/<cohort>/final/cxsv_summary.tsv` — are there rows with
 `IsCxSV == NO`? **Fix:** relax `cxsv_params.min_breakpoints` in
 `config/config.yaml`, then rerun `classify_cxsv` and downstream rules.
+
+### A `query` cohort's private-CxSV rules fail: reference BED not found.
+
+**Cause:** `results/_public_reference/master_cxsv.bed` doesn't exist yet.
+**Fix:** run every `role: reference` cohort first, then build it:
+
+```bash
+bash scripts/run_pipeline.sh --cohort 1000g
+python scripts/build_public_reference.py
+```
+
+### `build_public_reference.py` exits with "No cohorts with role 'reference'".
+
+**Cause:** No cohort in `config/config.yaml → cohorts:` has `role: reference`
+(or the ones that do haven't produced `final/cxsv_population.bed` yet — the
+script lists which are `[ok]` vs `[missing]`). **Fix:** register at least one
+reference cohort and run it to completion first.
 
 ---
 

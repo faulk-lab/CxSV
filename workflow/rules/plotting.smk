@@ -8,7 +8,7 @@ rule plot_sv_count_by_type:
         vcf_lr    = f"{RESULTS}/final/long_read_filtered.vcf",
         sv_counts = f"{RESULTS}/final/sv_counts.tsv"
     output: f"{RESULTS}/plots/sv_count_by_type.pdf"
-    log:    "logs/plots/sv_count_by_type.log"
+    log:    f"{RESULTS}/logs/plots/sv_count_by_type.log"
     shell:
         "Rscript {SCRIPTS}/plot_sv_count_by_type.R {input.sv_counts} {output} \
             > {log} 2>&1"
@@ -18,7 +18,7 @@ rule plot_size_distribution:
     """Violin + boxplot: SV size distribution on log10 scale per type."""
     input:  f"{RESULTS}/final/long_read_filtered.vcf"
     output: f"{RESULTS}/plots/sv_size_distribution.pdf"
-    log:    "logs/plots/size_distribution.log"
+    log:    f"{RESULTS}/logs/plots/size_distribution.log"
     shell:
         "Rscript {SCRIPTS}/plot_size_distribution.R {input} {output} > {log} 2>&1"
 
@@ -38,7 +38,7 @@ rule plot_cxsv_venn:
     output: f"{RESULTS}/plots/cxsv_venn.pdf"
     params:
         vcf_list = lambda wc, input: ",".join(input.merged_vcfs)
-    log: "logs/plots/cxsv_venn.log"
+    log: f"{RESULTS}/logs/plots/cxsv_venn.log"
     shell:
         """
         Rscript {SCRIPTS}/plot_cxsv_venn.R \
@@ -68,7 +68,7 @@ rule plot_breakpoint_resolution:
         sniffles_files = lambda wc, input: ",".join(input.sniffles),
         cutesv_files   = lambda wc, input: ",".join(input.cutesv),
         svim_files     = lambda wc, input: ",".join(input.svim)
-    log: "logs/plots/breakpoint_resolution.log"
+    log: f"{RESULTS}/logs/plots/breakpoint_resolution.log"
     shell:
         """
         Rscript {SCRIPTS}/plot_breakpoint_resolution.R \
@@ -89,7 +89,7 @@ rule plot_genomic_context:
     """
     input:  f"{RESULTS}/final/cxsv_master_table.tsv"
     output: f"{RESULTS}/plots/genomic_context.pdf"
-    log:    "logs/plots/genomic_context.log"
+    log:    f"{RESULTS}/logs/plots/genomic_context.log"
     shell:
         "Rscript {SCRIPTS}/plot_genomic_context.R {input} {output} > {log} 2>&1"
 
@@ -103,7 +103,7 @@ rule plot_complexity_class_heatmap:
     """
     input:  f"{RESULTS}/final/cxsv_master_table.tsv"
     output: f"{RESULTS}/plots/complexity_class_heatmap.pdf"
-    log:    "logs/plots/complexity_class.log"
+    log:    f"{RESULTS}/logs/plots/complexity_class.log"
     shell:
         "Rscript {SCRIPTS}/plot_complexity_class.R {input} {output} > {log} 2>&1"
 
@@ -115,6 +115,6 @@ rule plot_chromosome_density:
     """
     input:  f"{RESULTS}/final/long_read_filtered.vcf"
     output: f"{RESULTS}/plots/chromosome_density.pdf"
-    log:    "logs/plots/chromosome_density.log"
+    log:    f"{RESULTS}/logs/plots/chromosome_density.log"
     shell:
         "Rscript {SCRIPTS}/plot_chromosome_density.R {input} {output} > {log} 2>&1"

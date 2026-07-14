@@ -2,17 +2,50 @@
 # CxSV Long-Read Detection Pipeline — Configuration
 #
 # This file configures the core Snakemake pipeline only. It assumes BAMs are
-# already sitting in `bamfiles/` — either your own, or downloaded via the
-# optional `scripts/download_1000g_bams.sh` helper (see config/remote_1000g.yaml
-# and the README for that separate, optional step).
+# already sitting in `bamfiles/<cohort>/` — either your own, or downloaded via
+# the optional `scripts/download_1000g_bams.sh` helper (see
+# config/remote_1000g.yaml and the README for that separate, optional step).
 # =============================================================================
+
+# ─── Cohorts ──────────────────────────────────────────────────────────────────
+# Each cohort is an independent set of BAMs in bamfiles/<name>/, run through
+# the identical pipeline into results/<name>/. role determines how it's used:
+#   reference — contributes to the pooled public CxSV master list (benign/
+#               common variants expected in a healthy population). Build/update
+#               the master list with scripts/build_public_reference.py after
+#               running all reference cohorts you want included.
+#   query     — gets an extra private-CxSV filtering step (see
+#               workflow/rules/private_filter.smk): loci NOT present in the
+#               reference master list are kept as candidate pathogenic/private
+#               calls. Requires the reference master list to already exist.
+cohorts:
+  "1000g":        { role: reference }   # 1000G-ONT long-read samples
+  pos_control:    { role: query }       # known nested-inversion positive control
+
+# Which cohort this invocation processes. Override per run with:
+#   snakemake --config active_cohort=<name>
+# or: bash scripts/run_pipeline.sh --cohort <name>
+active_cohort: "1000g"
 
 # ─── Local Paths ─────────────────────────────────────────────────────────────
 # All paths below are relative to the project root — the pipeline assumes
 # you run `snakemake` (or scripts/run_pipeline.sh) from this directory.
-data_dir:    "bamfiles"
-results_dir: "results"
-scripts_dir: "workflow/scripts"
+# data_dir/results_dir are derived per-run as {bamfiles,results}_root/<active_cohort>.
+bamfiles_root: "bamfiles"
+results_root:  "results"
+scripts_dir:   "workflow/scripts"
+
+# ─── Public CxSV Reference (used only when the active cohort's role is "query") ─
+public_reference:
+  master_bed: "results/_public_reference/master_cxsv.bed"
+  # Slop tolerance (bp) added to each side of every locus before comparing a
+  # query cohort's CxSV loci against the reference master list. CxSV loci are
+  # already clustered regions (see cxsv_params.cluster_distance below), so this
+  # only needs to absorb boundary differences between independently-run
+  # cohorts — not merge genuinely distinct loci. 1000 bp (bedtools window's own
+  # default) sits well below the 50 kb CxSV clustering window and above
+  # SURVIVOR's 300 bp per-call merge tolerance (survivor_params.max_dist).
+  match_window: 1000
 
 # Reference genome (CHM13v2.0 / hs1 — must be local, not remote)
 reference: "hs1.fa"

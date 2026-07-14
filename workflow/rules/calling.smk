@@ -20,7 +20,7 @@ rule run_sniffles:
         min_support = config["sv_params"]["min_support"]
     threads: config["threads"]["sv_callers"]
     log:
-        f"logs/sniffles/{{sample}}.log"
+        f"{RESULTS}/logs/sniffles/{{sample}}.log"
     shell:
         """
         sniffles \
@@ -52,7 +52,7 @@ rule run_cutesv:
         min_support = config["sv_params"]["min_support"]
     threads: config["threads"]["sv_callers"]
     log:
-        f"logs/cutesv/{{sample}}.log"
+        f"{RESULTS}/logs/cutesv/{{sample}}.log"
     shell:
         """
         mkdir -p {params.workdir}
@@ -86,7 +86,7 @@ rule run_svim:
         min_mapq         = config["sv_params"]["min_mapq"],
         cluster_max_dist = config["sv_params"]["cluster_max_distance"]
     log:
-        f"logs/svim/{{sample}}.log"
+        f"{RESULTS}/logs/svim/{{sample}}.log"
     shell:
         """
         mkdir -p {params.outdir}

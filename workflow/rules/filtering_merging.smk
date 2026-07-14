@@ -7,7 +7,7 @@ rule filter_sniffles:
     input:  f"{RESULTS}/callers/{{sample}}_sniffles.vcf"
     output: f"{RESULTS}/callers/{{sample}}_sniffles_filtered.vcf"
     params: min_qual = config["filter_params"]["min_qual"]
-    log:    f"logs/filter/{{sample}}_sniffles.log"
+    log:    f"{RESULTS}/logs/filter/{{sample}}_sniffles.log"
     shell:
         """
         bcftools view -f PASS -e 'QUAL < {params.min_qual}' \
@@ -19,7 +19,7 @@ rule filter_cutesv:
     """Filter CuteSV VCF: keep PASS calls only."""
     input:  f"{RESULTS}/callers/{{sample}}_cutesv.vcf"
     output: f"{RESULTS}/callers/{{sample}}_cutesv_filtered.vcf"
-    log:    f"logs/filter/{{sample}}_cutesv.log"
+    log:    f"{RESULTS}/logs/filter/{{sample}}_cutesv.log"
     shell:  "bcftools view -f PASS {input} -o {output} -O v > {log} 2>&1"
 
 
@@ -32,7 +32,7 @@ rule filter_svim:
     input:  f"{RESULTS}/callers/{{sample}}_svim/variants.vcf"
     output: f"{RESULTS}/callers/{{sample}}_svim_filtered.vcf"
     params: min_qual = config["filter_params"]["svim_min_qual"]
-    log:    f"logs/filter/{{sample}}_svim.log"
+    log:    f"{RESULTS}/logs/filter/{{sample}}_svim.log"
     shell:
         """
         bcftools view -e 'QUAL < {params.min_qual}' \
@@ -57,7 +57,7 @@ rule merge_sv_callers:
         max_dist    = config["survivor_params"]["max_dist"],
         min_callers = config["survivor_params"]["min_callers"],
         min_sv_len  = config["sv_params"]["min_sv_len"]
-    log: f"logs/merge/{{sample}}_merge.log"
+    log: f"{RESULTS}/logs/merge/{{sample}}_merge.log"
     shell:
         """
         echo {input.cutesv}   >  {output.filelist}
@@ -85,7 +85,7 @@ rule merge_all_samples:
     params:
         max_dist   = config["survivor_params"]["max_dist"],
         min_sv_len = config["sv_params"]["min_sv_len"]
-    log: "logs/merge/all_samples.log"
+    log: f"{RESULTS}/logs/merge/all_samples.log"
     shell:
         """
         find {RESULTS}/per_sample -name "*_merged_sv.vcf" \
@@ -113,7 +113,7 @@ rule make_consensus_vcf:
         max_dist    = config["survivor_params"]["max_dist"],
         min_callers = config["survivor_params"]["min_callers_consensus"],
         min_sv_len  = config["sv_params"]["min_sv_len"]
-    log: "logs/consensus_vcf.log"
+    log: f"{RESULTS}/logs/consensus_vcf.log"
     shell:
         """
         find {RESULTS}/per_sample -name "*_merged_sv.vcf" \

@@ -17,6 +17,6 @@ rule index_bam:
         bai = f"{DATA}/{{sample}}.bam.bai"
     threads: config["threads"]["samtools"]
     log:
-        f"logs/index_bam/{{sample}}.log"
+        f"{RESULTS}/logs/index_bam/{{sample}}.log"
     shell:
         "samtools index -@ {threads} {input.bam} > {log} 2>&1"

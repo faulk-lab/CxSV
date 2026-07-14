@@ -6,7 +6,7 @@ rule calculate_sv_counts:
     """Tabulate SV counts by type (DEL/DUP/INV/INS/BND/TRA) across all samples."""
     input:  f"{RESULTS}/final/long_read_filtered.vcf"
     output: f"{RESULTS}/final/sv_counts.tsv"
-    log:    "logs/sv_counts.log"
+    log:    f"{RESULTS}/logs/sv_counts.log"
     shell:
         r"""
         bcftools view {input} | grep -v "^#" \
@@ -42,7 +42,7 @@ rule summarize_sv_overlap:
         cxsv_vcf = f"{RESULTS}/per_sample/{{sample}}_cxsv_only.vcf",
         summary  = f"{RESULTS}/final/cxsv_summary.tsv"
     output: f"{RESULTS}/per_sample/{{sample}}_sv_summary.txt"
-    log:    f"logs/summary/{{sample}}.log"
+    log:    f"{RESULTS}/logs/summary/{{sample}}.log"
     shell:
         """
         python {SCRIPTS}/summarize_sv.py \

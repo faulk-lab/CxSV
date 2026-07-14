@@ -3,18 +3,19 @@
 # download_1000g_bams.sh — OPTIONAL 1000G-ONT BAM downloader
 # =============================================================================
 # Downloads long-read BAMs from the public 1000G-ONT S3 bucket into
-# bamfiles/, saved as {sample}.bam — the pipeline itself has no naming
-# requirement, so this is just this script's own local convention. This
-# download is entirely optional and separate from the pipeline itself — if
-# you already have your own local BAMs, just copy/symlink them into
-# bamfiles/ (any filename works) and skip this script, then run
-# scripts/run_pipeline.sh directly.
+# bamfiles/<cohort>/, saved as {sample}.bam — the pipeline itself has no
+# naming requirement, so this is just this script's own local convention.
+# This download is entirely optional and separate from the pipeline itself —
+# if you already have your own local BAMs, just copy/symlink them into
+# bamfiles/<cohort>/ (any filename works) and skip this script, then run
+# scripts/run_pipeline.sh --cohort <cohort> directly.
 #
 # S3 bucket settings are documented in config/remote_1000g.yaml.
 #
 # Usage:
-#   bash scripts/download_1000g_bams.sh              # download all listed samples
-#   bash scripts/download_1000g_bams.sh --verify-only # just check what's present
+#   bash scripts/download_1000g_bams.sh                     # download into bamfiles/1000g/
+#   bash scripts/download_1000g_bams.sh --cohort <name>      # download into bamfiles/<name>/
+#   bash scripts/download_1000g_bams.sh --verify-only        # just check what's present
 #
 # Prerequisites:
 #   conda install -c conda-forge awscli     # for fast parallel downloads (optional)
@@ -33,7 +34,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 SAMPLES_FILE="$PROJECT_DIR/config/samples.txt"
-DATA_DIR="$PROJECT_DIR/bamfiles"
+COHORT="1000g"
 
 S3_BUCKET="1000g-ont"
 S3_PREFIX="ALIGNMENT_AND_ASSEMBLY_DATA/FIRST_100/NAPU_PIPELINE/CHM13"
@@ -48,26 +49,30 @@ PARALLEL_DOWNLOADS="${PARALLEL_DOWNLOADS:-4}"
 
 # ─── Argument parsing ────────────────────────────────────────────────────────
 VERIFY_ONLY=false
-for arg in "$@"; do
-    case "$arg" in
-        --verify-only) VERIFY_ONLY=true ;;
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --cohort)      COHORT="$2"; shift 2 ;;
+        --verify-only) VERIFY_ONLY=true; shift ;;
         --help|-h)
-            head -20 "$0" | grep '^#' | sed 's/^# \{0,1\}//'
+            head -22 "$0" | grep '^#' | sed 's/^# \{0,1\}//'
             exit 0
             ;;
         *)
-            echo "Unknown option: $arg"
-            echo "Usage: bash scripts/download_1000g_bams.sh [--verify-only]"
+            echo "Unknown option: $1"
+            echo "Usage: bash scripts/download_1000g_bams.sh [--cohort <name>] [--verify-only]"
             exit 1
             ;;
     esac
 done
+
+DATA_DIR="$PROJECT_DIR/bamfiles/$COHORT"
 
 echo ""
 echo "╔══════════════════════════════════════════════════════════════╗"
 echo "║       1000G-ONT BAM Download (optional)                      ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo ""
+echo "Cohort            : $COHORT"
 echo "Target directory  : $DATA_DIR"
 echo ""
 
@@ -102,7 +107,7 @@ if [ "$VERIFY_ONLY" = true ]; then
     exit 0
 fi
 
-# Check disk space available under bamfiles/
+# Check disk space available under bamfiles/<cohort>/
 AVAILABLE_GB=$(df -BG "$DATA_DIR" | awk 'NR==2 {gsub("G",""); print $4}')
 NEEDED_GB=$(( TOTAL * 118 ))
 echo "Disk available    : ~${AVAILABLE_GB} GB"
@@ -175,7 +180,7 @@ printf '%s\n' "${SAMPLES[@]}" \
 
 echo ""
 N_DOWNLOADED=$(ls "$DATA_DIR"/*.bam 2>/dev/null | wc -l || true)
-echo "Download complete: $N_DOWNLOADED / $TOTAL BAMs in bamfiles/"
+echo "Download complete: $N_DOWNLOADED / $TOTAL BAMs in bamfiles/$COHORT/"
 echo "Total disk usage: $(du -sh "$DATA_DIR" 2>/dev/null | cut -f1)"
 echo ""
 
@@ -196,4 +201,4 @@ fi
 
 echo "All $TOTAL BAMs verified."
 echo ""
-echo "Next: bash scripts/run_pipeline.sh"
+echo "Next: bash scripts/run_pipeline.sh --cohort $COHORT"

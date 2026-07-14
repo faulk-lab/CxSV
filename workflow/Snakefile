@@ -7,17 +7,35 @@ from long-read sequencing data using a three-caller ensemble approach.
 This version is LOCAL FILES ONLY.
 No remote streaming, no FIFOs, no sentinels — all complexity removed.
 
+Cohorts:
+    Each invocation processes exactly one cohort (config['active_cohort']),
+    reading bamfiles/<cohort>/ and writing results/<cohort>/. Cohorts are
+    registered in config['cohorts'] with a role:
+      reference — contributes to the pooled public CxSV master list
+      query     — additionally runs the private-CxSV filtering module
+                  (workflow/rules/private_filter.smk), subtracting out any
+                  CxSV loci already present in that reference master list
+    See scripts/run_pipeline.sh --cohort <name> and
+    scripts/build_public_reference.py.
+
 Workflow:
-    1. bash scripts/run_pipeline.sh
+    1. bash scripts/run_pipeline.sh --cohort <name>
        - Runs the full Snakemake pipeline against whatever BAMs are in
-         bamfiles/ — your own, or downloaded via the optional, separate
-         scripts/download_1000g_bams.sh helper.
+         bamfiles/<name>/ — your own, or downloaded via the optional,
+         separate scripts/download_1000g_bams.sh helper.
        - Creates a .bam.bai index for each BAM automatically.
+    2. For "reference" cohorts, once all of them have been run:
+       python scripts/build_public_reference.py
+       - Pools every reference cohort's cxsv_population.bed into the master
+         public CxSV list at results/_public_reference/master_cxsv.bed.
+    3. For "query" cohorts, re-running step 1 also produces the private
+       (non-reference) CxSV calls once the master list from step 2 exists.
 
 Run from the project root — all paths in config/config.yaml are relative
 to it (bamfiles/, results/, workflow/scripts/, resources/, hs1.fa).
 
-Any *.bam file in bamfiles/ is picked up — no filename convention required.
+Any *.bam file in bamfiles/<cohort>/ is picked up — no filename convention
+required.
 
 All three callers are active: Sniffles2, CuteSV, SVIM.
 CuteSV works correctly with local files (the index issue only
@@ -30,11 +48,32 @@ import sys
 
 configfile: "config/config.yaml"
 
+# ─── Cohort Selection ─────────────────────────────────────────────────────────
+COHORT      = config.get("active_cohort")
+COHORTS_CFG = config.get("cohorts", {})
+
+if not COHORT:
+    raise ValueError(
+        "config['active_cohort'] is required — set it in config/config.yaml "
+        "or pass --config active_cohort=<name>"
+    )
+if COHORT not in COHORTS_CFG:
+    raise ValueError(
+        f"active_cohort '{COHORT}' is not registered in config['cohorts'].\n"
+        f"Known cohorts: {', '.join(COHORTS_CFG) or '(none registered)'}"
+    )
+
+ROLE = COHORTS_CFG[COHORT].get("role")
+if ROLE not in ("reference", "query"):
+    raise ValueError(
+        f"cohort '{COHORT}' has role '{ROLE}' — must be 'reference' or 'query'"
+    )
+
 # ─── Globals ──────────────────────────────────────────────────────────────────
-RESULTS   = config["results_dir"]
+DATA      = f"{config.get('bamfiles_root', 'bamfiles')}/{COHORT}"
+RESULTS   = f"{config.get('results_root', 'results')}/{COHORT}"
 SCRIPTS   = config["scripts_dir"]
 REFERENCE = config["reference"]
-DATA      = config["data_dir"]
 
 # ─── Sample Discovery ─────────────────────────────────────────────────────────
 # Any *.bam file works — no naming scheme required. The sample ID is just
@@ -48,7 +87,7 @@ if not SAMPLES:
         f"Put any .bam file(s) there, or run scripts/download_1000g_bams.sh first.\n"
     )
 
-print(f"[local mode] {len(SAMPLES)} samples found in {DATA}/", file=sys.stderr)
+print(f"[cohort={COHORT} role={ROLE}] {len(SAMPLES)} samples found in {DATA}/", file=sys.stderr)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -61,6 +100,7 @@ include: "rules/cxsv_discovery.smk"
 include: "rules/annotation.smk"
 include: "rules/summary.smk"
 include: "rules/plotting.smk"
+include: "rules/private_filter.smk"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -90,4 +130,11 @@ rule all:
         f"{RESULTS}/plots/breakpoint_resolution.pdf",
         f"{RESULTS}/plots/genomic_context.pdf",
         f"{RESULTS}/plots/complexity_class_heatmap.pdf",
-        f"{RESULTS}/plots/chromosome_density.pdf"
+        f"{RESULTS}/plots/chromosome_density.pdf",
+        # Private-CxSV filtering (query cohorts only — see rules/private_filter.smk)
+        *([
+            f"{RESULTS}/final/private_cxsv_population.bed",
+            f"{RESULTS}/final/public_overlap_cxsv_population.bed",
+            f"{RESULTS}/final/private_cxsv_master_table.tsv",
+        ] + expand(f"{RESULTS}/per_sample/{{sample}}_private_cxsv.vcf", sample=SAMPLES)
+          if ROLE == "query" else [])

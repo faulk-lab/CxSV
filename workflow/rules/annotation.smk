@@ -25,7 +25,7 @@ rule annotate_cxsv:
     output:
         master_table = f"{RESULTS}/final/cxsv_master_table.tsv",
         pop_bed      = f"{RESULTS}/final/cxsv_population.bed"
-    log: "logs/annotate_cxsv.log"
+    log: f"{RESULTS}/logs/annotate_cxsv.log"
     shell:
         """
         python {SCRIPTS}/annotate_cxsv.py \

@@ -16,7 +16,7 @@ rule vcf_to_bed:
         bed = f"{RESULTS}/final/merged_sv.bed"
     params:
         window = config["cxsv_params"]["bnd_window"]
-    log: "logs/vcf_to_bed.log"
+    log: f"{RESULTS}/logs/vcf_to_bed.log"
     shell:
         """
         python {input.script} \
@@ -40,7 +40,7 @@ rule cluster_sv:
         clusters_bed = f"{RESULTS}/final/clusters.bed"
     params:
         cluster_dist = config["cxsv_params"]["cluster_distance"]
-    log: "logs/cluster_sv.log"
+    log: f"{RESULTS}/logs/cluster_sv.log"
     shell:
         """
         bedtools sort -i {input} \
@@ -70,7 +70,7 @@ rule classify_cxsv:
     """
     input:  f"{RESULTS}/final/clusters.bed"
     output: f"{RESULTS}/final/cxsv_summary.tsv"
-    log:    "logs/classify_cxsv.log"
+    log:    f"{RESULTS}/logs/classify_cxsv.log"
     params:
         min_bp      = config["cxsv_params"]["min_breakpoints"],
         max_win     = config["cxsv_params"]["cluster_distance"],
@@ -107,7 +107,7 @@ rule count_cxsv:
     """
     input:  f"{RESULTS}/final/cxsv_summary.tsv"
     output: f"{RESULTS}/final/cxsv_count.txt"
-    log:    "logs/count_cxsv.log"
+    log:    f"{RESULTS}/logs/count_cxsv.log"
     shell:
         r"""
         awk 'BEGIN{{OFS="\t"}}
@@ -135,7 +135,7 @@ rule extract_cxsv_vcf:
         vcf     = f"{RESULTS}/final/long_read_filtered.vcf",
         summary = f"{RESULTS}/final/cxsv_summary.tsv"
     output: f"{RESULTS}/final/cxsv_only.vcf"
-    log: "logs/extract_cxsv_vcf.log"
+    log: f"{RESULTS}/logs/extract_cxsv_vcf.log"
     shell:
         """
         python {SCRIPTS}/extract_cxsv_vcf.py \
@@ -152,7 +152,7 @@ rule extract_per_sample_cxsv:
         vcf     = f"{RESULTS}/per_sample/{{sample}}_merged_sv.vcf",
         summary = f"{RESULTS}/final/cxsv_summary.tsv"
     output: f"{RESULTS}/per_sample/{{sample}}_cxsv_only.vcf"
-    log: f"logs/cxsv_vcf/{{sample}}.log"
+    log: f"{RESULTS}/logs/cxsv_vcf/{{sample}}.log"
     shell:
         """
         python {SCRIPTS}/extract_cxsv_vcf.py \
