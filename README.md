@@ -1,261 +1,212 @@
-# CxSV — Long-Read Complex Structural Variant Detection Pipeline
+# CxSV — Long-Read Complex Structural Variant Detection
 
-A Snakemake pipeline that detects complex structural variants (CxSVs) from
-long-read sequencing data (PacBio / Oxford Nanopore) using an ensemble of
-three callers: **Sniffles2**, **CuteSV**, and **SVIM**.
+Detects complex structural variants (CxSVs) in long-read genomes (Oxford
+Nanopore, PacBio HiFi) with a three-caller ensemble (**Sniffles2**, **cuteSV**,
+**SVIM**). It then separates **public** CxSVs, seen in a background panel of
+presumed-healthy genomes, from **private** ones in a patient: the candidates
+for pathogenic events.
 
-Clone this repo, drop BAMs or CRAMs into `bamfiles/<cohort>/` (or list them in a
-sample sheet), and run one script.
+The repository holds two Snakemake workflows that share one calling module:
 
-The pipeline distinguishes two kinds of cohorts (see
-[Public vs. Private CxSVs](#public-vs-private-cxsvs-cohorts) below):
-**reference** cohorts (e.g. 1000 Genomes and other non-pathogenic samples)
-build a pooled master list of common/benign CxSVs, and **query** cohorts
-(e.g. patient samples) get filtered against that list, surfacing only CxSVs
-*not* seen in the healthy-population reference — candidate pathogenic calls.
+| Workflow | Runs where | Input | Product |
+|---|---|---|---|
+| **Panel builder** `workflow/panel/Snakefile` | lab fleet | background cohorts (hundreds–thousands of genomes) | a **panel release**: CxSV loci with carrier counts, denominators, and the calling fingerprint |
+| **Patient scorer** `workflow/patient/Snakefile` | anywhere, incl. a restricted environment | one patient run (or a family) + a panel release | every patient CxSV labelled public/private with its panel carrier count |
 
----
+The patient scorer never needs the background reads, only the panel release,
+so it can run where patient data must stay.
 
-## Directory Structure
-
-```
-CxSV/
-├── config/
-│   ├── config.yaml          ← main pipeline config: cohorts, paths, params
-│   ├── faulk_lab_background.yaml ← site overlay: background-panel cohorts on the lab NAS
-│   ├── samples.txt           ← sample IDs (only needed for the optional 1000G download)
-│   └── remote_1000g.yaml     ← optional: 1000G-ONT download settings
-├── workflow/
-│   ├── Snakefile
-│   ├── rules/                ← rules split by pipeline phase
-│   │   ├── common.smk          ← sample discovery (dir or sheet), CRAM reference handling
-│   │   ├── indexing.smk        ← reference cache, CRAM M5 check, BAM/CRAM indexes
-│   │   ├── calling.smk
-│   │   ├── filtering_merging.smk
-│   │   ├── cxsv_discovery.smk
-│   │   ├── annotation.smk
-│   │   ├── summary.smk
-│   │   ├── plotting.smk
-│   │   └── private_filter.smk    ← query cohorts only, see below
-│   └── scripts/              ← scripts invoked by Snakemake rules
-│       ├── vcf_to_bed.py, classify_cxsv.py, extract_cxsv_vcf.py,
-│       │   annotate_cxsv.py, summarize_sv.py
-│       ├── filter_vcf_by_bed.py, filter_table_by_bed.py  ← private-filter helpers
-│       ├── plot_utils.R      ← shared VCF parsing / palette / theme helpers
-│       └── plot_*.R          ← one script per figure
-├── scripts/                  ← operational scripts (not called by Snakemake)
-│   ├── run_pipeline.sh       ← runs the pipeline for one --cohort
-│   ├── build_public_reference.py ← pools reference cohorts into the master CxSV list
-│   ├── download_1000g_bams.sh← OPTIONAL: fetch 1000G-ONT BAMs
-│   └── fetch_sample_list.py  ← OPTIONAL: discover 1000G-ONT sample IDs
-├── bamfiles/
-│   ├── 1000g/                 ← example reference cohort (gitignored)
-│   └── pos_control/           ← example query cohort (gitignored)
-├── resources/                 ← annotation BEDs (gitignored — see below)
-├── hs1.fa, hs1.fa.fai          ← reference genome (gitignored — see below)
-└── results/                   ← pipeline outputs (gitignored)
-    ├── 1000g/, pos_control/, ...   ← per-cohort outputs (incl. logs/)
-    └── _public_reference/          ← pooled master_cxsv.bed
-```
+Planned work is in [`docs/ROADMAP.md`](docs/ROADMAP.md). The code that acquired
+and aligned the lab's background panel is in [`acquisition/`](acquisition/README.md).
 
 ---
 
-## Quick Start
+## Why the two sides must be called identically
 
-The pipeline assumes you run it **from the project root** — every path in
-`config/config.yaml` is relative to it.
+A patient CxSV is private only relative to a panel built the same way.
+Different caller versions, parameters, reference sequence or discovery code
+would make some patient calls look private purely because of that difference.
+Two mechanisms prevent this:
 
-### 1. Register a cohort
+1. **One parameter file.** Everything that decides which SVs and CxSV loci a
+   genome has lives in `config/calling.yaml` (sections marked
+   `[FINGERPRINTED]`), read by both workflows.
+2. **A calling fingerprint.** Each workflow writes `calling_fingerprint.json`:
+   - the fingerprinted parameters;
+   - every reference contig's name, length and MD5;
+   - the tool versions;
+   - a hash of the code that defines CxSV loci (comment and blank lines
+     ignored).
 
-Add it to `config/config.yaml → cohorts:`, tagged `role: reference` (healthy/
-non-pathogenic samples, e.g. 1000 Genomes) or `role: query` (patient samples
-to be filtered against the reference):
+   The panel release carries the panel's fingerprint, and the patient workflow
+   stops at `check_panel_compatibility` if its own differs, listing every
+   difference. (`allow_fingerprint_mismatch: true` overrides this for
+   exploratory work only.)
+
+CxSVs are **discovered per sample**: only one genome's own SVs are clustered
+and classified, in both workflows. The panel then counts carriers per locus.
+(Pooling SVs across many genomes before clustering, as the first version of
+this pipeline did, chains SVs from different people into artificial loci; at
+about 90 samples the pooled list already covered ~12% of the genome.)
+
+---
+
+## Layout
+
+```
+config/
+  calling.yaml            shared + [FINGERPRINTED] calling/discovery parameters, reference, annotation
+  panel.yaml              panel builder: cohorts, output root
+  patient.yaml            patient scorer: runs, panel_release, panel_match
+  sites/                  site overlays (paths, cohort sheets), e.g. faulk_lab_panel.yaml
+envs/
+  cxsv-pipeline.yaml      the one pinned environment for both workflows
+  cxsv-pipeline.lock.yaml exact solved versions (conda env export)
+workflow/
+  panel/Snakefile         panel builder entry point
+  patient/Snakefile       patient scorer entry point
+  lib/                    plain-Python modules (unit-tested): sample discovery, fingerprint
+  rules/
+    common.smk            shared: inputs, wildcards, CRAM reference cache env
+    indexing.smk          shared: reference cache, CRAM M5 check, BAM/CRAM indexes
+    calling.smk           shared, fingerprinted: Sniffles2 / cuteSV / SVIM
+    per_sample.smk        shared, fingerprinted: filter, merge, CxSV discovery, annotation
+    sample_report.smk     shared: per-sample text report
+    fingerprint.smk       shared: tool versions + calling fingerprint
+    panel_cohort.smk      panel: per-cohort population call sets and QC plots
+    panel_aggregate.smk   panel: carrier table and panel release
+    patient_private.smk   patient: compatibility check, public/private labels, plots
+  scripts/                scripts invoked by the rules (Python, R)
+scripts/
+  run_pipeline.sh         `run_pipeline.sh panel|patient [--extra-config FILE] [--resume] [--dry-run]`
+acquisition/              background-panel acquisition and alignment (lab fleet)
+docs/ROADMAP.md
+```
+
+---
+
+## Quick start
+
+Run everything **from the project root**; relative paths in the configs are
+relative to it.
+
+### 1. Environment
+
+```bash
+mamba env create -f envs/cxsv-pipeline.yaml
+conda activate cxsv-pipeline
+```
+
+Caller versions are part of the panel's identity: use the same environment
+(or the same container, roadmap item 2) for the panel and every patient.
+
+### 2. Reference and annotation
+
+- `reference`: T2T-CHM13v2 with UCSC `hs1` contig names (`chr1`..`chrM`); index
+  it with `samtools faidx`. The RefSeq copy (`NC_*` names) is **not** compatible.
+- Annotation BEDs: see [Annotation Resources](#annotation-resources).
+
+Point `reference`, `ref_cache` and `annotation` at them in a site overlay, e.g.
+`config/sites/<site>_panel.yaml`.
+
+### 3. Build the panel
+
+Declare background cohorts under `panel_cohorts:` in the site overlay. Each
+cohort is either a directory (`bamfiles/<name>/*.bam|*.cram`) or a sample sheet:
 
 ```yaml
-cohorts:
-  "1000g":        { role: reference }
-  patient_batchA: { role: query }
+panel_cohorts:
+  my_ont_cohort:               # directory mode: bamfiles/my_ont_cohort/
+    platform: ONT
+  my_sheet_cohort:
+    samples: /data/registry/my_sheet_cohort.tsv
+    min_coverage: 17           # keep rows with coverage_x >= 17
+    platform: PACBIO           # default when the sheet has no platform column
 ```
 
-### 2. Give the cohort its alignments (BAM or CRAM)
-
-Either:
-
-- **Drop files into `bamfiles/<cohort>/`** — copy or symlink any coordinate-sorted
-  `*.bam` or `*.cram` file(s) there. Any filename works — no naming scheme
-  required. The sample ID used throughout the pipeline's output is the filename
-  with `.bam`/`.cram` stripped (e.g. `patient42.cram` → sample `patient42`).
-  Missing `.bai`/`.crai` indexes are created automatically, or
-- **Point the cohort at a sample sheet** — for alignments that live elsewhere
-  (e.g. a shared, read-only datasets tree), add `samples:` to the cohort:
-
-  ```yaml
-  cohorts:
-    my_background:
-      role: reference
-      samples: /path/to/my_background.tsv   # sample_id  alignment  [index]  [coverage_x]
-      min_coverage: 17                       # optional: keep rows with coverage_x >= 17
-  ```
-
-  The sheet is tab-separated with a header; `index` defaults to the alignment
-  path plus `.bai`/`.crai`. Indexes must already exist — the pipeline never
-  writes into a sample sheet's directories. Extra columns are ignored, or
-- **Download the 1000G-ONT test set** (optional, separate step — see
-  [Optional: 1000G-ONT Download](#optional-1000g-ont-download) below).
-
-**CRAM inputs** must have been encoded against the pipeline's `reference`. The
-pipeline builds an MD5-keyed htslib cache of that FASTA once
-(`ref_cache`, ~3.1 GB for hs1), points every tool at it through `REF_PATH`, and
-checks each CRAM's `@SQ` M5 tags against it before calling. CRAMs therefore
-decode on any machine, regardless of the reference path recorded in their
-header, and a CRAM made against a different assembly stops with a clear error
-instead of being mis-decoded. Sniffles2 2.8.1, CuteSV 2.1.4 and SVIM 2.0.0 give
-identical call sets from a matched BAM/CRAM pair.
-
-**Site-specific cohorts** go in a second config file layered over
-`config/config.yaml` (nested keys merge), e.g. the lab's background panel:
+A sample sheet is tab-separated with a header. Required columns are
+`sample_id` and `alignment`; optional ones are `index`, `individual_id`,
+`platform` and `coverage_x`. `individual_id` is what carriers are counted by,
+so one person sequenced in two cohorts counts once. A sheet's indexes must
+already exist, because the pipeline never writes into its directories.
 
 ```bash
-bash scripts/run_pipeline.sh --cohort 1kGP_ONT_1019_CHM13 \
-     --extra-config config/faulk_lab_background.yaml
+bash scripts/run_pipeline.sh panel --extra-config config/sites/<site>_panel.yaml --dry-run
+bash scripts/run_pipeline.sh panel --extra-config config/sites/<site>_panel.yaml
 ```
 
-### 3. Get the reference and annotation resources
+### 4. Score a patient
 
-- `hs1.fa` (CHM13v2.0 / T2T-CHM13v2) — download from the
-  [T2T consortium](https://github.com/marbl/CHM13) and index with
-  `samtools faidx hs1.fa`.
-- `resources/*.bed` — see [Annotation Resources](#annotation-resources) below.
-
-### 4. Run the pipeline, per cohort
+```yaml
+# config/sites/<site>_patient.yaml
+reference: /restricted/refs/hs1.fa
+ref_cache: /restricted/refs/ref_cache
+panel_release: /restricted/cxsv_panel/release
+patient_runs:
+  family_042:
+    samples: /restricted/family_042/sheet.tsv
+```
 
 ```bash
-conda activate snakemake_env
-bash scripts/run_pipeline.sh --cohort 1000g
-bash scripts/run_pipeline.sh --cohort patient_batchA
+bash scripts/run_pipeline.sh patient --extra-config config/sites/<site>_patient.yaml
 ```
 
-This dry-runs the DAG, then runs the full pipeline with `--keep-going`. To
-resume an interrupted run:
+Do not override any `[FINGERPRINTED]` section in a patient overlay; the run
+would stop at the compatibility check.
 
-```bash
-bash scripts/run_pipeline.sh --cohort 1000g --resume
-```
-
-Or drive Snakemake directly (equivalent, since `workflow/Snakefile` is
-auto-discovered from the project root):
-
-```bash
-snakemake --config active_cohort=1000g -n --cores 1     # dry run
-snakemake --config active_cohort=1000g --cores 32       # full run
-snakemake --config active_cohort=1000g --cores 1 \
-  --cluster "sbatch -p short -c {threads} --mem=32G -t 4:00:00" \
-  --jobs 20                                             # SLURM example
-```
-
-If a **query** cohort's results include private-CxSV outputs, you'll need
-the reference master list built first — see the next section.
+**CRAM inputs** must have been encoded against `reference`. The pipeline builds
+an MD5-keyed htslib cache of it once (`ref_cache`, ~3.1 GB for hs1), points
+every tool at it through `REF_PATH` (so no network access is needed), and
+checks each CRAM's `@SQ` M5 tags against it before calling. Sniffles2 2.8.1,
+cuteSV 2.1.4 and SVIM 2.0.0 give identical call sets from a matched BAM/CRAM
+pair.
 
 ---
 
-## Public vs. Private CxSVs (Cohorts)
+## Outputs
 
-Every cohort runs through the identical per-sample/per-cohort pipeline
-(indexing → calling → filtering/merging → CxSV discovery → annotation →
-summary → plots) into its own `results/<cohort>/`, completely independent of
-every other cohort — adding a new patient batch never touches an earlier
-one's results, and growing the reference set never forces a full patient
-re-run.
+### Per sample — both workflows
 
-**`role: reference`** cohorts (1000 Genomes, other non-pathogenic datasets)
-are meant to be pooled into one master list of CxSVs expected in a healthy
-population. Once you've run every reference cohort you want included:
-
-```bash
-python scripts/build_public_reference.py
-```
-
-This reads `config/config.yaml → cohorts:`, pools every `role: reference`
-cohort's `results/<cohort>/final/cxsv_population.bed`, and merges them
-(`sort` + `bedtools merge`) into `results/_public_reference/master_cxsv.bed`.
-Re-run it any time you add a reference cohort or more samples to an existing
-one — already-completed cohort runs are untouched.
-
-**`role: query`** cohorts (patient samples) get three extra outputs once the
-master list exists, from `workflow/rules/private_filter.smk`:
+`results/<panel|patient>/samples/<cohort>/<sample>/`
 
 | File | Description |
-|------|--------------|
-| `final/private_cxsv_population.bed` | Cohort's CxSV loci **not** in the reference (candidate pathogenic) |
-| `final/public_overlap_cxsv_population.bed` | Cohort's CxSV loci that **are** in the reference (likely benign; QC) |
-| `final/private_cxsv_master_table.tsv` | Annotated master table, private subset only |
-| `per_sample/{sample}_private_cxsv.vcf` | **Primary per-patient deliverable** — that sample's CxSV calls with anything matching the reference removed |
+|---|---|
+| `callers/{sniffles,cutesv,svim/variants}.vcf` | raw calls; `callers/sniffles.snf` for joint genotyping |
+| `merged_sv.vcf` | SURVIVOR merge of the three callers (SUPP_VEC bit order CuteSV, SVIM, Sniffles2) |
+| `cxsv/cxsv_summary.tsv` | every SV cluster, `IsCxSV` and the criteria (C1–C5) that fired |
+| `cxsv/cxsv_only.vcf` | merged calls inside this sample's CxSV loci |
+| `cxsv/cxsv_master_table.tsv` | annotated CxSV loci (genes, exons, repeats, segdups, complexity class) |
+| `cxsv/cxsv_loci.bed` | Chr, Start, End, Exon_Disrupt |
+| `sv_summary.txt` | per-sample text report |
 
-Matching uses a slop window, not exact overlap (`public_reference.match_window`
-in `config.yaml`, default **1000 bp**) — CxSV loci are already clustered
-regions (see `cxsv_params.cluster_distance`, 50 kb), so this only needs to
-absorb boundary differences between independently-run cohorts, not merge
-genuinely distinct loci. It sits between SURVIVOR's 300 bp per-call merge
-tolerance (`survivor_params.max_dist`) and the much wider 50 kb CxSV
-clustering window. Widen it if you're seeing likely-benign loci show up as
-private just because of a few kb of breakpoint disagreement between cohorts;
-narrow it if distinct nearby loci are getting incorrectly filtered out as
-"seen in the reference."
+### Panel — `results/panel/`
 
-```bash
-# 1. Run every reference cohort
-bash scripts/run_pipeline.sh --cohort 1000g
+| File | Description |
+|---|---|
+| `release/panel_cxsv_calls.tsv` | one row per (sample, CxSV locus): the table patient loci are matched against |
+| `release/panel_cxsv_loci.tsv` | overlapping calls merged across samples, with carrier counts by platform (summary only) |
+| `release/panel_summary.tsv` | samples / individuals / calls per cohort, per platform, total |
+| `release/calling_fingerprint.json` | what a patient run must reproduce |
+| `release/release_manifest.tsv` | sha256 of every release file |
+| `panel/plots/cxsv_population_sharing.pdf` | carriers per locus and their genomic distribution |
+| `cohorts/<cohort>/` | population VCF, consensus VCF, SV counts, stacked CxSV table, QC plots (SV types, sizes, chromosome density, breakpoint resolution, caller Venn, genomic context, complexity classes) |
 
-# 2. Build (or rebuild) the pooled master list
-python scripts/build_public_reference.py
+### Patient — `results/patient/`
 
-# 3. Run a query cohort — private-CxSV outputs are produced automatically
-bash scripts/run_pipeline.sh --cohort pos_control
-```
+| File | Description |
+|---|---|
+| `panel_compatibility.txt` | fingerprint comparison with the panel release; written only when compatible (or overridden). The full report, including every difference on a mismatch, is `logs/panel_compatibility.log` |
+| `samples/<run>/<sample>/private/cxsv_panel_status.tsv` | every CxSV locus + `Panel_Carriers`, `Panel_Carrier_Freq`, `Panel_Carriers_By_Platform`, `Panel_Status` |
+| `samples/<run>/<sample>/private/private_cxsv_master_table.tsv` | private loci only |
+| `samples/<run>/<sample>/private/private_cxsv.vcf` | the patient's SV records inside private loci |
+| `samples/<run>/<sample>/plots/` | genomic context and complexity class plots |
 
----
-
-## Optional: 1000G-ONT Download
-
-This is entirely separate from running the pipeline — it just populates
-`bamfiles/<cohort>/` from the public 1000G-ONT S3 bucket. Skip it if you're
-using your own BAMs.
-
-```bash
-python scripts/fetch_sample_list.py                 # writes config/samples.txt
-bash scripts/download_1000g_bams.sh                 # downloads into bamfiles/1000g/
-bash scripts/download_1000g_bams.sh --cohort other  # or into bamfiles/other/
-bash scripts/run_pipeline.sh --cohort 1000g         # then run the pipeline as usual
-```
-
-Bucket/prefix/URL-template settings live in `config/remote_1000g.yaml` — edit
-them there if the bucket layout changes. Estimated size: ~118 GB per BAM.
-
----
-
-## Software Dependencies
-
-| Tool      | Version tested | Installation               |
-|-----------|-----------------|-----------------------------|
-| Snakemake | ≥ 7.0           | `conda install snakemake`  |
-| Sniffles2 | ≥ 2.2           | `conda install sniffles`   |
-| CuteSV    | ≥ 2.1           | `conda install cutesv`     |
-| SVIM      | ≥ 2.0           | `conda install svim`       |
-| SURVIVOR  | ≥ 1.0.7         | Build from source (GitHub) |
-| samtools  | ≥ 1.17          | `conda install samtools`   |
-| bcftools  | ≥ 1.17          | `conda install bcftools`   |
-| bedtools  | ≥ 2.31          | `conda install bedtools`   |
-| Python    | ≥ 3.10          | via conda                  |
-| R         | ≥ 4.3           | `conda install r-base`     |
-
-### Required R packages
-
-```r
-install.packages(c(
-  "ggplot2", "dplyr", "tidyr", "scales",
-  "patchwork", "ggVennDiagram"
-))
-```
+A patient locus is **public** when at least `panel_match.min_carriers`
+(default 1) panel individuals have a CxSV overlapping it after padding both
+sides by `panel_match.window` bp (default 1000). The carrier count is kept on
+every row, so a rare-but-seen locus can be told apart from one absent from the
+panel. Breakpoint-level matching and callability weighting replace interval
+overlap in roadmap item 3.
 
 ---
 
@@ -263,7 +214,7 @@ install.packages(c(
 
 `resources/` is gitignored — several of these files are hundreds of MB and
 exceed GitHub's size limits, so they're fetched/regenerated locally instead
-of committed. Paths are set in `config/config.yaml → annotation:`.
+of committed. Paths are set in `config/calling.yaml → annotation:` (override per site).
 
 The pre-generated `resources/` files (already in the naming/format the
 pipeline expects) are available for direct download here:
@@ -281,58 +232,6 @@ Alternatively, regenerate them yourself from the original sources:
 
 > **Note:** All resources must use the same chromosome naming convention as
 > the reference (e.g. `chr1`, not `1`, for hs1/CHM13).
-
----
-
-## Output Files
-
-Everything below lives under `results/<cohort>/` for the cohort you ran.
-
-### Per-Sample (`per_sample/`)
-
-| File                      | Description                       |
-|---------------------------|------------------------------------|
-| `{sample}_merged_sv.vcf`  | SURVIVOR merged long-read VCF     |
-| `{sample}_cxsv_only.vcf`  | CxSV subset of merged VCF         |
-| `{sample}_sv_summary.txt` | SV counts per caller + CxSV count |
-| `{sample}_private_cxsv.vcf` | **query cohorts only** — `{sample}_cxsv_only.vcf` with anything matching the reference master list removed; see [Public vs. Private CxSVs](#public-vs-private-cxsvs-cohorts) |
-
-### Final Call Sets (`final/`)
-
-| File                     | Description                             |
-|--------------------------|-------------------------------------------|
-| `long_read_filtered.vcf` | Population-level merged long-read VCF   |
-| `consensus.vcf`          | SVs supported by ≥2 callers             |
-| `cxsv_only.vcf`          | CxSV-only VCF                           |
-| `cxsv_master_table.tsv`  | 15-column annotated CxSV table          |
-| `cxsv_population.bed`    | Population-level CxSV BED — for `reference` cohorts, this is what `build_public_reference.py` pools |
-| `sv_counts.tsv`          | SV counts by type                       |
-| `cxsv_count.txt`         | Total CxSV locus count                  |
-| `private_cxsv_population.bed` | **query cohorts only** — cohort's CxSV loci not in the reference |
-| `public_overlap_cxsv_population.bed` | **query cohorts only** — cohort's CxSV loci that are in the reference (QC) |
-| `private_cxsv_master_table.tsv` | **query cohorts only** — annotated master table, private subset only |
-
-### Pooled Reference (`results/_public_reference/`)
-
-| File                | Description                                          |
-|---------------------|-------------------------------------------------------|
-| `master_cxsv.bed`   | Merged CxSV loci across every `role: reference` cohort, built by `scripts/build_public_reference.py` |
-
-### Plots (`plots/`)
-
-| File                           | Description                              |
-|---------------------------------|-------------------------------------------|
-| `sv_count_by_type.pdf`         | Bar plot: SV counts by type              |
-| `sv_size_distribution.pdf`     | Violin + box: size on log scale          |
-| `cxsv_venn.pdf`                | 3-way Venn: caller overlap               |
-| `breakpoint_resolution.pdf`    | Density: CI width per caller             |
-| `genomic_context.pdf`          | Bar: exonic/intronic/promoter/intergenic |
-| `complexity_class_heatmap.pdf` | Bar + tile: complexity class + SV types  |
-| `chromosome_density.pdf`       | Bar: SVs per Mb per chromosome           |
-
-`workflow/scripts/plot_cxsv_population_sharing.R` is a standalone extra
-script (not part of `rule all`) — run it manually once you have a per-locus
-sample-sharing BED; see the comment at the top of that script.
 
 ---
 
@@ -365,165 +264,45 @@ loci are retained (most CxSVs are expected there).
 
 ---
 
-## Troubleshooting FAQ
+## Troubleshooting
 
-### `active_cohort '<name>' is not registered in config['cohorts']`.
+### `[panel] no cohorts/runs configured` / `[patient] no cohorts/runs configured`
+Nothing under `panel_cohorts:` / `patient_runs:`. Both are empty in the
+committed configs on purpose; declare them in a site overlay passed with
+`--extra-config`.
 
-**Cause:** `--cohort <name>` (or `--config active_cohort=<name>`) doesn't
-match anything under `config/config.yaml → cohorts:`. **Fix:** add it there
-first, e.g. `patient_batchA: { role: query }`, or check for a typo — running
-`bash scripts/run_pipeline.sh` with no `--cohort` prints the registered list.
+### `sample sheet ... has N problem(s)`
+A row points at a missing alignment or index, repeats a `sample_id`, or names a
+file that is not `.bam`/`.cram`. The error lists the lines. Fix or regenerate
+the sheet; index sheet files yourself (`samtools index FILE`).
 
-### `No samples found` — pipeline exits immediately.
+### `check_panel_compatibility`: `this run is not comparable with the panel`
+The patient run's calling fingerprint differs from the panel release's.
+`results/patient/logs/panel_compatibility.log` lists each difference (parameter,
+contig, tool version or code file). Use the panel's environment and do not
+override `[FINGERPRINTED]` parameters; if the change is intended, build a new
+panel release with it.
 
-**Cause:** no `*.bam`/`*.cram` files in `bamfiles/<cohort>/`, and the cohort has
-no `samples:` sheet. **Fix:**
+### `check_cram_reference` fails: `M5 ... is not in the pipeline reference`
+The CRAM was encoded against a different reference (e.g. GRCh38, or CHM13 with
+RefSeq `NC_*` names). Point `reference` at the FASTA it was made with, or
+re-encode: `samtools view -C -T hs1.fa -o out.cram in.cram`.
 
-```bash
-ls bamfiles/<cohort>/*.bam bamfiles/<cohort>/*.cram   # should list your files
-```
+### A caller fails on a CRAM: `Failed to populate reference`
+The MD5 cache is missing or incomplete. Delete `<ref_cache>/md5_manifest.tsv`
+and re-run; `build_ref_cache` rebuilds it.
 
-### `sample sheet ... has N problem(s)`.
+### cuteSV produces an empty VCF
+A stale `callers/cutesv_work/` from a failed run, or coverage too low (cuteSV
+needs roughly 5–10x). Remove the work directory and resume with `--resume`.
 
-**Cause:** a sheet row points at an alignment or index that does not exist, has
-a duplicate `sample_id`, or an alignment that is not `.bam`/`.cram`. The error
-lists the offending lines. **Fix:** correct the sheet (or regenerate it), and
-index sheet files yourself (`samtools index FILE`) — the pipeline does not write
-into a sheet's directories.
+### SURVIVOR merge fails or exits silently
+SURVIVOR needs at least one record per input VCF. Check
+`bcftools view -H <sample>/callers/<caller>_filtered.vcf | wc -l` and the caller log.
 
-### `check_cram_reference` fails: `M5 ... is not in the pipeline reference`.
-
-**Cause:** the CRAM was encoded against a different reference than
-`config['reference']` (e.g. GRCh38, or a CHM13 copy with different contig
-naming). **Fix:** point `reference` at the FASTA the CRAM was made with, or
-re-encode it: `samtools view -C -T new_ref.fa -o out.cram in.cram` (decode uses
-the old reference via `REF_PATH`/`-T`).
-
-### A caller fails on a CRAM with `Failed to populate reference` / `Unable to fetch reference`.
-
-**Cause:** htslib could not find the reference sequence. The pipeline sets
-`REF_PATH` to its MD5 cache for every rule, so this means the cache is missing
-or incomplete. **Fix:** delete `<ref_cache>/md5_manifest.tsv` and re-run; rule
-`build_ref_cache` rebuilds it.
-
-### Sniffles2 fails with "ERROR: Index file not found".
-
-**Cause:** The `.bam.bai`/`.cram.crai` index was not created by `index_bam`/`index_cram`
-(or is missing from a sample sheet's directory), or the file is not coordinate-sorted. **Fix:**
-
-```bash
-samtools sort -o bamfiles/<cohort>/SAMPLE_sorted.bam bamfiles/<cohort>/SAMPLE.bam
-samtools index bamfiles/<cohort>/SAMPLE_sorted.bam
-```
-
-### CuteSV produces an empty VCF.
-
-**Cause 1:** Working directory (`results/<cohort>/callers/SAMPLE_cutesv_work/`)
-already exists with stale temp files from a previous failed run. **Fix:**
-
-```bash
-rm -rf results/<cohort>/callers/SAMPLE_cutesv_work/
-bash scripts/run_pipeline.sh --cohort <cohort> --resume
-```
-
-**Cause 2:** Coverage too low — CuteSV requires ≥5–10× for reliable calls.
-Check with `samtools coverage bamfiles/<cohort>/SAMPLE.bam`.
-
-### SVIM outputs `variants.vcf` but needs a very high QUAL threshold.
-
-**Cause:** SVIM scores are not probability-based; the default min QUAL is
-appropriate for most datasets but may be too strict for low-coverage data.
-**Fix:** Lower `filter_params.svim_min_qual` in `config/config.yaml` (e.g. to
-3) for low-coverage samples (<20×).
-
-### SURVIVOR merge fails with "Parsing error" or exits silently.
-
-**Cause 1:** One of the input VCFs contains no records. SURVIVOR requires
-≥1 record per input VCF. **Fix:**
-
-```bash
-bcftools view -H results/<cohort>/callers/SAMPLE_cutesv_filtered.vcf | wc -l
-```
-
-If 0, lower filter thresholds or check the caller logs.
-
-**Cause 2:** VCF headers are malformed or INFO fields non-standard. **Fix:**
-
-```bash
-bcftools reheader --fai hs1.fa.fai -o fixed.vcf input.vcf
-```
-
-### `annotate_cxsv.py` raises "bedtools: command not found".
-
-**Fix:**
-
-```bash
-conda activate cxsv_pipeline
-which bedtools   # Should return a path
-```
-
-### Master table has "NA" for all gene overlap columns.
-
-**Cause 1:** `genes_bed` / `exons_bed` paths in `config/config.yaml` point to
-non-existent or empty files. **Fix:**
-
-```bash
-wc -l resources/genes.final.bed
-head -1 resources/genes.final.bed   # Should show: chr1\tSTART\tEND\tGENE_NAME
-```
-
-**Cause 2:** Chromosome naming mismatch (`chr1` vs `1`). **Fix:**
-`sed 's/^/chr/' resources/genes.bed > resources/genes_fixed.bed`, or strip
-the prefix from the VCF depending on your reference.
-
-### R scripts fail with "there is no package called 'ggVennDiagram'".
-
-**Fix:**
-
-```r
-install.packages("ggVennDiagram")
-```
-
-`plot_cxsv_venn.R` falls back to the `VennDiagram` package automatically if
-`ggVennDiagram` is unavailable.
-
-### `patchwork` not found (complexity class plot fails).
-
-**Fix:** `install.packages("patchwork")`
-
-### Pipeline reruns rules that already completed successfully.
-
-**Cause:** Snakemake timestamps changed (e.g. after copying files, NFS
-mount). **Fix:**
-
-```bash
-snakemake --touch --config active_cohort=<cohort> --cores 1   # Mark up-to-date
-snakemake --config active_cohort=<cohort> --cores 32          # Rerun only missing outputs
-```
-
-### CxSV count is 0 even though the pipeline completed.
-
-**Cause:** Cluster parameters are too strict for your data. **Diagnosis:**
-check `results/<cohort>/final/cxsv_summary.tsv` — are there rows with
-`IsCxSV == NO`? **Fix:** relax `cxsv_params.min_breakpoints` in
-`config/config.yaml`, then rerun `classify_cxsv` and downstream rules.
-
-### A `query` cohort's private-CxSV rules fail: reference BED not found.
-
-**Cause:** `results/_public_reference/master_cxsv.bed` doesn't exist yet.
-**Fix:** run every `role: reference` cohort first, then build it:
-
-```bash
-bash scripts/run_pipeline.sh --cohort 1000g
-python scripts/build_public_reference.py
-```
-
-### `build_public_reference.py` exits with "No cohorts with role 'reference'".
-
-**Cause:** No cohort in `config/config.yaml → cohorts:` has `role: reference`
-(or the ones that do haven't produced `final/cxsv_population.bed` yet — the
-script lists which are `[ok]` vs `[missing]`). **Fix:** register at least one
-reference cohort and run it to completion first.
+### Pipeline reruns rules that already completed
+Timestamps changed (e.g. after copying files). `snakemake -s workflow/<panel|patient>/Snakefile --touch ...`
+marks outputs up to date.
 
 ---
 

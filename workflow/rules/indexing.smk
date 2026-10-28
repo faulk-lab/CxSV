@@ -1,13 +1,13 @@
 # ═══════════════════════════════════════════════════════════════════════════════
-# PHASE 1 — REFERENCE CACHE, CRAM REFERENCE CHECK, AND INDEXING
-# Inputs may be BAM or CRAM (see rules/common.smk for sample discovery).
+# REFERENCE CACHE, CRAM REFERENCE CHECK, AND INDEXING  (shared)
+# Inputs may be BAM or CRAM; see workflow/lib/cxsv_inputs.py for discovery.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 rule build_ref_cache:
     """
     MD5-keyed htslib cache of config['reference'], built once and shared by all
-    cohorts. Lets every tool decode CRAMs on any node, regardless of the
-    reference path recorded in the CRAM header. ~3.1 GB for hs1.
+    workflows and cohorts. Lets every tool decode CRAMs on any node, whatever
+    reference path is recorded in the CRAM header. ~3.1 GB for hs1.
     """
     input:
         ref = REFERENCE
@@ -28,9 +28,9 @@ rule check_cram_reference:
         cram     = alignment,
         manifest = REF_MD5_MANIFEST
     output:
-        ok = f"{RESULTS}/refcheck/{{sample}}.ok"
+        ok = f"{S}/refcheck.ok"
     log:
-        f"{RESULTS}/logs/refcheck/{{sample}}.log"
+        f"{S}/logs/refcheck.log"
     shell:
         "python {SCRIPTS}/check_cram_reference.py {input.manifest} {input.cram} "
         "> {output.ok} 2> {log}"
@@ -41,12 +41,12 @@ rule check_cram_reference:
 rule index_bam:
     """samtools index for a BAM in bamfiles/<cohort>/ that has no .bai yet."""
     input:
-        bam = f"{DATA}/{{sample}}.bam"
+        bam = f"{BAMFILES_ROOT}/{{cohort}}/{{sample}}.bam"
     output:
-        bai = f"{DATA}/{{sample}}.bam.bai"
+        bai = f"{BAMFILES_ROOT}/{{cohort}}/{{sample}}.bam.bai"
     threads: config["threads"]["samtools"]
     log:
-        f"{RESULTS}/logs/index/{{sample}}.log"
+        f"{BAMFILES_ROOT}/{{cohort}}/.{{sample}}.index.log"
     shell:
         "samtools index -@ {threads} {input.bam} > {log} 2>&1"
 
@@ -54,12 +54,12 @@ rule index_bam:
 rule index_cram:
     """samtools index for a CRAM in bamfiles/<cohort>/ that has no .crai yet."""
     input:
-        cram     = f"{DATA}/{{sample}}.cram",
+        cram     = f"{BAMFILES_ROOT}/{{cohort}}/{{sample}}.cram",
         manifest = REF_MD5_MANIFEST
     output:
-        crai = f"{DATA}/{{sample}}.cram.crai"
+        crai = f"{BAMFILES_ROOT}/{{cohort}}/{{sample}}.cram.crai"
     threads: config["threads"]["samtools"]
     log:
-        f"{RESULTS}/logs/index/{{sample}}.log"
+        f"{BAMFILES_ROOT}/{{cohort}}/.{{sample}}.index.log"
     shell:
         HTS_ENV + "samtools index -@ {threads} {input.cram} > {log} 2>&1"

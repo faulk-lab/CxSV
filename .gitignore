@@ -1,5 +1,5 @@
 # ─── Pipeline inputs (user-supplied or downloaded, too large for git) ────────
-# Cohort BAMs live in bamfiles/<cohort>/ (see config/config.yaml -> cohorts:).
+# Directory-mode inputs live in bamfiles/<cohort>/ (config: panel_cohorts / patient_runs).
 bamfiles/*/*.bam
 bamfiles/*/*.bam.bai
 bamfiles/*/*.cram

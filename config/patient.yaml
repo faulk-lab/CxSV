@@ -1,0 +1,33 @@
+# =============================================================================
+# CxSV PATIENT SCORER — workflow settings (loaded after config/calling.yaml)
+#
+# Do not override any [FINGERPRINTED] section of calling.yaml here: the run
+# would no longer match the panel and would stop at check_panel_compatibility.
+# =============================================================================
+
+patient_results_root: "results/patient"
+
+# Panel release directory produced by the panel builder (results/panel/release
+# on the lab fleet; a copy shipped with the bundle in a restricted environment).
+panel_release: "results/panel/release"
+
+# One or more patient runs, same spec format as panel cohorts (directory mode
+# bamfiles/<name>/ or a sample sheet). A family can be one run with several
+# samples.
+# Empty here on purpose; set in the site/patient overlay. Example:
+#   patient_runs:
+#     family_042:
+#       samples: /restricted/family_042/sheet.tsv
+patient_runs: {}
+
+# How patient loci are matched against the panel's per-sample CxSV calls.
+# A locus is public when at least min_carriers panel individuals have a CxSV
+# overlapping it after padding both sides by window bp. Breakpoint-level
+# matching replaces this in roadmap item 3.
+panel_match:
+  window: 1000
+  min_carriers: 1
+
+# Exploratory use only: continue (and record the differences) when this run's
+# calling fingerprint differs from the panel's.
+allow_fingerprint_mismatch: false

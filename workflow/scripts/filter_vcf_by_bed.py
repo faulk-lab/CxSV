@@ -5,10 +5,9 @@ filter_vcf_by_bed.py
 Keep or exclude VCF records that overlap regions in a BED file, with an
 optional bp window padding each region before the overlap check.
 
-Used by workflow/rules/private_filter.smk to derive each query cohort's
-per-sample private CxSV VCF: records in {sample}_cxsv_only.vcf that do NOT
-overlap (within the configured slop window) any locus in the pooled public
-reference master BED are kept as candidate pathogenic/private calls.
+Used by workflow/rules/patient_private.smk (rule patient_private_vcf) to
+extract a patient's SV records inside its private CxSV loci: --mode keep with
+the private loci BED from classify_patient_cxsv.py.
 
 Usage
 -----

@@ -1,146 +1,82 @@
 # ═══════════════════════════════════════════════════════════════════════════════
-# COMMON — sample discovery, alignment inputs, and CRAM reference handling
-# Included first by the Snakefile; everything below is plain Python + helpers.
+# COMMON — shared by the panel and patient workflows
+#
+# The including Snakefile must define, before `include:`-ing this file:
+#   WORKFLOW_NAME  "panel" or "patient"
+#   COHORT_SPECS   {name: spec}  — background cohorts (panel) or patient runs
+#   RESULTS_ROOT   output root for this workflow, e.g. results/panel
+#
+# Everything per sample lives under {SAMPLES_ROOT}/{cohort}/{sample}/ so the
+# same person can appear in two cohorts without output collisions.
+# Sample discovery itself is in workflow/lib/cxsv_inputs.py (unit-tested).
 # ═══════════════════════════════════════════════════════════════════════════════
-#
-# A cohort's samples come from ONE of two places (config/config.yaml -> cohorts):
-#
-#   Directory mode (default)
-#       Every *.bam and *.cram in bamfiles/<cohort>/. Sample ID = the filename
-#       minus .bam/.cram. A missing index (.bam.bai / .cram.crai) is created
-#       next to the file by rules/indexing.smk.
-#
-#   Sample-sheet mode   cohorts.<name>.samples: <path/to/sheet.tsv>
-#       Tab-separated, header required, columns:
-#           sample_id   alignment   [index]   [coverage_x]  ...extra columns ignored
-#       Alignments may live anywhere (e.g. a shared, read-only datasets tree).
-#       Their indexes must already exist: the pipeline never writes into a
-#       sample sheet's data directories. Optional cohorts.<name>.min_coverage
-#       keeps only rows whose coverage_x is at or above that value.
-#       The background-set sheets are produced by the acquisition code's
-#       build_registry.py (registry/sample_sheets/<cohort>.tsv).
-#
-# CRAM reference handling
-#   A CRAM stores reads as differences from the reference, so every tool that
-#   reads one must find the exact same reference sequence. htslib looks it up by
-#   each @SQ line's M5 (MD5) tag via REF_PATH, else by the UR path baked into the
-#   header -- which is only valid on the machine that wrote the CRAM. We build an
-#   MD5-keyed cache of config['reference'] once (rule build_ref_cache), point
-#   REF_PATH/REF_CACHE at it for every tool (HTS_ENV), and check each CRAM's M5
-#   tags against it before calling (rule check_cram_reference). With REF_PATH
-#   set to the local cache only, htslib never falls back to a network download.
 
-import csv
+import os
 import re
-from pathlib import Path
+import sys
 
-ALIGNMENT_INDEX_EXT = {".bam": ".bai", ".cram": ".crai"}
+sys.path.insert(0, os.path.join(workflow.basedir, "..", "lib"))
+import cxsv_inputs            # noqa: E402
+import cxsv_fingerprint       # noqa: E402
 
+WORKFLOW_DIR  = os.path.abspath(os.path.join(workflow.basedir, ".."))
+SCRIPTS       = config.get("scripts_dir", "workflow/scripts")
+REFERENCE     = config["reference"]
+BAMFILES_ROOT = config.get("bamfiles_root", "bamfiles")
+SAMPLES_ROOT  = f"{RESULTS_ROOT}/samples"
+S             = f"{SAMPLES_ROOT}/{{cohort}}/{{sample}}"      # per-sample output prefix
 
-def _default_index(alignment):
-    return alignment + ALIGNMENT_INDEX_EXT[Path(alignment).suffix]
+if not COHORT_SPECS:
+    raise ValueError(f"[{WORKFLOW_NAME}] no cohorts/runs configured -- see config/{WORKFLOW_NAME}.yaml")
 
+SAMPLE_TABLE, _notes = cxsv_inputs.build_sample_table(COHORT_SPECS, BAMFILES_ROOT)
+for _n in _notes:
+    print(f"[{WORKFLOW_NAME}] {_n}", file=sys.stderr)
+if not SAMPLE_TABLE:
+    raise ValueError(f"[{WORKFLOW_NAME}] no samples found in any configured cohort/run")
 
-def _samples_from_dir(data_dir):
-    table = {}
-    for ext in ALIGNMENT_INDEX_EXT:
-        for p in sorted(Path(data_dir).glob(f"*{ext}")):
-            sid = p.name[: -len(ext)]
-            if sid in table:
-                raise ValueError(
-                    f"sample '{sid}' appears as both {table[sid]['alignment']} and {p} "
-                    f"in {data_dir}/ -- keep one alignment per sample"
-                )
-            table[sid] = {"alignment": str(p), "index": _default_index(str(p))}
-    return table
-
-
-def _samples_from_sheet(sheet, min_coverage=None):
-    with open(sheet, newline="") as fh:
-        rows = list(csv.DictReader((ln.replace("\r", "") for ln in fh), delimiter="\t"))
-    if not rows:
-        raise ValueError(f"sample sheet {sheet} has no rows")
-    for col in ("sample_id", "alignment"):
-        if col not in rows[0]:
-            raise ValueError(f"sample sheet {sheet} lacks required column '{col}'")
-    if min_coverage is not None and "coverage_x" not in rows[0]:
-        raise ValueError(f"min_coverage is set but {sheet} has no coverage_x column")
-
-    table, problems, dropped = {}, [], 0
-    for i, row in enumerate(rows, start=2):
-        sid, aln = row["sample_id"].strip(), row["alignment"].strip()
-        if min_coverage is not None:
-            try:
-                if float(row["coverage_x"]) < float(min_coverage):
-                    dropped += 1
-                    continue
-            except ValueError:
-                problems.append(f"line {i}: {sid}: coverage_x '{row['coverage_x']}' is not a number")
-                continue
-        if Path(aln).suffix not in ALIGNMENT_INDEX_EXT:
-            problems.append(f"line {i}: {sid}: alignment must end in .bam or .cram: {aln}")
-            continue
-        idx = (row.get("index") or "").strip() or _default_index(aln)
-        if sid in table:
-            problems.append(f"line {i}: duplicate sample_id '{sid}'")
-        if not Path(aln).exists():
-            problems.append(f"line {i}: {sid}: alignment not found: {aln}")
-        if not Path(idx).exists():
-            problems.append(f"line {i}: {sid}: index not found: {idx}")
-        table[sid] = {"alignment": aln, "index": idx}
-    if problems:
-        shown = "\n  ".join(problems[:20])
-        more = f"\n  ... and {len(problems) - 20} more" if len(problems) > 20 else ""
-        raise ValueError(f"sample sheet {sheet} has {len(problems)} problem(s):\n  {shown}{more}")
-    if dropped:
-        print(f"[cohort={COHORT}] min_coverage={min_coverage}: {dropped} sample(s) below the floor "
-              f"left out, {len(table)} kept", file=sys.stderr)
-    return table
+COHORTS = sorted(COHORT_SPECS)
+KEYS    = sorted(SAMPLE_TABLE)                     # [(cohort, sample), ...]
+COHORT_OF_KEY = [k[0] for k in KEYS]
+SAMPLE_OF_KEY = [k[1] for k in KEYS]
 
 
-_cohort_cfg = COHORTS_CFG[COHORT] or {}
-SAMPLE_SHEET = _cohort_cfg.get("samples")
-if SAMPLE_SHEET:
-    SAMPLE_TABLE = _samples_from_sheet(SAMPLE_SHEET, _cohort_cfg.get("min_coverage"))
-    INPUT_SOURCE = f"sample sheet {SAMPLE_SHEET}"
-else:
-    SAMPLE_TABLE = _samples_from_dir(DATA)
-    INPUT_SOURCE = f"{DATA}/"
+def per_sample(pattern, cohort=None):
+    """Expand a per-sample path pattern over every (cohort, sample) pair,
+    or over one cohort's samples."""
+    keys = [k for k in KEYS if cohort is None or k[0] == cohort]
+    return [pattern.format(cohort=c, sample=s) for c, s in keys]
 
-SAMPLES = sorted(SAMPLE_TABLE)
-CRAM_SAMPLES = {s for s in SAMPLES if SAMPLE_TABLE[s]["alignment"].endswith(".cram")}
 
-# Pin {sample} to the known IDs so dotted IDs (HG00096.ERR15142589...) can
-# never be split ambiguously against other wildcard patterns. (The Snakefile
-# stops with a clear error when SAMPLES is empty.)
-SAMPLE_REGEX = "|".join(re.escape(s) for s in SAMPLES) or "(?!)"
-
+# Pin wildcards to known values so sample IDs containing dots can never be
+# split ambiguously against other patterns.
 wildcard_constraints:
-    sample=SAMPLE_REGEX,
+    cohort="|".join(re.escape(c) for c in COHORTS),
+    sample="|".join(re.escape(s) for s in sorted(set(SAMPLE_OF_KEY))),
 
-# ─── Reference cache (shared by every cohort) ────────────────────────────────
-REF_CACHE = os.path.abspath(config.get("ref_cache", "resources/ref_cache"))
+# ─── Reference cache (shared by every workflow and cohort) ───────────────────
+# A CRAM stores reads as differences from the reference; htslib finds the
+# sequence by each @SQ line's M5 tag via REF_PATH. The cache is built once
+# (rule build_ref_cache) and every rule that reads alignments exports HTS_ENV.
+# With REF_PATH set to the local cache only, htslib never downloads anything.
+REF_CACHE        = os.path.abspath(config.get("ref_cache", "resources/ref_cache"))
 REF_MD5_MANIFEST = f"{REF_CACHE}/md5_manifest.tsv"
-# Prefixed to every shell command that may read a CRAM. '%2s/%2s/%s' is
-# htslib's MD5 path template (first two hex chars / next two / remainder).
-HTS_ENV = (
-    f"export REF_PATH='{REF_CACHE}/%2s/%2s/%s' REF_CACHE='{REF_CACHE}/%2s/%2s/%s'; "
-)
+HTS_ENV = f"export REF_PATH='{REF_CACHE}/%2s/%2s/%s' REF_CACHE='{REF_CACHE}/%2s/%2s/%s'; "
 
 
-# ─── Input functions used by indexing.smk / calling.smk ──────────────────────
+# ─── Input functions ─────────────────────────────────────────────────────────
+def record(wildcards):
+    return SAMPLE_TABLE[(wildcards.cohort, wildcards.sample)]
+
+
 def alignment(wildcards):
-    return SAMPLE_TABLE[wildcards.sample]["alignment"]
-
-
-def alignment_index(wildcards):
-    return SAMPLE_TABLE[wildcards.sample]["index"]
+    return record(wildcards).alignment
 
 
 def caller_inputs(wildcards):
     """aln + idx for every sample; CRAMs also wait for their reference check."""
-    s = wildcards.sample
-    inputs = {"aln": SAMPLE_TABLE[s]["alignment"], "idx": SAMPLE_TABLE[s]["index"]}
-    if s in CRAM_SAMPLES:
-        inputs["refcheck"] = f"{RESULTS}/refcheck/{s}.ok"
+    r = record(wildcards)
+    inputs = {"aln": r.alignment, "idx": r.index}
+    if r.is_cram:
+        inputs["refcheck"] = f"{SAMPLES_ROOT}/{r.cohort}/{r.sample_id}/refcheck.ok"
     return inputs

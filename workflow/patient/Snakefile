@@ -1,0 +1,47 @@
+"""
+CxSV PATIENT SCORER
+===================
+Calls SVs and CxSVs in one patient (or a family) with exactly the panel's
+calling module, checks that the calling fingerprint matches the panel release,
+then labels every patient CxSV locus public or private with its panel carrier
+count. Pathogenicity scoring of private loci is added in roadmap item 5.
+
+Inputs: the patient alignments and a panel release directory. No background
+reads are needed, so this runs inside a restricted environment.
+
+Run from the project root:
+    snakemake -s workflow/patient/Snakefile --cores 32 \
+        --configfile config/sites/<site>_patient.yaml
+or  bash scripts/run_pipeline.sh patient --extra-config config/sites/<site>_patient.yaml
+
+Config (later files override earlier ones; nested keys merge):
+    config/calling.yaml   shared + fingerprinted calling/discovery parameters
+    config/patient.yaml   patient runs, panel release, matching settings
+    --configfile ...      site overlay: paths, patient sample sheet
+"""
+
+configfile: "config/calling.yaml"
+configfile: "config/patient.yaml"
+
+WORKFLOW_NAME = "patient"
+COHORT_SPECS  = config.get("patient_runs") or {}
+RESULTS_ROOT  = config.get("patient_results_root", "results/patient")
+
+include: "../rules/common.smk"
+include: "../rules/indexing.smk"
+include: "../rules/calling.smk"
+include: "../rules/per_sample.smk"
+include: "../rules/sample_report.smk"
+include: "../rules/fingerprint.smk"
+include: "../rules/patient_private.smk"
+
+
+rule all:
+    input:
+        f"{RESULTS_ROOT}/panel_compatibility.txt",
+        per_sample(f"{S}/sv_summary.txt"),
+        per_sample(f"{S}/private/cxsv_panel_status.tsv"),
+        per_sample(f"{S}/private/private_cxsv_master_table.tsv"),
+        per_sample(f"{S}/private/private_cxsv.vcf"),
+        per_sample(f"{S}/plots/genomic_context.pdf"),
+        per_sample(f"{S}/plots/complexity_class_heatmap.pdf"),

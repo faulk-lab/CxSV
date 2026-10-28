@@ -55,7 +55,21 @@ Item 2 removes this.
 **Suggested order:** 1 → 6 (test scaffold) → 3 → 2 → 4 → 5. Item 6 grows
 with each later item.
 
-### 1. Two workflows, one shared calling module
+### 1. Two workflows, one shared calling module — **done (2026-10-28)**
+
+> Implemented: `workflow/panel/Snakefile` and `workflow/patient/Snakefile`
+> share `rules/{common,indexing,calling,per_sample,sample_report,fingerprint}.smk`
+> and `config/calling.yaml`. The calling fingerprint (parameters, reference
+> contig MD5s, tool versions, loci-defining code) is written by both; the
+> patient workflow stops on a mismatch with the panel release. CxSVs are now
+> discovered **per sample** in both workflows (decision 2026-10-28) and the
+> panel counts distinct carrier individuals per locus. One pinned
+> environment: `envs/cxsv-pipeline.yaml` (+ lock file). Verified on freya
+> with chr20: BAM and CRAM give identical CxSV tables; the patient's table is
+> byte-identical to the same sample's panel table; all its loci are public
+> with 2 carriers; a changed `min_support` is rejected; the full 1,006-sample
+> background panel resolves to a 13,603-job DAG.
+
 
 - **Panel builder** (lab fleet): runs over the background cohorts and
   publishes a panel release (item 2).
