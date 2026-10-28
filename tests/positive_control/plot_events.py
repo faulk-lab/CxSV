@@ -64,7 +64,7 @@ def block(ax, x, w, y, h, colour, strand=None, hatch=None, label=None, alpha=1.0
                       for py, lv, px0, px1 in below_labels):
                 level += 1
             below_labels.append((y, level, cx - half, cx + half))
-            ax.text(cx, y - 0.04 - 0.2 * level, label, ha="center", va="top", fontsize=5,
+            ax.text(cx, y - 0.04 - 0.3 * level, label, ha="center", va="top", fontsize=5,
                     fontweight="bold", color=colour)
 
 
@@ -140,7 +140,7 @@ def draw_event(ax, ev):
     ax.set_yticklabels([t for _, t in ylabels], fontsize=6)
     ax.tick_params(axis="y", length=0)
     ax.set_xlim(-total_w * 0.02, total_w * 1.02)
-    ax.set_ylim(-(len(rows) - 1) * (h + gap) - 0.85, h + 0.45)
+    ax.set_ylim(-(len(rows) - 1) * (h + gap) - 1.0, h + 0.45)
     for s in ("top", "right", "left"):
         ax.spines[s].set_visible(False)
     if inter:
