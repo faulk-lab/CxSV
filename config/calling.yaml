@@ -68,3 +68,14 @@ cxsv_params:
   chromoanag_max_window: 50000
   chromoanag_min_svs:        3
   max_cluster_size: 500000
+
+# ─── [FINGERPRINTED] Junction tables (per sample; rules/junctions.smk) ──────
+# Every merged SV call becomes a breakpoint junction (docs/JUNCTIONS.md).
+# Records of one sample with the same svtype and contigs and both ends within
+# collapse_distance bp are one junction (Sniffles2's reciprocal inversion
+# breakends, BND/mate pairs). Same scale as survivor_params.max_dist, which
+# already merges calls across callers. INS also need lengths within
+# ins_len_ratio (shorter/longer).
+junction_params:
+  collapse_distance: 300
+  ins_len_ratio:     0.5

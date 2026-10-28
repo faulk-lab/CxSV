@@ -1,3 +1,2 @@
-# event	reason (first seen 2026-10-28, regression on 10 background slices)
-E04	labelled public: overlaps a different panel CxSV at the SHANK3 subtelomeric hotspot (region-overlap matching; roadmap item 3)
-E12	simple inversion called CxSV: reciprocal INV breakend records kept as two calls, C2_nested_SV fires (classifier)
+# event	reason (E12 first seen 2026-10-28; E04 fixed by breakpoint-level matching, roadmap item 3)
+E12	simple inversion called CxSV: reciprocal INV breakend records kept as two calls, C2_nested_SV fires (classifier; roadmap item 5)

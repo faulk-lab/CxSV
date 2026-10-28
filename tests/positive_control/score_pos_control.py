@@ -8,13 +8,26 @@ Junction level (truth_junctions.tsv, one row per novel adjacency):
            (e.g. an INS or a one-sided call);
   callers  SUPP_VEC of the matching call(s), in SURVIVOR file order:
            cuteSV, SVIM, Sniffles2 (so 001 = Sniffles2 only).
+  panel    the patient junction (private/junction_panel_status.tsv) matching the
+           truth junction on both ends within --slop, and its panel carriers
+           (breakpoint-level matching against the panel's junction sites).
 Event level (truth_events.bed + events.yaml expectations):
   loci     patient CxSV loci (private/cxsv_panel_status.tsv) overlapping any
-           span of the event, with class, criteria, carriers and panel status;
+           span of the event, with class, criteria, carriers, panel status and
+           region-overlap (hotspot) carriers;
   verdict  PASS if every expectation in events.yaml holds:
-             expect.cxsv true  -> >=1 overlapping CxSV locus, all of them private
+             expect.cxsv true, panel_status private (default) -> >=1 overlapping
+               CxSV locus, none of them public (private, or shared_junctions:
+               junctions seen in the panel but no individual carries the
+               rearrangement), 0 rearrangement carriers;
+             expect.cxsv true, panel_status public -> >=1 overlapping CxSV locus,
+               all public with exactly expect.panel_carriers carriers (spike-in E13);
              expect.cxsv false -> no overlapping CxSV locus (simple SV controls)
+               AND every truth junction matched on breakpoints by a patient
+               junction with 0 panel carriers (not region overlap);
            and >=1 junction detected exactly (or partially for templated INS).
+Add-on events (E13) keep their truth outside the release: --extra-truth DIR adds
+DIR/truth_junctions.tsv and DIR/truth_events.bed.
 Outside the events: CxSV loci not overlapping any event span are listed as the
 host's own CxSV-like calls (expected; a 10-genome panel cannot make most public).
 
@@ -24,7 +37,7 @@ and XPASS as failures, so it catches new problems without masking old ones.
 class_match reports whether the pipeline's class equals expect.ideal_class.
 
 Usage: score_pos_control.py TRUTH_DIR SAMPLE_DIR events.yaml OUT_PREFIX [--slop 1000]
-                            [--known-failures known_failures.tsv]
+                            [--known-failures known_failures.tsv] [--extra-truth DIR ...]
 Writes OUT_PREFIX.junctions.tsv, OUT_PREFIX.events.tsv, OUT_PREFIX.offtarget.tsv.
 """
 import argparse
@@ -69,18 +82,33 @@ def main():
     ap.add_argument("truth"); ap.add_argument("sample"); ap.add_argument("events"); ap.add_argument("out")
     ap.add_argument("--slop", type=int, default=1000)
     ap.add_argument("--known-failures", default=None)
+    ap.add_argument("--extra-truth", action="append", default=[])
     a = ap.parse_args()
 
     calls = parse_calls(f"{a.sample}/merged_sv.vcf")
     evs = {e["id"]: e for e in yaml.safe_load(open(a.events))["events"]}
+    truth_dirs = [a.truth] + a.extra_truth
     spans = {}
-    for line in open(f"{a.truth}/truth_events.bed"):
-        c, s, e, eid = line.split("\t")[:4]
-        spans.setdefault(eid, []).append((c, int(s), int(e)))
+    for d in truth_dirs:
+        for line in open(f"{d}/truth_events.bed"):
+            c, s, e, eid = line.split("\t")[:4]
+            spans.setdefault(eid, []).append((c, int(s), int(e)))
     loci = list(csv.DictReader(open(f"{a.sample}/private/cxsv_panel_status.tsv"), delimiter="\t"))
+    pj = list(csv.DictReader(open(f"{a.sample}/private/junction_panel_status.tsv"), delimiter="\t"))
+    truth_j = [j for d in truth_dirs for j in csv.DictReader(open(f"{d}/truth_junctions.tsv"), delimiter="\t")]
+    missing = sorted(set(evs) - set(spans))
+    if missing:
+        raise SystemExit(f"events without truth: {missing} (add-on truth dirs: --extra-truth)")
 
-    jrows, jsum = [], {}
-    for j in csv.DictReader(open(f"{a.truth}/truth_junctions.tsv"), delimiter="\t"):
+    def bp_match(c1, p1, c2, p2):
+        """Patient junctions matching a truth junction on both ends (either order)."""
+        return [k for k in pj if (near(k["chrom1"], int(k["pos1"]), c1, p1, a.slop)
+                                  and near(k["chrom2"], int(k["pos2"]), c2, p2, a.slop))
+                or (near(k["chrom1"], int(k["pos1"]), c2, p2, a.slop)
+                    and near(k["chrom2"], int(k["pos2"]), c1, p1, a.slop))]
+
+    jrows, jsum, jpanel = [], {}, {}
+    for j in truth_j:
         c1, p1, c2, p2 = j["chrom1"], int(j["pos1"]), j["chrom2"], int(j["pos2"])
         exact = [k for k in calls if (near(k["c1"], k["p1"], c1, p1, a.slop) and near(k["c2"], k["p2"], c2, p2, a.slop))
                  or (near(k["c1"], k["p1"], c2, p2, a.slop) and near(k["c2"], k["p2"], c1, p1, a.slop))]
@@ -88,10 +116,16 @@ def main():
                 for c, p in ((k["c1"], k["p1"]), (k["c2"], k["p2"])) for cc, pp in ((c1, p1), (c2, p2)))]
         status = "exact" if exact else ("partial" if part else "missed")
         best = exact or part
+        bm = bp_match(c1, p1, c2, p2)
+        pc = max((int(k["panel_carriers"]) for k in bm), default=None)
+        jpanel.setdefault(j["event"], []).append(pc)
         jrows.append(dict(event=j["event"], junction=f"{j['left']}|{j['right']}",
                           truth=f"{c1}:{p1}-{c2}:{p2}", status=status,
                           calls=";".join(f"{k['svtype']}:{k['c1']}:{k['p1']}-{k['c2']}:{k['p2']}" for k in best[:3]) or ".",
-                          supp_vec=";".join(sorted({k["supp"] for k in best})) or "."))
+                          supp_vec=";".join(sorted({k["supp"] for k in best})) or ".",
+                          patient_junction=";".join(f"{k['svtype']}:{k['chrom1']}:{k['pos1']}-{k['chrom2']}:{k['pos2']}"
+                                                    for k in bm[:3]) or ".",
+                          panel_carriers="." if pc is None else pc))
         s = jsum.setdefault(j["event"], {"exact": 0, "partial": 0, "missed": 0})
         s[status] += 1
 
@@ -111,18 +145,31 @@ def main():
         js = jsum.get(eid, {"exact": 0, "partial": 0, "missed": 0})
         n = sum(js.values())
         detected = js["exact"] > 0 or js["partial"] > 0
-        if exp.get("cxsv"):
-            ok_cx = bool(ov) and all(r["Panel_Status"] == "private" for r in ov)
+        want = exp.get("panel_status", "private")
+        jp = jpanel.get(eid, [])
+        bp_ok = bool(jp) and all(x is not None for x in jp)
+        if exp.get("cxsv") and want == "public":
+            ok_cx = bool(ov) and all(r["Panel_Status"] == "public"
+                                     and int(r["Panel_Carriers"]) == int(exp.get("panel_carriers", 1)) for r in ov)
+        elif exp.get("cxsv"):
+            ok_cx = bool(ov) and all(r["Panel_Status"] != "public" and int(r["Panel_Carriers"]) == 0 for r in ov)
         else:
-            ok_cx = not ov
+            # simple SV controls: not a CxSV, and matched on breakpoints (not region overlap):
+            # every truth junction has a patient junction with 0 panel carriers
+            ok_cx = not ov and bp_ok and all(x == 0 for x in jp)
         erows.append(dict(event=eid, name=ev["name"], gene=ev.get("gene") or "intergenic",
                           expect_cxsv=exp.get("cxsv"), ideal_class=exp.get("ideal_class", "."),
                           junctions=n, exact=js["exact"], partial=js["partial"], missed=js["missed"],
                           cxsv_loci=len(ov),
                           classes=";".join(sorted({r["Cmplx_Class"] for r in ov})) or ".",
                           criteria=";".join(sorted({r["CxSV_Criteria"] for r in ov})) or ".",
+                          expect_status=want if exp.get("cxsv") else "not_cxsv",
                           carriers=";".join(sorted({str(r["Panel_Carriers"]) for r in ov})) or ".",
                           panel_status=";".join(sorted({r["Panel_Status"] for r in ov})) or ".",
+                          region_carriers=";".join(sorted({str(r["Panel_Region_Carriers"]) for r in ov})) or ".",
+                          hotspot=";".join(sorted({r["Panel_Hotspot"] for r in ov})) or ".",
+                          junctions_matched_bp=f"{sum(x is not None for x in jp)}/{len(jp)}",
+                          junction_panel_carriers=",".join("." if x is None else str(x) for x in jp) or ".",
                           class_match=("yes" if exp.get("ideal_class") in {r["Cmplx_Class"] for r in ov}
                                        else ("n/a" if not exp.get("cxsv") else "no")),
                           verdict=verdict(detected and ok_cx, eid in known)))
@@ -139,16 +186,22 @@ def main():
     write(a.out + ".junctions.tsv", jrows)
     write(a.out + ".events.tsv", erows)
     write(a.out + ".offtarget.tsv", [{k: r[k] for k in ("Chr", "Start", "End", "SV_Types", "Cmplx_Class",
-                                                         "CxSV_Criteria", "Panel_Carriers", "Panel_Status")}
+                                                         "CxSV_Criteria", "Panel_Junctions", "Panel_Junctions_Seen",
+                                                         "Panel_Carriers", "Panel_Region_Carriers", "Panel_Hotspot",
+                                                         "Panel_Status")}
                                      for r in off])
     for r in erows:
         print(f"{r['event']}\t{r['verdict']}{' (' + known[r['event']] + ')' if r['event'] in known else ''}\tjunctions {r['exact']}+{r['partial']}p/{r['junctions']}\t"
-              f"cxsv_loci={r['cxsv_loci']} class={r['classes']} (expected {r['ideal_class']}, match {r['class_match']}) status={r['panel_status']} carriers={r['carriers']}")
+              f"cxsv_loci={r['cxsv_loci']} class={r['classes']} (expected {r['ideal_class']}, match {r['class_match']}) "
+              f"status={r['panel_status']} (expected {r['expect_status']}) carriers={r['carriers']} "
+              f"region_carriers={r['region_carriers']} bp_matched={r['junctions_matched_bp']} "
+              f"junction_panel_carriers={r['junction_panel_carriers']}")
     print(f"junctions: {sum(r['status'] == 'exact' for r in jrows)} exact, "
           f"{sum(r['status'] == 'partial' for r in jrows)} partial, "
           f"{sum(r['status'] == 'missed' for r in jrows)} missed of {len(jrows)}")
-    print(f"off-target CxSV loci in the slices: {len(off)} "
-          f"({sum(r['Panel_Status'] == 'private' for r in off)} private)")
+    print(f"off-target CxSV loci in the slices: {len(off)} ("
+          + ", ".join(f"{sum(r['Panel_Status'] == s for r in off)} {s}" for s in ("private", "shared_junctions", "public"))
+          + ")")
 
 
 if __name__ == "__main__":

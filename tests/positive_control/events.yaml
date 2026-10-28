@@ -547,3 +547,64 @@ events:
     - p+
     - I-
     - q+
+- id: E13
+  name: 'public spike-in: deletion-inversion cluster'
+  gene: null
+  note: deletion of B and inversions of C and E within 35 kb, intergenic; also planted in 3 background
+    genomes (expected public, 3 carriers)
+  expect:
+    cxsv: true
+    ideal_class: Multi_breakpoint_cluster
+    panel_status: public
+    panel_carriers: 3
+  spike_in:
+    splice: regression
+    backgrounds:
+    - HG00125
+    - HG00111
+    - HG00096
+    rule: the 3 highest-coverage genomes of the 10 regression backgrounds (registry coverage 34.1x, 25.6x,
+      25.4x)
+  zygosity: heterozygous
+  segments:
+    A:
+    - chr13
+    - 54982500
+    - 54987500
+    B:
+    - chr13
+    - 54987500
+    - 54992100
+    C:
+    - chr13
+    - 54992100
+    - 54999500
+    D:
+    - chr13
+    - 54999500
+    - 55005500
+    E:
+    - chr13
+    - 55005500
+    - 55010800
+    F:
+    - chr13
+    - 55010800
+    - 55017500
+    p:
+    - chr13
+    - 54832500
+    - 54982500
+    q:
+    - chr13
+    - 55017500
+    - 55167500
+  paths:
+    der:
+    - p+
+    - A+
+    - C-
+    - D+
+    - E-
+    - F+
+    - q+

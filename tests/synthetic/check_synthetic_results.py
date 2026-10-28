@@ -3,9 +3,12 @@
 
 For each planted CxSV (COMMON, RARE, PRIVATE) the patient must have at least
 one CxSV locus overlapping it, and every such locus must carry the expected
-panel carrier count and public/private status. The private VCF must contain
-records only near the PRIVATE event. Prints one line per check and exits 1 on
-any failure.
+panel carrier count and status (breakpoint-level matching). PRIVATE must also
+show the HOTSPOT DECOY's region-overlap carriers (Panel_Region_Carriers,
+Panel_Hotspot) while staying private. The SIMPLE deletion's junction must be
+matched to its panel carriers (private/junction_panel_status.tsv). The private
+VCF must contain records only near the PRIVATE event. Prints one line per check
+and exits 1 on any failure.
 
 Usage: check_synthetic_results.py <expected.json> <patient_results_root> <run> <sample>
 """
@@ -14,7 +17,7 @@ import json
 import sys
 from pathlib import Path
 
-WINDOW = 1000   # same as panel_match.window
+SLOP = 500      # breakpoint slop for the junction check (panel_match.tolerance)
 
 
 def main(expected_json, patient_root, run, sample):
@@ -46,6 +49,21 @@ def main(expected_json, patient_root, run, sample):
             check(int(r["Panel_Carriers"]) == want["panel_carriers"] and r["Panel_Status"] == want["status"],
                   f"{name}: locus {r['Chr']}:{r['Start']}-{r['End']} carriers={r['Panel_Carriers']} "
                   f"status={r['Panel_Status']} (want {want['panel_carriers']}/{want['status']})")
+            if "region_carriers" in want:
+                check(int(r["Panel_Region_Carriers"]) == want["region_carriers"]
+                      and r["Panel_Hotspot"] == want["hotspot"],
+                      f"{name}: hotspot decoy seen by region overlap: region carriers="
+                      f"{r['Panel_Region_Carriers']} hotspot={r['Panel_Hotspot']} "
+                      f"(want {want['region_carriers']}/{want['hotspot']}) yet status {r['Panel_Status']}")
+
+    with open(sdir / "private" / "junction_panel_status.tsv", newline="") as fh:
+        jrows = list(csv.DictReader(fh, delimiter="\t"))
+    for name, want in exp.get("junction_expectations", {}).items():
+        m = [j for j in jrows if j["svtype"] == want["svtype"] and j["chrom1"] == contig
+             and abs(int(j["pos1"]) - want["pos1"]) <= SLOP and abs(int(j["pos2"]) - want["pos2"]) <= SLOP]
+        check(len(m) == 1 and int(m[0]["panel_carriers"]) == want["panel_carriers"],
+              f"{name}: junction {want['svtype']} {want['pos1']}-{want['pos2']} matched on breakpoints, "
+              f"panel carriers {[j['panel_carriers'] for j in m]} (want [{want['panel_carriers']}])")
 
     pv = exp["events"]["PRIVATE"]
     recs = [l.split("\t") for l in (sdir / "private" / "private_cxsv.vcf").read_text().splitlines()
