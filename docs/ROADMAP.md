@@ -150,7 +150,20 @@ with each later item.
   literature set) rank in the top tier and the score breakdown is in the
   report.
 
-### 6. Tests
+### 6. Tests — **in progress (CI done 2026-10-28; lab positive control pending)**
+
+> Done: `tests/unit` (pytest: sample discovery, fingerprint, panel/patient
+> scripts, and a guard that no committed config overrides a fingerprinted
+> section and both workflows include the same calling module);
+> `tests/synthetic` (seeded, fully artificial 1.2 Mb genome with COMMON /
+> RARE / PRIVATE CxSVs planted in 3 panel genomes + a patient: checks
+> carriers 3/1/0, public/public/private, private VCF confined to the private
+> event, and rejection of a changed fingerprinted parameter);
+> `.github/workflows/ci.yml` runs both on every push. Passed on freya in 27 s.
+> Pending: the real positive control is being rebuilt with a catalogue of
+> planted CxSVs (docs/POSITIVE_CONTROL.md); its lab-only regression test
+> follows it.
+
 
 - CI on every push: a tiny synthetic dataset plus the nested-inversion
   positive control, run through both workflows.
