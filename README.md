@@ -17,7 +17,9 @@ The patient scorer never needs the background reads, only the panel release,
 so it can run where patient data must stay.
 
 Planned work is in [`docs/ROADMAP.md`](docs/ROADMAP.md). The code that acquired
-and aligned the lab's background panel is in [`acquisition/`](acquisition/README.md).
+and aligned the lab's background panel is in [`acquisition/`](acquisition/README.md);
+external SV catalogues (CoLoRSdb, HGSVC3, HPRC, gnomAD-SV) are described in
+[`docs/EXTERNAL_CATALOGUES.md`](docs/EXTERNAL_CATALOGUES.md).
 
 ---
 
@@ -80,6 +82,7 @@ workflow/
 scripts/
   run_pipeline.sh         `run_pipeline.sh panel|patient [--extra-config FILE] [--resume] [--dry-run]`
 acquisition/              background-panel acquisition and alignment (lab fleet)
+  catalogues/             external SV catalogues: verified download, liftover, junction-site tables
 tests/
   unit/                   pytest: sample discovery, fingerprint, panel/patient scripts, config guard
   synthetic/              seeded artificial genome, panel + patient end to end (runs in CI)
@@ -89,6 +92,7 @@ tests/
 docs/
   ROADMAP.md
   POSITIVE_CONTROL.md     the planted-CxSV catalogue, how it is built, latest regression result
+  EXTERNAL_CATALOGUES.md  CoLoRSdb, HGSVC3, HPRC r2, gnomAD-SV: licences, builds, fields, conversion counts
 ```
 
 ---

@@ -11,6 +11,9 @@ princess, keurig) appear in `orchestrate_alignment.py`. The design notes in each
 file's docstring say why each safeguard exists; most were added after a
 specific failure.
 
+External SV catalogues used as additional background (roadmap item 4) are in
+[`catalogues/`](catalogues/README.md).
+
 ## Data layout (lab NAS)
 
 ```
