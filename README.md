@@ -4,7 +4,8 @@ A Snakemake pipeline that detects complex structural variants (CxSVs) from
 long-read sequencing data (PacBio / Oxford Nanopore) using an ensemble of
 three callers: **Sniffles2**, **CuteSV**, and **SVIM**.
 
-Clone this repo, drop BAMs into `bamfiles/<cohort>/`, and run one script.
+Clone this repo, drop BAMs or CRAMs into `bamfiles/<cohort>/` (or list them in a
+sample sheet), and run one script.
 
 The pipeline distinguishes two kinds of cohorts (see
 [Public vs. Private CxSVs](#public-vs-private-cxsvs-cohorts) below):
@@ -21,12 +22,14 @@ build a pooled master list of common/benign CxSVs, and **query** cohorts
 CxSV/
 ├── config/
 │   ├── config.yaml          ← main pipeline config: cohorts, paths, params
+│   ├── faulk_lab_background.yaml ← site overlay: background-panel cohorts on the lab NAS
 │   ├── samples.txt           ← sample IDs (only needed for the optional 1000G download)
 │   └── remote_1000g.yaml     ← optional: 1000G-ONT download settings
 ├── workflow/
 │   ├── Snakefile
 │   ├── rules/                ← rules split by pipeline phase
-│   │   ├── indexing.smk
+│   │   ├── common.smk          ← sample discovery (dir or sheet), CRAM reference handling
+│   │   ├── indexing.smk        ← reference cache, CRAM M5 check, BAM/CRAM indexes
 │   │   ├── calling.smk
 │   │   ├── filtering_merging.smk
 │   │   ├── cxsv_discovery.smk
@@ -74,17 +77,48 @@ cohorts:
   patient_batchA: { role: query }
 ```
 
-### 2. Get BAMs into `bamfiles/<cohort>/`
+### 2. Give the cohort its alignments (BAM or CRAM)
 
 Either:
 
-- **Use your own long-read BAMs** — copy or symlink any `*.bam` file(s) into
-  `bamfiles/<cohort>/` (coordinate-sorted). Any filename works — no naming
-  scheme required. The sample ID used throughout the pipeline's output is
-  just the filename with `.bam` stripped (e.g. `patient42.bam` → sample
-  `patient42`), or
+- **Drop files into `bamfiles/<cohort>/`** — copy or symlink any coordinate-sorted
+  `*.bam` or `*.cram` file(s) there. Any filename works — no naming scheme
+  required. The sample ID used throughout the pipeline's output is the filename
+  with `.bam`/`.cram` stripped (e.g. `patient42.cram` → sample `patient42`).
+  Missing `.bai`/`.crai` indexes are created automatically, or
+- **Point the cohort at a sample sheet** — for alignments that live elsewhere
+  (e.g. a shared, read-only datasets tree), add `samples:` to the cohort:
+
+  ```yaml
+  cohorts:
+    my_background:
+      role: reference
+      samples: /path/to/my_background.tsv   # sample_id  alignment  [index]  [coverage_x]
+      min_coverage: 17                       # optional: keep rows with coverage_x >= 17
+  ```
+
+  The sheet is tab-separated with a header; `index` defaults to the alignment
+  path plus `.bai`/`.crai`. Indexes must already exist — the pipeline never
+  writes into a sample sheet's directories. Extra columns are ignored, or
 - **Download the 1000G-ONT test set** (optional, separate step — see
   [Optional: 1000G-ONT Download](#optional-1000g-ont-download) below).
+
+**CRAM inputs** must have been encoded against the pipeline's `reference`. The
+pipeline builds an MD5-keyed htslib cache of that FASTA once
+(`ref_cache`, ~3.1 GB for hs1), points every tool at it through `REF_PATH`, and
+checks each CRAM's `@SQ` M5 tags against it before calling. CRAMs therefore
+decode on any machine, regardless of the reference path recorded in their
+header, and a CRAM made against a different assembly stops with a clear error
+instead of being mis-decoded. Sniffles2 2.8.1, CuteSV 2.1.4 and SVIM 2.0.0 give
+identical call sets from a matched BAM/CRAM pair.
+
+**Site-specific cohorts** go in a second config file layered over
+`config/config.yaml` (nested keys merge), e.g. the lab's background panel:
+
+```bash
+bash scripts/run_pipeline.sh --cohort 1kGP_ONT_1019_CHM13 \
+     --extra-config config/faulk_lab_background.yaml
+```
 
 ### 3. Get the reference and annotation resources
 
@@ -340,18 +374,42 @@ match anything under `config/config.yaml → cohorts:`. **Fix:** add it there
 first, e.g. `patient_batchA: { role: query }`, or check for a typo — running
 `bash scripts/run_pipeline.sh` with no `--cohort` prints the registered list.
 
-### `glob_wildcards` finds no samples — pipeline exits immediately.
+### `No samples found` — pipeline exits immediately.
 
-**Cause:** BAM files not in `bamfiles/<cohort>/` or wrong extension. **Fix:**
+**Cause:** no `*.bam`/`*.cram` files in `bamfiles/<cohort>/`, and the cohort has
+no `samples:` sheet. **Fix:**
 
 ```bash
-ls bamfiles/<cohort>/*.bam     # Should list your BAMs
+ls bamfiles/<cohort>/*.bam bamfiles/<cohort>/*.cram   # should list your files
 ```
+
+### `sample sheet ... has N problem(s)`.
+
+**Cause:** a sheet row points at an alignment or index that does not exist, has
+a duplicate `sample_id`, or an alignment that is not `.bam`/`.cram`. The error
+lists the offending lines. **Fix:** correct the sheet (or regenerate it), and
+index sheet files yourself (`samtools index FILE`) — the pipeline does not write
+into a sheet's directories.
+
+### `check_cram_reference` fails: `M5 ... is not in the pipeline reference`.
+
+**Cause:** the CRAM was encoded against a different reference than
+`config['reference']` (e.g. GRCh38, or a CHM13 copy with different contig
+naming). **Fix:** point `reference` at the FASTA the CRAM was made with, or
+re-encode it: `samtools view -C -T new_ref.fa -o out.cram in.cram` (decode uses
+the old reference via `REF_PATH`/`-T`).
+
+### A caller fails on a CRAM with `Failed to populate reference` / `Unable to fetch reference`.
+
+**Cause:** htslib could not find the reference sequence. The pipeline sets
+`REF_PATH` to its MD5 cache for every rule, so this means the cache is missing
+or incomplete. **Fix:** delete `<ref_cache>/md5_manifest.tsv` and re-run; rule
+`build_ref_cache` rebuilds it.
 
 ### Sniffles2 fails with "ERROR: Index file not found".
 
-**Cause:** The `.bam.bai` index was not created by `index_bam`, or the BAM is
-not coordinate-sorted. **Fix:**
+**Cause:** The `.bam.bai`/`.cram.crai` index was not created by `index_bam`/`index_cram`
+(or is missing from a sample sheet's directory), or the file is not coordinate-sorted. **Fix:**
 
 ```bash
 samtools sort -o bamfiles/<cohort>/SAMPLE_sorted.bam bamfiles/<cohort>/SAMPLE.bam

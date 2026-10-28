@@ -1,15 +1,25 @@
 # =============================================================================
 # CxSV Long-Read Detection Pipeline — Configuration
 #
-# This file configures the core Snakemake pipeline only. It assumes BAMs are
-# already sitting in `bamfiles/<cohort>/` — either your own, or downloaded via
-# the optional `scripts/download_1000g_bams.sh` helper (see
-# config/remote_1000g.yaml and the README for that separate, optional step).
+# This file configures the core Snakemake pipeline only. Each cohort's input is
+# either the BAM/CRAM files sitting in `bamfiles/<cohort>/` — your own, or
+# downloaded via the optional `scripts/download_1000g_bams.sh` helper (see
+# config/remote_1000g.yaml) — or a sample sheet listing files anywhere on disk.
+#
+# Site-specific cohorts and paths belong in a second config file layered on top
+# of this one (e.g. config/faulk_lab_background.yaml), passed with
+#   bash scripts/run_pipeline.sh --cohort <name> --extra-config <file>
 # =============================================================================
 
 # ─── Cohorts ──────────────────────────────────────────────────────────────────
-# Each cohort is an independent set of BAMs in bamfiles/<name>/, run through
-# the identical pipeline into results/<name>/. role determines how it's used:
+# Each cohort is an independent set of alignments run through the identical
+# pipeline into results/<name>/. Inputs, per cohort:
+#   (default)          every *.bam / *.cram in bamfiles/<name>/
+#   samples: <tsv>     a sample sheet: columns sample_id, alignment[, index]
+#                      [, coverage_x]. Files may live anywhere; their indexes
+#                      must already exist (the pipeline never writes there).
+#   min_coverage: <x>  sample-sheet mode only: keep rows with coverage_x >= x
+# role determines how the cohort is used:
 #   reference — contributes to the pooled public CxSV master list (benign/
 #               common variants expected in a healthy population). Build/update
 #               the master list with scripts/build_public_reference.py after
@@ -47,8 +57,15 @@ public_reference:
   # SURVIVOR's 300 bp per-call merge tolerance (survivor_params.max_dist).
   match_window: 1000
 
-# Reference genome (CHM13v2.0 / hs1 — must be local, not remote)
+# Reference genome (CHM13v2.0 / hs1 — must be local, not remote). CRAM inputs
+# must have been encoded against this exact sequence: every CRAM's @SQ M5 tags
+# are checked against it before calling.
 reference: "hs1.fa"
+
+# MD5-keyed htslib cache of `reference`, built once by rule build_ref_cache
+# (~3.1 GB for hs1) and shared by every cohort. CRAMs are decoded from here on
+# every node, whatever reference path their header records.
+ref_cache: "resources/ref_cache"
 
 # ─── Annotation Resources ────────────────────────────────────────────────────
 annotation:
