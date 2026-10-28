@@ -1,7 +1,10 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 2 — ENSEMBLE SV CALLING
-# Three callers run independently on each sample.
-# All take the local BAM + BAI as input — no streaming needed.
+# Three callers run independently on each sample, from a local BAM or CRAM plus
+# its index. For CRAMs, HTS_ENV (rules/common.smk) points htslib at the MD5
+# reference cache and the sample must first pass check_cram_reference.
+# Sniffles2 2.8.1, cuteSV 2.1.4 and SVIM 2.0.0 gave identical call sets from a
+# matched BAM/CRAM pair (chr20: 511 / 2,064 / 10,577 calls, 0 discordant).
 # ═══════════════════════════════════════════════════════════════════════════════
 
 rule run_sniffles:
@@ -10,8 +13,7 @@ rule run_sniffles:
     Outputs a VCF and a .snf (used for optional joint calling).
     """
     input:
-        bam = f"{DATA}/{{sample}}.bam",
-        bai = f"{DATA}/{{sample}}.bam.bai"
+        unpack(caller_inputs)
     output:
         vcf = f"{RESULTS}/callers/{{sample}}_sniffles.vcf",
         snf = f"{RESULTS}/callers/{{sample}}_sniffles.snf"
@@ -22,9 +24,9 @@ rule run_sniffles:
     log:
         f"{RESULTS}/logs/sniffles/{{sample}}.log"
     shell:
-        """
+        HTS_ENV + """
         sniffles \
-            --input      {input.bam} \
+            --input      {input.aln} \
             --reference  {REFERENCE} \
             --threads    {threads} \
             --vcf        {output.vcf} \
@@ -38,12 +40,10 @@ rule run_sniffles:
 rule run_cutesv:
     """
     CuteSV: signature-based SV caller.
-    Requires a local BAM + BAI file — works correctly here.
     Uses a per-sample working directory for temporary split-read files.
     """
     input:
-        bam = f"{DATA}/{{sample}}.bam",
-        bai = f"{DATA}/{{sample}}.bam.bai"
+        unpack(caller_inputs)
     output:
         vcf = f"{RESULTS}/callers/{{sample}}_cutesv.vcf"
     params:
@@ -54,10 +54,10 @@ rule run_cutesv:
     log:
         f"{RESULTS}/logs/cutesv/{{sample}}.log"
     shell:
-        """
+        HTS_ENV + """
         mkdir -p {params.workdir}
         cuteSV \
-            {input.bam} \
+            {input.aln} \
             {REFERENCE} \
             {output.vcf} \
             {params.workdir} \
@@ -72,12 +72,10 @@ rule run_cutesv:
 rule run_svim:
     """
     SVIM: split-read and coverage-based SV caller.
-    Requires a local BAM + BAI file — works correctly here.
     Outputs to a per-sample directory; variants.vcf is the main output.
     """
     input:
-        bam = f"{DATA}/{{sample}}.bam",
-        bai = f"{DATA}/{{sample}}.bam.bai"
+        unpack(caller_inputs)
     output:
         vcf = f"{RESULTS}/callers/{{sample}}_svim/variants.vcf"
     params:
@@ -88,11 +86,11 @@ rule run_svim:
     log:
         f"{RESULTS}/logs/svim/{{sample}}.log"
     shell:
-        """
+        HTS_ENV + """
         mkdir -p {params.outdir}
         svim alignment \
             {params.outdir} \
-            {input.bam} \
+            {input.aln} \
             {REFERENCE} \
             --min_sv_size {params.min_sv_len} \
             --min_mapq {params.min_mapq} \

@@ -2,6 +2,8 @@
 # Cohort BAMs live in bamfiles/<cohort>/ (see config/config.yaml -> cohorts:).
 bamfiles/*/*.bam
 bamfiles/*/*.bam.bai
+bamfiles/*/*.cram
+bamfiles/*/*.cram.crai
 hs1.fa
 hs1.fa.fai
 

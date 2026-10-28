@@ -2,9 +2,10 @@
 # =============================================================================
 # run_pipeline.sh — CxSV Pipeline Runner
 # =============================================================================
-# Runs the Snakemake pipeline for one cohort, against whatever BAMs are
-# already sitting in bamfiles/<cohort>/ — your own, local BAMs, or ones
-# fetched via the separate, optional scripts/download_1000g_bams.sh helper.
+# Runs the Snakemake pipeline for one cohort, against whatever BAMs/CRAMs are
+# already sitting in bamfiles/<cohort>/ — your own, local files, or ones
+# fetched via the separate, optional scripts/download_1000g_bams.sh helper —
+# or against the files in the cohort's sample sheet (cohorts.<name>.samples).
 # This script does NOT download anything itself.
 #
 # Cohorts are registered in config/config.yaml -> cohorts:, each tagged
@@ -15,12 +16,16 @@
 # Usage:
 #   bash scripts/run_pipeline.sh --cohort <name>             # run one cohort
 #   bash scripts/run_pipeline.sh --cohort <name> --resume    # resume it
+#   bash scripts/run_pipeline.sh --cohort <name> --extra-config config/site.yaml
+#       (layer a site-specific config — extra cohorts, paths — over config.yaml)
 #
 # Prerequisites:
 #   conda activate snakemake_env
-#   bamfiles/<cohort>/ must contain at least one *.bam file (any name works)
-#     - your own BAMs, copied/symlinked in, or
-#     - bash scripts/download_1000g_bams.sh   (optional 1000G-ONT download)
+#   bamfiles/<cohort>/ must contain at least one *.bam or *.cram (any name
+#   works), or the cohort must have a sample sheet:
+#     - your own BAMs/CRAMs, copied/symlinked in, or
+#     - bash scripts/download_1000g_bams.sh   (optional 1000G-ONT download), or
+#     - cohorts.<name>.samples: <sheet.tsv>   in a config file
 # =============================================================================
 
 set -euo pipefail
@@ -35,18 +40,20 @@ CORES="${CORES:-32}"
 # ─── Argument parsing ────────────────────────────────────────────────────────
 RESUME=false
 COHORT=""
+EXTRA_CONFIG=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --cohort)   COHORT="$2"; shift 2 ;;
         --resume)   RESUME=true; shift ;;
+        --extra-config) EXTRA_CONFIG="$2"; shift 2 ;;
         --help|-h)
             head -24 "$0" | grep '^#' | sed 's/^# \{0,1\}//'
             exit 0
             ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: bash scripts/run_pipeline.sh --cohort <name> [--resume]"
+            echo "Usage: bash scripts/run_pipeline.sh --cohort <name> [--resume] [--extra-config FILE]"
             exit 1
             ;;
     esac
@@ -59,11 +66,13 @@ if [ -z "$COHORT" ]; then
     python3 -c "
 import yaml
 cfg = yaml.safe_load(open('$CONFIG'))
+if '$EXTRA_CONFIG':
+    cfg.setdefault('cohorts', {}).update(yaml.safe_load(open('$EXTRA_CONFIG')).get('cohorts', {}))
 for name, spec in cfg.get('cohorts', {}).items():
     print(f'  {name}  (role: {(spec or {}).get(\"role\", \"?\")})')
 " 2>/dev/null || echo "  (could not read $CONFIG)"
     echo ""
-    echo "Usage: bash scripts/run_pipeline.sh --cohort <name> [--resume]"
+    echo "Usage: bash scripts/run_pipeline.sh --cohort <name> [--resume] [--extra-config FILE]"
     exit 1
 fi
 
@@ -78,7 +87,7 @@ echo "╚═══════════════════════�
 echo ""
 echo "Project directory : $PROJECT_DIR"
 echo "Cohort            : $COHORT"
-echo "BAM directory      : $DATA_DIR"
+echo "Input directory   : $DATA_DIR (unless the cohort has a sample sheet)"
 echo "Results directory : $RESULTS_DIR"
 echo "Cores             : $CORES"
 echo ""
@@ -96,16 +105,39 @@ if [ ! -f "$SNAKEFILE" ]; then
     exit 1
 fi
 
-N_BAMS=$(ls "$DATA_DIR"/*.bam 2>/dev/null | wc -l || true)
-if [ "$N_BAMS" -eq 0 ]; then
-    echo ""
-    echo "ERROR: No BAMs found in $DATA_DIR"
-    echo "Either copy your own .bam file(s) there (any filename works),"
-    echo "or run the optional 1000G-ONT download first:"
-    echo "  bash scripts/download_1000g_bams.sh"
+if [ -n "$EXTRA_CONFIG" ] && [ ! -f "$EXTRA_CONFIG" ]; then
+    echo "ERROR: --extra-config file not found: $EXTRA_CONFIG"
     exit 1
 fi
-echo "BAMs found in bamfiles/$COHORT/: $N_BAMS"
+
+# Sample sheet (if the cohort has one) or *.bam/*.cram in bamfiles/<cohort>/.
+SHEET=$(python3 -c "
+import yaml
+cfg = yaml.safe_load(open('$CONFIG'))
+if '$EXTRA_CONFIG':
+    cfg.setdefault('cohorts', {}).update(yaml.safe_load(open('$EXTRA_CONFIG')).get('cohorts', {}))
+print(((cfg.get('cohorts', {}).get('$COHORT') or {}).get('samples')) or '')
+")
+if [ -n "$SHEET" ]; then
+    if [ ! -f "$SHEET" ]; then
+        echo "ERROR: sample sheet for cohort $COHORT not found: $SHEET"
+        exit 1
+    fi
+    N_BAMS=$(( $(grep -vc '^[[:space:]]*$' "$SHEET") - 1 ))
+    echo "Sample sheet      : $SHEET ($N_BAMS rows before any min_coverage filter)"
+else
+    N_BAMS=$(ls "$DATA_DIR"/*.bam "$DATA_DIR"/*.cram 2>/dev/null | wc -l || true)
+    if [ "$N_BAMS" -eq 0 ]; then
+        echo ""
+        echo "ERROR: No BAM/CRAM files found in $DATA_DIR"
+        echo "Either copy your own .bam/.cram file(s) there (any filename works),"
+        echo "give the cohort a sample sheet (cohorts.$COHORT.samples), or run the"
+        echo "optional 1000G-ONT download first:"
+        echo "  bash scripts/download_1000g_bams.sh"
+        exit 1
+    fi
+    echo "Alignments found in bamfiles/$COHORT/: $N_BAMS"
+fi
 echo ""
 
 mkdir -p "$RESULTS_DIR"
@@ -114,7 +146,7 @@ mkdir -p "$RESULTS_DIR"
 # (e.g. "bamfiles", "workflow/scripts"), so snakemake must be run from there.
 cd "$PROJECT_DIR"
 
-SNAKE_CONFIG=(--configfile "$CONFIG" --config "active_cohort=$COHORT")
+SNAKE_CONFIG=(--configfile "$CONFIG" ${EXTRA_CONFIG:+"$EXTRA_CONFIG"} --config "active_cohort=$COHORT")
 
 # ─── Dry run ──────────────────────────────────────────────────────────────────
 echo "════════════════════════════════════════════════════════════════"
