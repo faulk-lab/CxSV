@@ -1,0 +1,549 @@
+version: 1
+reference: T2T-CHM13v2 (UCSC hs1 names); 0-based half-open coordinates
+host: sample 3559 (lab-only human-subject data), realigned with minimap2 2.24-r1122 k17
+seed: 3559
+design:
+  max_shift: 5000
+  segdup_pad: 10000
+  repeat_pad: 250
+  max_repeat_frac: 0.3
+  repeat_source: hs1 soft mask
+flank_sim: 150000
+flank_replace: 50000
+notation: segments are reference intervals; a derivative path lists segments 5'->3' on the rearranged
+  haplotype with strand (+ reference orientation, - reverse complement). p/q are flanks. Segments absent
+  from every path are deleted.
+events:
+- id: E01
+  name: DUP-TRP/INV-DUP
+  gene: MECP2
+  note: duplicated B and D flank a triplicated C whose middle copy is inverted (replication-based, inverted-repeat
+    mediated; MECP2/PLP1 type)
+  expect:
+    cxsv: true
+    ideal_class: DUP+INV
+  zygosity: heterozygous
+  segments:
+    B:
+    - chrX
+    - 152320014
+    - 152325989
+    C:
+    - chrX
+    - 152325989
+    - 152338314
+    D:
+    - chrX
+    - 152338314
+    - 152349014
+    p:
+    - chrX
+    - 152170014
+    - 152320014
+    q:
+    - chrX
+    - 152349014
+    - 152499014
+  paths:
+    der:
+    - p+
+    - B+
+    - C+
+    - D+
+    - C-
+    - B+
+    - C+
+    - D+
+    - q+
+- id: E02
+  name: delINVdel
+  gene: NF1
+  note: inversion with a deletion at each breakpoint
+  expect:
+    cxsv: true
+    ideal_class: DEL+INV
+  zygosity: heterozygous
+  segments:
+    D1:
+    - chr17
+    - 32243849
+    - 32247849
+    I:
+    - chr17
+    - 32247849
+    - 32265774
+    D2:
+    - chr17
+    - 32265774
+    - 32271849
+    p:
+    - chr17
+    - 32093849
+    - 32243849
+    q:
+    - chr17
+    - 32271849
+    - 32421849
+  paths:
+    der:
+    - p+
+    - I-
+    - q+
+- id: E03
+  name: dupINVdup
+  gene: PMP22
+  note: inversion of B with inverted duplications of the flanking segments A and C
+  expect:
+    cxsv: true
+    ideal_class: DUP+INV
+  zygosity: heterozygous
+  segments:
+    A:
+    - chr17
+    - 15140559
+    - 15145559
+    B:
+    - chr17
+    - 15145559
+    - 15161084
+    C:
+    - chr17
+    - 15161084
+    - 15166559
+    p:
+    - chr17
+    - 14990559
+    - 15140559
+    q:
+    - chr17
+    - 15166559
+    - 15316559
+  paths:
+    der:
+    - p+
+    - A+
+    - C-
+    - B-
+    - A-
+    - C+
+    - q+
+- id: E04
+  name: DEL+INV+DUP
+  gene: SHANK3
+  note: deletion of B, inversion of C and tandem duplication of E within 24 kb
+  expect:
+    cxsv: true
+    ideal_class: DEL+DUP+INV
+  zygosity: heterozygous
+  segments:
+    A:
+    - chr22
+    - 51207890
+    - 51209790
+    B:
+    - chr22
+    - 51209790
+    - 51213665
+    C:
+    - chr22
+    - 51213665
+    - 51223040
+    D:
+    - chr22
+    - 51223040
+    - 51225790
+    E:
+    - chr22
+    - 51225790
+    - 51230915
+    p:
+    - chr22
+    - 51057890
+    - 51207890
+    q:
+    - chr22
+    - 51230915
+    - 51324926
+  paths:
+    der:
+    - p+
+    - A+
+    - C-
+    - D+
+    - E+
+    - E+
+    - q+
+- id: E05
+  name: nested inversion with inner deletion
+  gene: NRXN1
+  note: 35 kb inversion containing a second, inner inversion (C, back in forward orientation) and a deletion
+    (D)
+  expect:
+    cxsv: true
+    ideal_class: DEL+INV
+  zygosity: heterozygous
+  segments:
+    A:
+    - chr2
+    - 50453329
+    - 50461904
+    B:
+    - chr2
+    - 50461904
+    - 50469104
+    C:
+    - chr2
+    - 50469104
+    - 50476904
+    D:
+    - chr2
+    - 50476904
+    - 50479929
+    E:
+    - chr2
+    - 50479929
+    - 50488904
+    p:
+    - chr2
+    - 50303329
+    - 50453329
+    q:
+    - chr2
+    - 50488904
+    - 50638904
+  paths:
+    der:
+    - p+
+    - E-
+    - C+
+    - B-
+    - A-
+    - q+
+- id: E06
+  name: templated insertions at a deletion (FoSTeS/MMBIR)
+  gene: AUTS2
+  note: 20 kb deletion X whose junction carries a forward copy of T1 (from ~14 kb upstream) and an inverted
+    copy of T2 (from ~30 kb downstream)
+  expect:
+    cxsv: true
+    ideal_class: INS+DEL
+  zygosity: heterozygous
+  segments:
+    T1:
+    - chr7
+    - 71340258
+    - 71341183
+    U1:
+    - chr7
+    - 71341183
+    - 71355258
+    X:
+    - chr7
+    - 71355258
+    - 71376583
+    U2:
+    - chr7
+    - 71376583
+    - 71405258
+    T2:
+    - chr7
+    - 71405258
+    - 71406158
+    p:
+    - chr7
+    - 71190258
+    - 71340258
+    q:
+    - chr7
+    - 71406158
+    - 71556158
+  paths:
+    der:
+    - p+
+    - T1+
+    - U1+
+    - T1+
+    - T2-
+    - U2+
+    - T2+
+    - q+
+- id: E07
+  name: reciprocal translocation with junction deletions
+  gene: SATB2/FOXP2
+  note: t(2;7) between SATB2 and FOXP2 introns; 2 kb lost on chr2 and 1 kb on chr7
+  expect:
+    cxsv: true
+    ideal_class: BND_cluster
+  zygosity: heterozygous
+  segments:
+    d2:
+    - chr2
+    - 199854293
+    - 199856293
+    p_chr2:
+    - chr2
+    - 199704293
+    - 199854293
+    q_chr2:
+    - chr2
+    - 199856293
+    - 200006293
+    d7:
+    - chr7
+    - 115868955
+    - 115869905
+    p_chr7:
+    - chr7
+    - 115718955
+    - 115868955
+    q_chr7:
+    - chr7
+    - 115869905
+    - 116019905
+  paths:
+    der(2):
+    - p_chr2+
+    - q_chr7+
+    der(7):
+    - p_chr7+
+    - q_chr2+
+- id: E08
+  name: chromoplexy (balanced 3-chromosome chain)
+  gene: NSD2/EHMT1/ZIC2
+  note: chained translocations chr4->chr9->chr13->chr4 with 500 bp losses at each junction
+  expect:
+    cxsv: true
+    ideal_class: BND_cluster
+    caveat: each chromosome carries only two breakends, so per-locus criteria C1-C5 may not fire
+  zygosity: heterozygous
+  segments:
+    d4:
+    - chr4
+    - 1931409
+    - 1931784
+    p_chr4:
+    - chr4
+    - 1781409
+    - 1931409
+    q_chr4:
+    - chr4
+    - 1931784
+    - 2081784
+    d9:
+    - chr9
+    - 149997337
+    - 149997837
+    p_chr9:
+    - chr9
+    - 149847337
+    - 149997337
+    q_chr9:
+    - chr9
+    - 149997837
+    - 150147837
+    d13:
+    - chr13
+    - 99195184
+    - 99195684
+    p_chr13:
+    - chr13
+    - 99045184
+    - 99195184
+    q_chr13:
+    - chr13
+    - 99195684
+    - 99345684
+  paths:
+    der(4):
+    - p_chr4+
+    - q_chr9+
+    der(9):
+    - p_chr9+
+    - q_chr13+
+    der(13):
+    - p_chr13+
+    - q_chr4+
+- id: E09
+  name: localized chromothripsis
+  gene: CHD2
+  note: ~400 kb shattered into 12 fragments; S4, S8 and S12 lost; the rest re-joined in random order and
+    orientation
+  expect:
+    cxsv: true
+    ideal_class: Chromothripsis_like
+  zygosity: heterozygous
+  segments:
+    S1:
+    - chr15
+    - 90515727
+    - 90544509
+    S2:
+    - chr15
+    - 90544509
+    - 90576300
+    S3:
+    - chr15
+    - 90576300
+    - 90610554
+    S4:
+    - chr15
+    - 90610554
+    - 90642577
+    S5:
+    - chr15
+    - 90642577
+    - 90676242
+    S6:
+    - chr15
+    - 90676242
+    - 90713851
+    S7:
+    - chr15
+    - 90713851
+    - 90748606
+    S8:
+    - chr15
+    - 90748606
+    - 90783043
+    S9:
+    - chr15
+    - 90783043
+    - 90813897
+    S10:
+    - chr15
+    - 90813897
+    - 90853518
+    S11:
+    - chr15
+    - 90853518
+    - 90891960
+    S12:
+    - chr15
+    - 90891960
+    - 90925728
+    p:
+    - chr15
+    - 90365727
+    - 90515727
+    q:
+    - chr15
+    - 90925728
+    - 91075728
+  paths:
+    der:
+    - p+
+    - S1+
+    - S5-
+    - S3+
+    - S9-
+    - S7+
+    - S2+
+    - S11-
+    - S6+
+    - S10-
+    - q+
+- id: E10
+  name: multi-breakpoint cluster
+  gene: null
+  note: two inversions (C, E) and two deletions (B, F) within 39 kb, intergenic
+  expect:
+    cxsv: true
+    ideal_class: Multi_breakpoint_cluster
+  zygosity: heterozygous
+  segments:
+    A:
+    - chr5
+    - 25003550
+    - 25008500
+    B:
+    - chr5
+    - 25008500
+    - 25011500
+    C:
+    - chr5
+    - 25011500
+    - 25018500
+    D:
+    - chr5
+    - 25018500
+    - 25023650
+    E:
+    - chr5
+    - 25023650
+    - 25031500
+    F:
+    - chr5
+    - 25031500
+    - 25035500
+    G:
+    - chr5
+    - 25035500
+    - 25041800
+    p:
+    - chr5
+    - 24853550
+    - 25003550
+    q:
+    - chr5
+    - 25041800
+    - 25191800
+  paths:
+    der:
+    - p+
+    - A+
+    - C-
+    - D+
+    - E-
+    - G+
+    - q+
+- id: E11
+  name: simple deletion (specificity control)
+  gene: null
+  note: 'a single 20 kb deletion: must NOT be classified a CxSV'
+  expect:
+    cxsv: false
+    ideal_class: null
+  zygosity: heterozygous
+  segments:
+    X:
+    - chr10
+    - 29098000
+    - 29115650
+    p:
+    - chr10
+    - 28948000
+    - 29098000
+    q:
+    - chr10
+    - 29115650
+    - 29265650
+  paths:
+    der:
+    - p+
+    - q+
+- id: E12
+  name: simple inversion (specificity control)
+  gene: null
+  note: 'a single 60 kb balanced inversion: must NOT be classified a CxSV'
+  expect:
+    cxsv: false
+    ideal_class: null
+  zygosity: heterozygous
+  segments:
+    I:
+    - chr12
+    - 74754175
+    - 74814325
+    p:
+    - chr12
+    - 74604175
+    - 74754175
+    q:
+    - chr12
+    - 74814325
+    - 74964325
+  paths:
+    der:
+    - p+
+    - I-
+    - q+
