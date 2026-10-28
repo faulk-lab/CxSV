@@ -1,0 +1,14 @@
+# Tools for acquisition/catalogues (external SV catalogue download + conversion).
+# Separate from cxsv-pipeline on purpose: the pipeline does not need liftOver.
+# Created on freya 2026-10-28 with these pins.
+name: cxsv-catalogues
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.11
+  - bcftools=1.21
+  - htslib=1.21
+  - ucsc-liftover=502
+  - pytest
+  - pyyaml
