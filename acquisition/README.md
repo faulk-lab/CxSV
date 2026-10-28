@@ -2,8 +2,8 @@
 
 Code that built the CxSV **background panel**: public, presumed-healthy long-read
 human genomes, aligned to T2T-CHM13v2 (`hs1`), whose CxSV calls form the
-reference that patient CxSVs are filtered against (`role: reference` cohorts in
-`config/config.yaml`; see `config/faulk_lab_background.yaml`).
+reference that patient CxSVs are compared against (the panel builder's
+`panel_cohorts`; see `config/sites/faulk_lab_panel.yaml`).
 
 These scripts are operational code for the Faulk lab fleet. Paths default to the
 lab NAS (`/mnt/sargasso1/CxSV`), and node names (freya, shadowfax, athena, betsy,
@@ -68,6 +68,5 @@ specific failure.
 ```bash
 python3 acquisition/build_registry.py --dry-run     # counts only
 python3 acquisition/build_registry.py               # rewrite registry + sample sheets
-bash scripts/run_pipeline.sh --cohort 1kGP_ONT_1019_CHM13 \
-     --extra-config config/faulk_lab_background.yaml
+bash scripts/run_pipeline.sh panel --extra-config config/sites/faulk_lab_panel.yaml
 ```

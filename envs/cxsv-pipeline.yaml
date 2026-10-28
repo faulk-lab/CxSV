@@ -1,0 +1,41 @@
+# Single pinned environment for both CxSV workflows (panel builder and patient
+# scorer). Caller versions are part of the panel's identity: a patient must be
+# called with exactly the versions the panel was built with, or version
+# differences surface as false "private" CxSVs. Change a pin only together with
+# a new panel release.
+#
+#   mamba env create -f envs/cxsv-pipeline.yaml
+#   conda activate cxsv-pipeline
+name: cxsv-pipeline
+channels:
+  - conda-forge
+  - bioconda
+  - nodefaults
+dependencies:
+  - python=3.11
+  - snakemake-minimal=9.23
+  # SV callers (verified CRAM-safe: identical BAM/CRAM call sets on chr20)
+  - sniffles=2.8.1
+  - cutesv=2.1.4
+  - svim=2.0.0
+  - matplotlib-base<3.9        # SVIM plotting breaks on >=3.9 (VCF unaffected)
+  # merging / interval / alignment utilities
+  - survivor=1.0.7
+  - bcftools=1.21
+  - samtools=1.21
+  - htslib=1.21
+  - bedtools=2.31.1
+  # python libraries used by workflow/scripts
+  - pysam=0.22
+  - pyyaml
+  - pandas
+  - pytest
+  # R plotting
+  - r-base=4.4
+  - r-ggplot2
+  - r-dplyr
+  - r-tidyr
+  - r-patchwork
+  - r-scales
+  - r-venndiagram
+  - r-ggvenndiagram

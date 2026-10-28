@@ -1,0 +1,70 @@
+# =============================================================================
+# CxSV — shared calling configuration (read by BOTH workflows)
+#
+# The panel builder (workflow/panel/Snakefile) and the patient scorer
+# (workflow/patient/Snakefile) both load this file first, so a patient is
+# called exactly as the panel was.
+#
+# Sections marked [FINGERPRINTED] define which SVs and CxSV loci a genome has.
+# They are recorded in the panel release's calling_fingerprint.json, and the
+# patient workflow stops if its values differ from the panel's. Changing any of
+# them means building a new panel release. Do NOT override them in a site or
+# patient config.
+#
+# All relative paths are relative to the project root (run snakemake there).
+# =============================================================================
+
+# ─── Reference ────────────────────────────────────────────────────────────────
+# T2T-CHM13v2 with UCSC hs1 contig names (chr1..chrM). CRAM inputs must have
+# been encoded against this exact sequence: each CRAM's @SQ M5 tags are checked
+# against it, and contig MD5s are part of the fingerprint.
+reference: "hs1.fa"
+
+# MD5-keyed htslib cache of `reference` (~3.1 GB for hs1), built once by rule
+# build_ref_cache. CRAMs decode from it on any machine, with no network access.
+ref_cache: "resources/ref_cache"
+
+# ─── Annotation resources (labels only — never remove a locus) ──────────────
+annotation:
+  genes_bed:    "resources/genes.final.bed"
+  exons_bed:    "resources/exons.filtered.bed"
+  repeats_bed:  "resources/repeats.final.bed"
+  segdup_bed:   "resources/segdup.final.bed"
+  promoter_window: 2000
+
+# ─── Paths ───────────────────────────────────────────────────────────────────
+bamfiles_root: "bamfiles"          # directory-mode inputs: bamfiles/<cohort>/*.bam|*.cram
+scripts_dir:   "workflow/scripts"
+
+# ─── Threads (not fingerprinted) ─────────────────────────────────────────────
+threads:
+  samtools:   8
+  sv_callers: 32
+
+# ─── [FINGERPRINTED] SV calling ─────────────────────────────────────────────
+sv_params:
+  min_sv_len:           50
+  min_support:           3
+  min_mapq:             20
+  cluster_max_distance: 1000
+
+# ─── [FINGERPRINTED] Per-caller quality filtering ───────────────────────────
+filter_params:
+  min_qual:       10
+  svim_min_qual:   5
+
+# ─── [FINGERPRINTED] SURVIVOR merging of the three callers ──────────────────
+survivor_params:
+  max_dist:              300
+  min_callers:             1
+  min_callers_consensus:   2
+
+# ─── [FINGERPRINTED] CxSV discovery (per sample) ────────────────────────────
+cxsv_params:
+  cluster_distance:  50000
+  min_breakpoints:       3
+  bnd_window:            1
+  chromoanag_min_window: 10000
+  chromoanag_max_window: 50000
+  chromoanag_min_svs:        3
+  max_cluster_size: 500000

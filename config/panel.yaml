@@ -1,0 +1,28 @@
+# =============================================================================
+# CxSV PANEL BUILDER — workflow settings (loaded after config/calling.yaml)
+#
+# Background cohorts, one spec each. Inputs per cohort:
+#   (default)          every *.bam / *.cram in bamfiles/<name>/
+#   samples: <tsv>     sample sheet: sample_id, alignment[, index][, individual_id]
+#                      [, platform][, coverage_x]; files may live anywhere and
+#                      their indexes must already exist
+#   min_coverage: <x>  sample-sheet mode only: keep rows with coverage_x >= x
+#   platform: <name>   default platform label (ONT, PACBIO) when a sheet or
+#                      directory does not give one per sample
+# individual_id is what carrier counts are de-duplicated on: one person in two
+# cohorts counts once.
+#
+# Site-specific cohorts and paths go in an overlay, e.g.
+#   config/sites/faulk_lab_panel.yaml
+# =============================================================================
+
+panel_results_root: "results/panel"
+
+# Empty here on purpose: cohorts are site-specific. Example:
+#   panel_cohorts:
+#     my_ont_cohort:              # directory mode: bamfiles/my_ont_cohort/*.bam|*.cram
+#       platform: ONT
+#     my_sheet_cohort:
+#       samples: /path/to/sheet.tsv
+#       min_coverage: 17
+panel_cohorts: {}

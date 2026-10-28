@@ -1,0 +1,52 @@
+"""
+CxSV PANEL BUILDER
+==================
+Builds the background CxSV panel from presumed-healthy long-read genomes, on
+the lab fleet. Its product is a panel release (results/panel/release/): CxSV
+loci with carrier counts, the denominators, and the calling fingerprint that a
+patient run must reproduce. The patient scorer (workflow/patient/Snakefile)
+needs only that release.
+
+Both workflows share one calling module (rules/common, indexing, calling,
+per_sample, fingerprint) and one parameter file (config/calling.yaml), so a
+patient is called exactly as the panel was.
+
+Run from the project root:
+    snakemake -s workflow/panel/Snakefile --cores 32 \
+        --configfile config/sites/<site>_panel.yaml
+or  bash scripts/run_pipeline.sh panel --extra-config config/sites/<site>_panel.yaml
+
+Config (later files override earlier ones; nested keys merge):
+    config/calling.yaml   shared + fingerprinted calling/discovery parameters
+    config/panel.yaml     panel cohorts and output root
+    --configfile ...      site overlay: paths, cohort sample sheets
+"""
+
+configfile: "config/calling.yaml"
+configfile: "config/panel.yaml"
+
+WORKFLOW_NAME = "panel"
+COHORT_SPECS  = config.get("panel_cohorts") or {}
+RESULTS_ROOT  = config.get("panel_results_root", "results/panel")
+
+include: "../rules/common.smk"
+include: "../rules/indexing.smk"
+include: "../rules/calling.smk"
+include: "../rules/per_sample.smk"
+include: "../rules/sample_report.smk"
+include: "../rules/fingerprint.smk"
+include: "../rules/panel_cohort.smk"
+include: "../rules/panel_aggregate.smk"
+
+
+rule all:
+    input:
+        # per sample: report, annotated CxSV loci, Sniffles2 .snf for joint genotyping
+        per_sample(f"{S}/sv_summary.txt"),
+        per_sample(f"{S}/cxsv/cxsv_master_table.tsv"),
+        per_sample(f"{S}/callers/sniffles.snf"),
+        # per cohort: population call sets and QC plots
+        [f"{RESULTS_ROOT}/cohorts/{c}/{o}" for c in COHORTS for o in COHORT_OUTPUTS],
+        # panel: carrier table, sharing plot, release
+        f"{P}/plots/cxsv_population_sharing.pdf",
+        f"{REL}/release_manifest.tsv",

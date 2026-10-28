@@ -1,219 +1,81 @@
 #!/usr/bin/env bash
 # =============================================================================
-# run_pipeline.sh — CxSV Pipeline Runner
+# run_pipeline.sh — run the CxSV panel builder or the patient scorer
 # =============================================================================
-# Runs the Snakemake pipeline for one cohort, against whatever BAMs/CRAMs are
-# already sitting in bamfiles/<cohort>/ — your own, local files, or ones
-# fetched via the separate, optional scripts/download_1000g_bams.sh helper —
-# or against the files in the cohort's sample sheet (cohorts.<name>.samples).
-# This script does NOT download anything itself.
-#
-# Cohorts are registered in config/config.yaml -> cohorts:, each tagged
-# role: reference (contributes to the public CxSV master list) or
-# role: query (gets filtered against that master list once it exists — see
-# scripts/build_public_reference.py and workflow/rules/private_filter.smk).
-#
 # Usage:
-#   bash scripts/run_pipeline.sh --cohort <name>             # run one cohort
-#   bash scripts/run_pipeline.sh --cohort <name> --resume    # resume it
-#   bash scripts/run_pipeline.sh --cohort <name> --extra-config config/site.yaml
-#       (layer a site-specific config — extra cohorts, paths — over config.yaml)
+#   bash scripts/run_pipeline.sh panel   [--extra-config FILE] [--resume] [--dry-run]
+#   bash scripts/run_pipeline.sh patient [--extra-config FILE] [--resume] [--dry-run]
 #
-# Prerequisites:
-#   conda activate snakemake_env
-#   bamfiles/<cohort>/ must contain at least one *.bam or *.cram (any name
-#   works), or the cohort must have a sample sheet:
-#     - your own BAMs/CRAMs, copied/symlinked in, or
-#     - bash scripts/download_1000g_bams.sh   (optional 1000G-ONT download), or
-#     - cohorts.<name>.samples: <sheet.tsv>   in a config file
+#   panel    build the background CxSV panel and its release
+#            (workflow/panel/Snakefile; config/calling.yaml + config/panel.yaml)
+#   patient  call one patient run with the panel's calling module, check the
+#            calling fingerprint against the panel release, label CxSVs
+#            public/private (workflow/patient/Snakefile; config/calling.yaml +
+#            config/patient.yaml)
+#
+#   --extra-config FILE   site overlay (paths, cohorts, patient sheet); repeatable
+#   --resume              re-run incomplete jobs from an interrupted run
+#   --dry-run             resolve the DAG and list jobs, run nothing
+#   CORES=<n>             cores for snakemake (default 32)
+#
+# Prerequisite: conda env create -f envs/cxsv-pipeline.yaml && conda activate cxsv-pipeline
+# Run from anywhere; snakemake is started in the project root.
 # =============================================================================
-
 set -euo pipefail
 
-# ─── Configuration ────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-SNAKEFILE="$PROJECT_DIR/workflow/Snakefile"
-CONFIG="$PROJECT_DIR/config/config.yaml"
 CORES="${CORES:-32}"
 
-# ─── Argument parsing ────────────────────────────────────────────────────────
-RESUME=false
-COHORT=""
-EXTRA_CONFIG=""
+usage() { sed -n '4,22p' "$0" | sed 's/^# \{0,1\}//'; }
 
+[ $# -ge 1 ] || { usage; exit 1; }
+WORKFLOW="$1"; shift
+case "$WORKFLOW" in
+    panel|patient) ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "ERROR: first argument must be 'panel' or 'patient' (got '$WORKFLOW')"; usage; exit 1 ;;
+esac
+
+EXTRA=(); RESUME=false; DRY=false
 while [ $# -gt 0 ]; do
     case "$1" in
-        --cohort)   COHORT="$2"; shift 2 ;;
-        --resume)   RESUME=true; shift ;;
-        --extra-config) EXTRA_CONFIG="$2"; shift 2 ;;
-        --help|-h)
-            head -24 "$0" | grep '^#' | sed 's/^# \{0,1\}//'
-            exit 0
-            ;;
-        *)
-            echo "Unknown option: $1"
-            echo "Usage: bash scripts/run_pipeline.sh --cohort <name> [--resume] [--extra-config FILE]"
-            exit 1
-            ;;
+        --extra-config) EXTRA+=("$(cd "$(dirname "$2")" && pwd)/$(basename "$2")"); shift 2 ;;
+        --resume)       RESUME=true; shift ;;
+        --dry-run|-n)   DRY=true; shift ;;
+        -h|--help)      usage; exit 0 ;;
+        *) echo "Unknown option: $1"; usage; exit 1 ;;
     esac
 done
 
-if [ -z "$COHORT" ]; then
-    echo "ERROR: --cohort <name> is required."
-    echo ""
-    echo "Registered cohorts (config/config.yaml -> cohorts:):"
-    python3 -c "
-import yaml
-cfg = yaml.safe_load(open('$CONFIG'))
-if '$EXTRA_CONFIG':
-    cfg.setdefault('cohorts', {}).update(yaml.safe_load(open('$EXTRA_CONFIG')).get('cohorts', {}))
-for name, spec in cfg.get('cohorts', {}).items():
-    print(f'  {name}  (role: {(spec or {}).get(\"role\", \"?\")})')
-" 2>/dev/null || echo "  (could not read $CONFIG)"
-    echo ""
-    echo "Usage: bash scripts/run_pipeline.sh --cohort <name> [--resume] [--extra-config FILE]"
-    exit 1
-fi
-
-DATA_DIR="$PROJECT_DIR/bamfiles/$COHORT"
-RESULTS_DIR="$PROJECT_DIR/results/$COHORT"
-
-# ─── Banner ───────────────────────────────────────────────────────────────────
-echo ""
-echo "╔══════════════════════════════════════════════════════════════╗"
-echo "║           CxSV Long-Read Detection Pipeline                  ║"
-echo "╚══════════════════════════════════════════════════════════════╝"
-echo ""
-echo "Project directory : $PROJECT_DIR"
-echo "Cohort            : $COHORT"
-echo "Input directory   : $DATA_DIR (unless the cohort has a sample sheet)"
-echo "Results directory : $RESULTS_DIR"
-echo "Cores             : $CORES"
-echo ""
-
-# ─── Prerequisites check ─────────────────────────────────────────────────────
-echo "Checking prerequisites..."
-
-if [ ! -f "$CONFIG" ]; then
-    echo "ERROR: Config not found: $CONFIG"
-    exit 1
-fi
-
-if [ ! -f "$SNAKEFILE" ]; then
-    echo "ERROR: Snakefile not found: $SNAKEFILE"
-    exit 1
-fi
-
-if [ -n "$EXTRA_CONFIG" ] && [ ! -f "$EXTRA_CONFIG" ]; then
-    echo "ERROR: --extra-config file not found: $EXTRA_CONFIG"
-    exit 1
-fi
-
-# Sample sheet (if the cohort has one) or *.bam/*.cram in bamfiles/<cohort>/.
-SHEET=$(python3 -c "
-import yaml
-cfg = yaml.safe_load(open('$CONFIG'))
-if '$EXTRA_CONFIG':
-    cfg.setdefault('cohorts', {}).update(yaml.safe_load(open('$EXTRA_CONFIG')).get('cohorts', {}))
-print(((cfg.get('cohorts', {}).get('$COHORT') or {}).get('samples')) or '')
-")
-if [ -n "$SHEET" ]; then
-    if [ ! -f "$SHEET" ]; then
-        echo "ERROR: sample sheet for cohort $COHORT not found: $SHEET"
-        exit 1
-    fi
-    N_BAMS=$(( $(grep -vc '^[[:space:]]*$' "$SHEET") - 1 ))
-    echo "Sample sheet      : $SHEET ($N_BAMS rows before any min_coverage filter)"
-else
-    N_BAMS=$(ls "$DATA_DIR"/*.bam "$DATA_DIR"/*.cram 2>/dev/null | wc -l || true)
-    if [ "$N_BAMS" -eq 0 ]; then
-        echo ""
-        echo "ERROR: No BAM/CRAM files found in $DATA_DIR"
-        echo "Either copy your own .bam/.cram file(s) there (any filename works),"
-        echo "give the cohort a sample sheet (cohorts.$COHORT.samples), or run the"
-        echo "optional 1000G-ONT download first:"
-        echo "  bash scripts/download_1000g_bams.sh"
-        exit 1
-    fi
-    echo "Alignments found in bamfiles/$COHORT/: $N_BAMS"
-fi
-echo ""
-
-mkdir -p "$RESULTS_DIR"
-
-# config.yaml and the Snakefile use paths relative to the project root
-# (e.g. "bamfiles", "workflow/scripts"), so snakemake must be run from there.
+SNAKEFILE="$PROJECT_DIR/workflow/$WORKFLOW/Snakefile"
 cd "$PROJECT_DIR"
 
-SNAKE_CONFIG=(--configfile "$CONFIG" ${EXTRA_CONFIG:+"$EXTRA_CONFIG"} --config "active_cohort=$COHORT")
+command -v snakemake >/dev/null || { echo "ERROR: snakemake not on PATH; activate the cxsv-pipeline env"; exit 1; }
 
-# ─── Dry run ──────────────────────────────────────────────────────────────────
-echo "════════════════════════════════════════════════════════════════"
-echo "  Dry run (checking DAG)"
-echo "════════════════════════════════════════════════════════════════"
-snakemake \
-    -s "$SNAKEFILE" \
-    "${SNAKE_CONFIG[@]}" \
-    --cores "$CORES" \
-    -n \
-    --quiet \
-    2>&1 | tail -8
-echo ""
+FLAGS=(-s "$SNAKEFILE" --cores "$CORES" --keep-going --printshellcmds)
+[ ${#EXTRA[@]} -gt 0 ] && FLAGS+=(--configfile "${EXTRA[@]}")
+$RESUME && FLAGS+=(--rerun-incomplete)
 
-# ─── Full run ─────────────────────────────────────────────────────────────────
-echo "════════════════════════════════════════════════════════════════"
-echo "  Running Snakemake pipeline"
-echo "  Cohort  : $COHORT"
-echo "  Samples : $N_BAMS"
-echo "  Cores   : $CORES"
-echo "════════════════════════════════════════════════════════════════"
-echo ""
+echo "CxSV $WORKFLOW workflow"
+echo "  project : $PROJECT_DIR"
+echo "  config  : config/calling.yaml config/$WORKFLOW.yaml ${EXTRA[*]:-}"
+echo "  cores   : $CORES"
 
-LOG="$RESULTS_DIR/snakemake_run_$(date +%Y%m%d_%H%M%S).log"
-echo "Full log: $LOG"
-echo ""
-
-SNAKE_FLAGS=(--cores "$CORES" "${SNAKE_CONFIG[@]}" --keep-going)
-if [ "$RESUME" = true ]; then
-    SNAKE_FLAGS+=(--rerun-incomplete)
-    echo "(Resuming incomplete run)"
+if $DRY; then
+    snakemake "${FLAGS[@]}" --dry-run --quiet rules
+    exit 0
 fi
 
-snakemake -s "$SNAKEFILE" "${SNAKE_FLAGS[@]}" 2>&1 | tee "$LOG"
-SNAKE_EXIT=${PIPESTATUS[0]}
-
-if [ "$SNAKE_EXIT" -ne 0 ]; then
-    echo ""
-    echo "════════════════════════════════════════════════════════════════"
-    echo "  Pipeline finished with errors (exit code $SNAKE_EXIT)"
-    echo "  Some samples may have failed — check: $LOG"
-    echo "  To resume: bash scripts/run_pipeline.sh --cohort $COHORT --resume"
-    echo "════════════════════════════════════════════════════════════════"
-    exit "$SNAKE_EXIT"
+mkdir -p "$PROJECT_DIR/results/logs"
+LOG="$PROJECT_DIR/results/logs/${WORKFLOW}_$(date +%Y%m%d_%H%M%S).log"
+echo "  log     : $LOG"
+set +e
+snakemake "${FLAGS[@]}" 2>&1 | tee "$LOG"
+RC=${PIPESTATUS[0]}
+set -e
+if [ "$RC" -ne 0 ]; then
+    echo "Finished with errors (exit $RC). Resume with: bash scripts/run_pipeline.sh $WORKFLOW ${EXTRA[*]:+--extra-config ${EXTRA[*]}} --resume"
+    exit "$RC"
 fi
-
-echo ""
-echo "════════════════════════════════════════════════════════════════"
-echo "  Pipeline complete!"
-echo ""
-
-N_MERGED=$(find "$RESULTS_DIR/per_sample" -name "*_merged_sv.vcf" 2>/dev/null | wc -l)
-N_CXSV=$(find "$RESULTS_DIR/per_sample" -name "*_cxsv_only.vcf"  2>/dev/null | wc -l)
-echo "  Per-sample merged VCFs : $N_MERGED / $N_BAMS"
-echo "  Per-sample CxSV VCFs   : $N_CXSV / $N_BAMS"
-echo ""
-if [ -f "$RESULTS_DIR/final/cxsv_count.txt" ]; then
-    echo "  CxSV summary:"
-    cat "$RESULTS_DIR/final/cxsv_count.txt" | sed 's/^/    /'
-fi
-echo ""
-echo "  Outputs:"
-echo "    results/$COHORT/final/cxsv_master_table.tsv"
-echo "    results/$COHORT/final/long_read_filtered.vcf"
-echo "    results/$COHORT/final/cxsv_only.vcf"
-echo "    results/$COHORT/plots/*.pdf"
-if [ -f "$RESULTS_DIR/final/private_cxsv_master_table.tsv" ]; then
-    echo "    results/$COHORT/final/private_cxsv_master_table.tsv  (private/candidate-pathogenic CxSVs)"
-fi
-echo "════════════════════════════════════════════════════════════════"
+echo "Done."
