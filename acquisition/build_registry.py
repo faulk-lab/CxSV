@@ -30,6 +30,16 @@ Sources
 * manifests/manifest_PRJEB89727.tsv (the 2 ENA-only runs, recorded as excluded)
 * registry/sources/: 1kGP_LRSC_500_ONT_Metadata.tsv (pore, kit, sex, ancestry),
   ont500_cramino_coverage.tsv, pacbio_chr20_depth.tsv
+* registry/sources/ population fallbacks, used in this order when the LRSC
+  metadata has no entry (fetched from ftp.1000genomes.ebi.ac.uk; see the
+  matching .source files):
+    igsr_3202_samples_ped_population.txt  (1000G_2504_high_coverage; sex,
+        population, superpopulation)
+    igsr_20130606_sample_info.txt         (phase 3 sample info; population and
+        gender only, superpopulation taken from the population code's
+        superpopulation in the 3,202-sample table)
+  individuals.tsv records which source supplied each label
+  (population_source); individuals in none of them stay blank.
 
 Usage
 -----
@@ -120,6 +130,33 @@ def load_lrsc_metadata(src: Path) -> dict[str, dict]:
     for row in read_tsv(src / "1kGP_LRSC_500_ONT_Metadata.tsv"):
         meta[normalise_individual_id(row["NHGRI_ID"])] = row
     return meta
+
+
+def load_igsr_populations(src: Path) -> dict[str, dict]:
+    """Sex/population/superpopulation per individual from the IGSR tables."""
+    out: dict[str, dict] = {}
+    pop_to_super: dict[str, str] = {}
+    ped = src / "igsr_3202_samples_ped_population.txt"
+    if ped.exists():
+        with open(ped) as fh:
+            hdr = fh.readline().split()
+            for line in fh:
+                r = dict(zip(hdr, line.split()))
+                pop_to_super[r["Population"]] = r["Superpopulation"]
+                out[r["SampleID"]] = {"sex": {"1": "male", "2": "female"}.get(r["Sex"], ""),
+                                      "subpopulation": r["Population"],
+                                      "superpopulation": r["Superpopulation"],
+                                      "source": "igsr_3202"}
+    info = src / "igsr_20130606_sample_info.txt"
+    if info.exists():
+        for r in read_tsv(info):
+            iid = r["Sample"]
+            if iid in out or not r.get("Population"):
+                continue
+            out[iid] = {"sex": r.get("Gender", "").lower(), "subpopulation": r["Population"],
+                        "superpopulation": pop_to_super.get(r["Population"], ""),
+                        "source": "igsr_20130606_sample_info"}
+    return out
 
 
 def load_cramino(src: Path) -> dict[str, float]:
@@ -271,7 +308,11 @@ def passes_floor(row: dict) -> bool:
         return False
 
 
-def individuals_table(rows: list[dict], meta) -> list[dict]:
+# one sex vocabulary across sources: the LRSC metadata uses XX/XY, IGSR male/female
+SEX_VOCAB = {"XX": "female", "XY": "male", "1": "male", "2": "female"}
+
+
+def individuals_table(rows: list[dict], meta, igsr=None) -> list[dict]:
     by = defaultdict(list)
     for r in rows:
         if r["status"] == "verified":
@@ -281,6 +322,14 @@ def individuals_table(rows: list[dict], meta) -> list[dict]:
         rs = by[iid]
         covs = [float(r["coverage_x"]) for r in rs if r["coverage_x"]]
         md = meta.get(iid, {})
+        ig = (igsr or {}).get(iid, {})
+        if md.get("SuperPopulation"):
+            demo = {"sex": SEX_VOCAB.get(md.get("Sex", ""), md.get("Sex", "")), "subpopulation": md.get("SubPopulation", ""),
+                    "superpopulation": md.get("SuperPopulation", ""), "source": "lrsc_500_metadata"}
+        elif ig:
+            demo = ig
+        else:
+            demo = {"sex": md.get("Sex", ""), "subpopulation": "", "superpopulation": "", "source": ""}
         out.append({
             "individual_id": iid,
             "n_verified_files": len(rs),
@@ -288,8 +337,8 @@ def individuals_table(rows: list[dict], meta) -> list[dict]:
             "platforms": ",".join(sorted({r["platform"] for r in rs})),
             "max_coverage_x": f"{max(covs):.2f}" if covs else "",
             "passes_17x_any": "yes" if any(passes_floor(r) for r in rs) else "no",
-            "sex": md.get("Sex", ""), "subpopulation": md.get("SubPopulation", ""),
-            "superpopulation": md.get("SuperPopulation", ""),
+            "sex": demo["sex"], "subpopulation": demo["subpopulation"],
+            "superpopulation": demo["superpopulation"], "population_source": demo["source"],
         })
     return out
 
@@ -329,7 +378,7 @@ def main() -> int:
     dups = [k for k, n in ids.items() if n > 1]
     if dups:
         sys.exit(f"duplicate file_id(s): {dups[:5]}")
-    inds = individuals_table(rows, meta)
+    inds = individuals_table(rows, meta, load_igsr_populations(src))
     sheets = sample_sheets(rows, ds)
 
     print("cohort\tstatus\tfiles")
@@ -339,6 +388,8 @@ def main() -> int:
     print(f"verified files: {len(v)}; distinct individuals: {len(inds)}; "
           f"individuals passing {COVERAGE_FLOOR_X:g}x in at least one file: "
           f"{sum(i['passes_17x_any'] == 'yes' for i in inds)}")
+    by_src = Counter(i["population_source"] or "none" for i in inds)
+    print("population labels by source: " + ", ".join(f"{k}:{n}" for k, n in sorted(by_src.items())))
     multi = Counter(i["cohorts"].count(",") + 1 for i in inds)
     print("individuals by number of cohorts: " + ", ".join(f"{k}:{n}" for k, n in sorted(multi.items())))
     if a.dry_run:

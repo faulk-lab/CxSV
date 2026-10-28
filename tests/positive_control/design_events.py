@@ -304,7 +304,7 @@ def main():
     doc = {
         "version": 1,
         "reference": "T2T-CHM13v2 (UCSC hs1 names); 0-based half-open coordinates",
-        "host": "sample 3559 (lab-only human-subject data), realigned with minimap2 2.24-r1122 k17",
+        "host": "sample 3559 (exempt), realigned with minimap2 2.24-r1122 k17",
         "seed": a.seed,
         "design": dict(max_shift=MAX_SHIFT, segdup_pad=SEGDUP_PAD, repeat_pad=REPEAT_PAD,
                        max_repeat_frac=MAX_REPEAT_FRAC, repeat_source="hs1 soft mask"),

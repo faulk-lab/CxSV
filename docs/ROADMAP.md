@@ -178,7 +178,7 @@ with each later item.
 
 
 - CI on every push: the tiny synthetic dataset through both workflows. The
-  real positive control is human-subject data and is lab-only
+  real positive control is too large for CI and runs on the lab fleet
   (`tests/lab/pos_control_regression.sh`).
 - Before the first patient run, validate the restricted-environment bundle
   with a dry run, then a full run, on public data.
