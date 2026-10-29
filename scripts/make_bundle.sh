@@ -93,7 +93,8 @@ build_image
 [ -n "$RELEASE" ] && [ -f "$RELEASE/release.json" ] || { echo "--release DIR with release.json is required"; exit 1; }
 # shellcheck disable=SC1091
 source "$IMG_DIR/image.env"
-in_image() { "$SINGULARITY" exec --containall --bind "$EXPORT:/repo:ro" --bind "$RELEASE:/release:ro" \
+in_image() { "$SINGULARITY" exec --containall --env CXSV_IMAGE_ID="$CXSV_IMAGE_ID" --env CXSV_SIF_SHA256="$CXSV_SIF_SHA256" \
+                 --bind "$EXPORT:/repo:ro" --bind "$RELEASE:/release:ro" \
                  "$IMG_DIR/cxsv-pipeline.sif" "$@"; }
 log "release: verifying $RELEASE"
 in_image python /repo/workflow/scripts/verify_panel_release.py /release
@@ -219,8 +220,11 @@ print(json.dumps({k: meta[k] for k in ("bundle_id", "size_bytes_before_manifests
 PY
 
 t=$(date +%s); log "checksums"
-( cd "$STAGE" && find . -type f ! -name MANIFEST.sha256 ! -name bundle_manifest.tsv -printf '%P\n' \
-    | LC_ALL=C sort | xargs -d '\n' sha256sum > MANIFEST.sha256.tmp && mv MANIFEST.sha256.tmp MANIFEST.sha256 )
+# the list is complete before the output file exists (a redirect inside the
+# bundle would otherwise list its own temp file)
+( cd "$STAGE" && find . -type f ! -name 'MANIFEST.sha256*' ! -name 'bundle_manifest.tsv*' -printf '%P\n' \
+    | LC_ALL=C sort > "$EXPORT/.filelist" \
+  && xargs -d '\n' sha256sum < "$EXPORT/.filelist" > "$EXPORT/.manifest" && mv "$EXPORT/.manifest" MANIFEST.sha256 )
 log "checksums: $(( $(date +%s) - t )) s"
 # sizes are stat-ed relative to the bundle root
 ( cd "$STAGE" && awk 'BEGIN{OFS="\t"; print "path","bytes","sha256","component"}
