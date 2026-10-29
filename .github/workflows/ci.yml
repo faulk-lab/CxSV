@@ -1,0 +1,41 @@
+# CI for both CxSV workflows. Fully synthetic data only: no human data ever
+# enters CI (the real positive control runs as tests/lab/, on the lab fleet).
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  unit:
+    name: unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pytest pyyaml
+      - run: python -m pytest -q tests/unit
+
+  synthetic:
+    name: synthetic end-to-end (panel + patient)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-file: envs/cxsv-pipeline.yaml
+          cache-environment: true
+      - name: run panel + patient on the synthetic dataset and check results
+        shell: bash -el {0}
+        run: CORES=4 bash tests/synthetic/run_synthetic.sh "$RUNNER_TEMP/synth"
+      - name: keep logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-logs
+          path: |
+            ${{ runner.temp }}/synth/*.log
+            ${{ runner.temp }}/synth/results/**/logs/**

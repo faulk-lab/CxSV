@@ -25,10 +25,14 @@ dependencies:
   - samtools=1.21
   - htslib=1.21
   - bedtools=2.31.1
+  # aligner: only used by tests/synthetic to align simulated reads; pinned to
+  # the version that aligned the background panel
+  - minimap2=2.24
   # python libraries used by workflow/scripts
   - pysam=0.22
   - pyyaml
   - pandas
+  - numpy
   - pytest
   # R plotting
   - r-base=4.4
