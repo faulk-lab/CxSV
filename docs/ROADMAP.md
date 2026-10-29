@@ -52,7 +52,7 @@ Item 2 removes this.
 **Start condition:** `cram-input` and `acquisition-code` are merged into
 `main`, and the registry has been rebuilt after the PacBio download.
 
-**Suggested order:** 1 → 6 (test scaffold) → 3 → 2 → 4 → 5. Item 6 grows
+**Suggested order:** 1 → 6 (test scaffold) → 3 → 2 → 4 → 5. Done: 1, 6, 3. Item 6 grows
 with each later item.
 
 ### 1. Two workflows, one shared calling module — **done (2026-10-28)**
@@ -102,7 +102,65 @@ with each later item.
   engines and container runtime are allowed. Snakemake plus Apptainer is the
   assumption.
 
-### 3. Joint genotyping and breakpoint-level matching
+### 3. Joint genotyping and breakpoint-level matching — **done (2026-10-28)**
+
+> **Implemented** on branch `item3-breakpoint-matching`; details in
+> [docs/JUNCTIONS.md](JUNCTIONS.md).
+>
+> - **Junction tables.** Every sample's merged SV calls become a junction
+>   table (`rules/junctions.smk`, fingerprinted, with `junction_params`).
+>   Duplicate and reciprocal breakend records are collapsed for matching only;
+>   the C1-C5 criteria are unchanged.
+> - **Panel junction sites.** The panel clusters all junctions across
+>   individuals into sites in the shared junction-site schema. Clustering is
+>   type-aware and leader-based, with 500 bp tolerance. Each site carries
+>   distinct-individual carriers and allele frequencies by platform and
+>   superpopulation (`panel_junction_sites.tsv`, `panel_junction_carriers.tsv`,
+>   `panel_individuals.tsv`).
+> - **Sniffles2 population mode.** The per-sample `.snf` files are jointly
+>   genotyped (`sniffles_population_sites.tsv`) and compared with the clustered
+>   sites.
+> - **Patient matching.** Patient loci are matched junction by junction: a
+>   panel individual carries a locus when it has >= 75% of its junctions.
+>   Statuses are private / shared_junctions / public, and region overlap is
+>   kept as a hotspot flag.
+> - **Tests.** Unit tests (29) cover extraction, collapsing, clustering and the
+>   matcher. The synthetic CI test gained a HOTSPOT DECOY (a different CxSV at
+>   the PRIVATE locus in 2 panel genomes: PRIVATE stays private with 2
+>   region-overlap carriers; COMMON stays public with 3) and a breakpoint check
+>   of the SIMPLE deletion (3 carriers).
+> - **E13.** The positive control gained E13, a CxSV spliced at regression
+>   time into the control and 3 background genomes.
+>
+> **Result** (lab regression, 10 backgrounds, `RERUN=1`):
+>
+> - 40/41 junctions exact.
+> - **E04 now PASSES as private**: 0 carriers, 4 region-overlap carriers
+>   flagged as a hotspot.
+> - **E13 is public with 3 carriers.**
+> - E11/E12's junctions are matched on breakpoints with 0 carriers.
+> - E01-E03 and E05-E11 still pass. E12 stays a known failure (classifier,
+>   item 5).
+> - The rerun gave byte-identical records.
+>
+> **Sniffles2 vs clustered frequencies** on that panel:
+>
+> - 954 of 964 Sniffles2 sites match a clustered site.
+> - Summed per clustered site, carrier calls agree: DEL 1,241 vs 1,203; INS
+>   1,473 vs 1,458.
+> - Per site, Sniffles2 splits 129 clustered INS sites into several
+>   sequence-distinct alleles, so per-Sniffles2-site INS carriers are lower.
+> - Carrier counts are equal at 236/310 DEL sites and 209/257 one-to-one INS
+>   sites.
+> - Sniffles2 population mode reports no BND, so the 7 clustered BND sites
+>   have no Sniffles2 counterpart.
+>
+> **Not implemented: forced genotyping of panel sites in the patient**
+> (Sniffles2 `--genotype-vcf`). It cannot change a status, because it only
+> adds patient junctions that are public by construction. The false-private
+> error comes from panel callers missing the patient's junctions, which needs
+> panel evidence rather than patient re-genotyping. It would also cost one more
+> genome-wide Sniffles2 pass per patient. Reasoning in docs/JUNCTIONS.md.
 
 - Today `build_public_reference.py` pools each cohort's CxSV regions into one
   BED. `private_filter.smk` then calls a patient CxSV public if it lies

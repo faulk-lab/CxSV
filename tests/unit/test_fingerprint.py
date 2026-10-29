@@ -6,7 +6,8 @@ import cxsv_fingerprint as fpm
 from conftest import REPO
 
 PARAMS = {"sv_params": {"min_sv_len": 50, "min_support": 3}, "filter_params": {"min_qual": 10},
-          "survivor_params": {"max_dist": 300}, "cxsv_params": {"cluster_distance": 50000}}
+          "survivor_params": {"max_dist": 300}, "cxsv_params": {"cluster_distance": 50000},
+          "junction_params": {"collapse_distance": 300}}
 
 
 def make_fp(tmp_path, params=PARAMS, tools=None, contigs=None):

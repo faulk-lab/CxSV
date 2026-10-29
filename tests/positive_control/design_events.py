@@ -24,6 +24,13 @@ truth set and figure are all generated from it, never from this script.
 Usage (on a machine with the annotation BEDs):
   design_events.py --resources /mnt/sargasso1/CxSV/resources --fasta hs1.fa \
                    --out tests/positive_control/events.yaml [--seed 3559]
+
+Adding events to an existing catalogue (E13, 2026-10-28) without moving any
+placed event:
+  design_events.py ... --append-to tests/positive_control/events.yaml --only E13 \
+                   --out tests/positive_control/events.yaml
+places only the --only events (avoiding every existing event as usual) and
+appends them; the existing entries are re-written unchanged.
 """
 import argparse
 import bisect
@@ -115,6 +122,21 @@ def catalogue(rng):
              note="a single 60 kb balanced inversion: must NOT be classified a CxSV",
              segments=[("I", 60000, "inv")], paths={"der": ["p+", "I-", "q+"]},
              expect=dict(cxsv=False, ideal_class=None)),
+        # Added 2026-10-28 (roadmap item 3): a COMMON panel CxSV. Spliced at
+        # regression time into the control AND into 3 background genomes, so it
+        # must be classed public with 3 carriers. Intergenic, so it never
+        # competes with the gene events in the scoring work (item 5).
+        dict(id="E13", name="public spike-in: deletion-inversion cluster", gene=None, chrom="chr13",
+             note="deletion of B and inversions of C and E within 35 kb, intergenic; also planted in 3 "
+                  "background genomes (expected public, 3 carriers)",
+             segments=[("A", 5000, "keep"), ("B", 4000, "del"), ("C", 8000, "inv"),
+                       ("D", 6000, "keep"), ("E", 7000, "inv"), ("F", 5000, "keep")],
+             paths={"der": ["p+", "A+", "C-", "D+", "E-", "F+", "q+"]},
+             expect=dict(cxsv=True, ideal_class="Multi_breakpoint_cluster",
+                         panel_status="public", panel_carriers=3),
+             spike_in=dict(splice="regression", backgrounds=["HG00125", "HG00111", "HG00096"],
+                           rule="the 3 highest-coverage genomes of the 10 regression backgrounds "
+                                "(registry coverage 34.1x, 25.6x, 25.4x)")),
     ]
 
 
@@ -220,6 +242,8 @@ def main():
     ap.add_argument("--fasta", required=True, help="soft-masked hs1 FASTA (+ .fai)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--seed", type=int, default=3559)
+    ap.add_argument("--append-to", default=None, help="existing events.yaml to extend")
+    ap.add_argument("--only", default=None, help="comma-separated event ids to place (with --append-to)")
     a = ap.parse_args()
     rng = random.Random(a.seed)
     cat = catalogue(rng)
@@ -235,12 +259,32 @@ def main():
         segdup.setdefault(c, Track([]))
 
     events, used = [], defaultdict(list)
+    existing = None
+    if a.append_to:
+        existing = yaml.safe_load(open(a.append_to))
+        for ev in existing["events"]:
+            for name, (c, s, e) in ev["segments"].items():
+                if not (name in ("p", "q") or name.startswith(("p_", "q_"))):
+                    used[c].append((s, e))
+        only = set(a.only.split(",")) if a.only else set()
+        have = {ev["id"] for ev in existing["events"]}
+        cat = [ev for ev in cat if ev["id"] in only and ev["id"] not in have]
+        chroms = set()
+        for ev in cat:
+            chroms.update(ev["chrom"] if isinstance(ev["chrom"], list) else [ev["chrom"]])
+        genes = read_bed(f"{a.resources}/genes.final.bed", chroms, names=True)
+        exons = read_bed(f"{a.resources}/exons.filtered.bed", chroms, names=True)
+        segdup = {c: Track(v) for c, v in read_bed(f"{a.resources}/segdup.final.bed", chroms).items()}
+        for c in chroms:
+            segdup.setdefault(c, Track([]))
 
     def clash(chrom, s, e):
         return any(e + 2 * FLANK_SIM > us and s - 2 * FLANK_SIM < ue for us, ue in used[chrom])
 
     for ev in cat:
         out = {k: ev[k] for k in ("id", "name", "gene", "note", "expect")}
+        if "spike_in" in ev:
+            out["spike_in"] = ev["spike_in"]
         out["zygosity"] = "heterozygous"
         if isinstance(ev["chrom"], list):                # inter-chromosomal: one junction locus per chromosome
             segs_out, genes_list = {}, ev["gene"].split("/")
@@ -270,7 +314,8 @@ def main():
                 assert c == chrom
                 centre, lo, hi = (gs + ge) // 2, gs - total // 2, ge - total // 2
             else:
-                centre, lo, hi = {"chr5": 25_000_000, "chr10": 30_000_000, "chr12": 75_000_000}[chrom], 0, clen[chrom]
+                centre, lo, hi = {"chr5": 25_000_000, "chr10": 30_000_000, "chr12": 75_000_000,
+                                  "chr13": 55_000_000}[chrom], 0, clen[chrom]
             placed = None
             for k in range(0, 4000):
                 anchor = centre - total // 2 + (k // 2) * 2000 * (1 if k % 2 else -1)
@@ -300,6 +345,13 @@ def main():
         print(f"{ev['id']} {ev['name']}: " + ", ".join(
             f"{k}={v[0]}:{v[1]}-{v[2]}" for k, v in out["segments"].items() if not k.startswith(("p", "q"))),
             file=sys.stderr)
+
+    if existing is not None:
+        existing["events"] += events
+        with open(a.out, "w") as fh:
+            yaml.safe_dump(existing, fh, sort_keys=False, width=100)
+        print(f"appended {[e['id'] for e in events]} to {a.append_to} -> {a.out}", file=sys.stderr)
+        return
 
     doc = {
         "version": 1,

@@ -12,7 +12,10 @@ import yaml
 import cxsv_fingerprint as fpm
 from conftest import REPO
 
-SHARED = ["common.smk", "indexing.smk", "calling.smk", "per_sample.smk", "sample_report.smk", "fingerprint.smk"]
+SHARED = [
+    "common.smk", "indexing.smk", "calling.smk", "per_sample.smk", "junctions.smk",
+    "sample_report.smk", "fingerprint.smk",
+]
 
 
 def includes(snakefile):

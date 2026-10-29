@@ -56,8 +56,8 @@ about 90 samples the pooled list already covered ~12% of the genome.)
 ```
 config/
   calling.yaml            shared + [FINGERPRINTED] calling/discovery parameters, reference, annotation
-  panel.yaml              panel builder: cohorts, output root
-  patient.yaml            patient scorer: runs, panel_release, panel_match
+  panel.yaml              panel builder: cohorts, output root, panel_individuals, panel_sites
+  patient.yaml            patient scorer: runs, panel_release, panel_match (junction matching)
   sites/                  site overlays (paths, cohort sheets), e.g. faulk_lab_panel.yaml
 envs/
   cxsv-pipeline.yaml      the one pinned environment for both workflows
@@ -65,17 +65,19 @@ envs/
 workflow/
   panel/Snakefile         panel builder entry point
   patient/Snakefile       patient scorer entry point
-  lib/                    plain-Python modules (unit-tested): sample discovery, fingerprint
+  lib/                    plain-Python modules (unit-tested): sample discovery, fingerprint,
+                          junction model (cxsv_junctions), site clustering + matching (cxsv_matching)
   rules/
     common.smk            shared: inputs, wildcards, CRAM reference cache env
     indexing.smk          shared: reference cache, CRAM M5 check, BAM/CRAM indexes
     calling.smk           shared, fingerprinted: Sniffles2 / cuteSV / SVIM
     per_sample.smk        shared, fingerprinted: filter, merge, CxSV discovery, annotation
+    junctions.smk         shared, fingerprinted: per-sample junction table (docs/JUNCTIONS.md)
     sample_report.smk     shared: per-sample text report
     fingerprint.smk       shared: tool versions + calling fingerprint
     panel_cohort.smk      panel: per-cohort population call sets and QC plots
-    panel_aggregate.smk   panel: carrier table and panel release
-    patient_private.smk   patient: compatibility check, public/private labels, plots
+    panel_aggregate.smk   panel: carrier table, junction sites, Sniffles2 population mode, release
+    patient_private.smk   patient: compatibility check, breakpoint-level panel status, plots
   scripts/                scripts invoked by the rules (Python, R)
 scripts/
   run_pipeline.sh         `run_pipeline.sh panel|patient [--extra-config FILE] [--resume] [--dry-run]`
@@ -88,6 +90,7 @@ tests/
   lab/                    regression on the real positive control (lab fleet; too large for CI)
 docs/
   ROADMAP.md
+  JUNCTIONS.md            junction model, shared junction-site schema, panel sites, patient matching
   POSITIVE_CONTROL.md     the planted-CxSV catalogue, how it is built, latest regression result
 ```
 
@@ -185,13 +188,19 @@ pair.
 | `cxsv/cxsv_only.vcf` | merged calls inside this sample's CxSV loci |
 | `cxsv/cxsv_master_table.tsv` | annotated CxSV loci (genes, exons, repeats, segdups, complexity class) |
 | `cxsv/cxsv_loci.bed` | Chr, Start, End, Exon_Disrupt |
+| `junctions/junctions.tsv` | every merged SV call as a breakpoint junction (duplicate / reciprocal breakends collapsed), with its CxSV locus (docs/JUNCTIONS.md) |
 | `sv_summary.txt` | per-sample text report |
 
 ### Panel — `results/panel/`
 
 | File | Description |
 |---|---|
-| `release/panel_cxsv_calls.tsv` | one row per (sample, CxSV locus): the table patient loci are matched against |
+| `release/panel_junction_sites.tsv` | junction sites clustered across individuals, in the shared junction-site schema (`chrom1 pos1 chrom2 pos2 svtype svlen ac an af source version` + `af_<platform>`, `af_<superpopulation>`) |
+| `release/panel_junction_carriers.tsv` | the same sites with their coordinate envelope and carrier individuals: what patient loci are matched against |
+| `release/panel_individuals.tsv` | sex, superpopulation, platforms, cohorts and samples per panel individual |
+| `release/sniffles_population_sites.tsv` | Sniffles2 population-mode joint genotypes of the per-sample `.snf` files, same schema (`source=sniffles2_population`) |
+| `release/panel_frequency_comparison.tsv`, `..._summary.tsv` | Sniffles2 vs clustered carriers per site, and summary statistics |
+| `release/panel_cxsv_calls.tsv` | one row per (sample, CxSV locus): region-overlap (hotspot) information for patient loci |
 | `release/panel_cxsv_loci.tsv` | overlapping calls merged across samples, with carrier counts by platform (summary only) |
 | `release/panel_summary.tsv` | samples / individuals / calls per cohort, per platform, total |
 | `release/calling_fingerprint.json` | what a patient run must reproduce |
@@ -204,17 +213,40 @@ pair.
 | File | Description |
 |---|---|
 | `panel_compatibility.txt` | fingerprint comparison with the panel release; written only when compatible (or overridden). The full report, including every difference on a mismatch, is `logs/panel_compatibility.log` |
-| `samples/<run>/<sample>/private/cxsv_panel_status.tsv` | every CxSV locus + `Panel_Carriers`, `Panel_Carrier_Freq`, `Panel_Carriers_By_Platform`, `Panel_Status` |
-| `samples/<run>/<sample>/private/private_cxsv_master_table.tsv` | private loci only |
-| `samples/<run>/<sample>/private/private_cxsv.vcf` | the patient's SV records inside private loci |
+| `samples/<run>/<sample>/private/cxsv_panel_status.tsv` | every CxSV locus + `Panel_Junctions`, `Panel_Junctions_Seen`, `Panel_Carriers`, `Panel_Carrier_Freq`, `Panel_Carriers_By_Platform`, `Panel_Carriers_By_Superpopulation`, `Panel_Best_Junction_Fraction`, `Panel_Region_Carriers`, `Panel_Hotspot`, `Panel_Status` |
+| `samples/<run>/<sample>/private/private_cxsv_master_table.tsv` | loci that are not public (`private` and `shared_junctions`) |
+| `samples/<run>/<sample>/private/private_cxsv.vcf` | the patient's SV records inside those loci |
+| `samples/<run>/<sample>/private/junction_panel_status.tsv` | every patient junction (also simple SVs) with its panel sites, carriers, carrier frequency and site allele frequency |
 | `samples/<run>/<sample>/plots/` | genomic context and complexity class plots |
 
-A patient locus is **public** when at least `panel_match.min_carriers`
-(default 1) panel individuals have a CxSV overlapping it after padding both
-sides by `panel_match.window` bp (default 1000). The carrier count is kept on
-every row, so a rare-but-seen locus can be told apart from one absent from the
-panel. Breakpoint-level matching and callability weighting replace interval
-overlap in roadmap item 3.
+Patient loci are matched against the panel **on breakpoints**, not on region
+overlap (roadmap item 3; [docs/JUNCTIONS.md](docs/JUNCTIONS.md)).
+
+- **Junction match:** a patient junction matches a panel site when svtype and
+  both contigs agree and each end lies within `panel_match.tolerance` (500 bp).
+- **Carrier:** a panel individual carries a locus when it carries at least
+  `panel_match.min_junction_fraction` (0.75) of the locus's junctions. That is
+  all junctions for loci of ≤ 3 junctions, and one may be missing from 4 on.
+- **Status:**
+  - `public`: at least `panel_match.min_carriers` (1) individuals carry the
+    rearrangement;
+  - `shared_junctions`: some junctions are in the panel but not the
+    rearrangement, e.g. a different event at a hotspot. Not public;
+  - `private`: no junction is in the panel.
+- **Hotspot flag:** region-overlap carriers (the previous rule, padded by
+  `panel_match.hotspot_window`) stay as information in
+  `Panel_Region_Carriers` and `Panel_Hotspot`.
+
+The `panel_match` settings are not fingerprinted. The junction tables
+(`junction_params` in `config/calling.yaml`) are.
+
+Panel settings (`config/panel.yaml`):
+
+- `panel_individuals`: the registry `individuals.tsv`, which supplies sex
+  (chrX/chrY allele numbers) and superpopulation (`af_<group>`);
+- `panel_sites.tolerance`: 500 bp, keep it equal to `panel_match.tolerance`;
+- `panel_release_id`: the `version` column; unset, it is `fp-<fingerprint hash>`;
+- `sniffles_population.extra`: options for very large panels.
 
 ---
 
@@ -278,11 +310,15 @@ loci are retained (most CxSVs are expected there).
 |---|---|---|---|
 | Unit | none | CI + anywhere | `pytest tests/unit` |
 | Synthetic end to end | seeded artificial 1.2 Mb genome, 3 panel genomes + 1 patient | CI on every push | `bash tests/synthetic/run_synthetic.sh` |
-| Positive control | sample 3559 with 12 planted heterozygous CxSVs (~105 GB CRAM on the lab NAS) | lab fleet | `bash tests/lab/pos_control_regression.sh [WORKDIR] [N_BACKGROUND]` |
+| Positive control | sample 3559 with 12 planted heterozygous events + the E13 public spike-in (also in 3 background genomes) (~105 GB CRAM on the lab NAS) | lab fleet | `bash tests/lab/pos_control_regression.sh [WORKDIR] [N_BACKGROUND]` |
 
 The positive control is described in [docs/POSITIVE_CONTROL.md](docs/POSITIVE_CONTROL.md):
-ten complex rearrangements at clinically relevant genes and two simple-SV
-specificity controls, each with a breakend-level truth set. Its CRAM (~105 GB)
+ten complex rearrangements at clinically relevant genes, two simple-SV
+specificity controls and a complex SV that is also planted in 3 background
+genomes and must come out public (E13), each with a breakend-level truth set.
+The synthetic test includes a HOTSPOT DECOY: a different CxSV, carried by two
+panel genomes at the locus of the patient's PRIVATE event, which must stay
+private. Its CRAM (~105 GB)
 stays on the lab NAS; the repository holds the generator, the event catalogue
 and the truth coordinates.
 

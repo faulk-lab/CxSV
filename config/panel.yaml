@@ -26,3 +26,27 @@ panel_results_root: "results/panel"
 #       samples: /path/to/sheet.tsv
 #       min_coverage: 17
 panel_cohorts: {}
+
+# Registry individuals table (individual_id, sex, superpopulation, ...), e.g.
+# /mnt/sargasso1/CxSV/datasets/registry/individuals.tsv. Gives allele numbers
+# for chrX/chrY (sex) and the per-superpopulation frequencies (af_<group>) of
+# the panel junction sites. Unset: sex unknown, no superpopulation groups.
+panel_individuals: null
+
+# Label written into the junction-site tables' `version` column. Unset: "fp-"
+# + the first 12 hex digits of the calling fingerprint (roadmap item 2 adds
+# versioned release ids).
+panel_release_id: null
+
+# Junction sites (scripts/build_panel_sites.py): junctions of different
+# individuals are one site when svtype and contigs agree and both ends lie
+# within `tolerance` bp of the site's first member (INS: lengths within
+# ins_len_ratio). Keep panel_match.tolerance (config/patient.yaml) equal.
+panel_sites:
+  tolerance: 500
+  ins_len_ratio: 0.5
+
+# Sniffles2 population-mode joint genotyping of the per-sample .snf files.
+# extra: options for very large panels, e.g. "--combine-max-inmemory-results 2000"
+sniffles_population:
+  extra: ""

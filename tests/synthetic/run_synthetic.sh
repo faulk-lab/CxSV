@@ -9,7 +9,10 @@
 #    minimap2 alignments (panel3 as CRAM to exercise the CRAM path).
 # 2. panel builder on panel1-3, patient scorer on the patient.
 # 3. check_synthetic_results.py: carriers 3 / 1 / 0 and public / public /
-#    private, compatible fingerprint, private VCF confined to PRIVATE.
+#    private by breakpoint matching, although a HOTSPOT DECOY (a different
+#    CxSV at the PRIVATE locus in panel1 and panel3) overlaps PRIVATE; the
+#    SIMPLE deletion's junction has 3 panel carriers; compatible fingerprint;
+#    private VCF confined to PRIVATE.
 # 4. negative test: a patient overlay that changes a fingerprinted parameter
 #    must stop at check_panel_compatibility.
 # Needs the cxsv-pipeline env (it includes minimap2 for this test). Run from

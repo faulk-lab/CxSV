@@ -25,7 +25,7 @@ import hashlib
 import json
 from pathlib import Path
 
-CALLING_PARAM_KEYS = ("sv_params", "filter_params", "survivor_params", "cxsv_params")
+CALLING_PARAM_KEYS = ("sv_params", "filter_params", "survivor_params", "cxsv_params", "junction_params")
 
 # Relative to the workflow/ directory. Everything that decides which CxSV loci a
 # sample has; changing any of these needs a new panel release.
@@ -36,6 +36,9 @@ CALLING_CODE = (
     "scripts/classify_cxsv.py",
     "scripts/extract_cxsv_vcf.py",
     "scripts/annotate_cxsv.py",
+    "rules/junctions.smk",
+    "scripts/extract_junctions.py",
+    "lib/cxsv_junctions.py",
 )
 
 TOOLS = ("sniffles", "cuteSV", "svim", "SURVIVOR", "bcftools", "bedtools", "samtools")

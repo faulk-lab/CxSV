@@ -1,12 +1,14 @@
 # Positive control: sample 3559 with a catalogue of planted CxSVs
 
 The lab positive control is a real long-read genome (sample 3559, ONT R10.4.1,
-~39x) into which twelve heterozygous structural rearrangements have been
-planted at known coordinates: ten complex SVs of different mechanisms and two
-simple SVs that must **not** be called complex. It tests the whole patient path
-on real background sequence and real host variation: calling, CxSV clustering
-and classification, panel matching (a planted event must come out *private*)
-and the private VCF.
+~39x) into which thirteen heterozygous structural rearrangements have been
+planted at known coordinates: ten complex SVs of different mechanisms, two
+simple SVs that must **not** be called complex, and one complex SV (E13) that is
+also planted in 3 of the regression's background genomes and must therefore
+come out **public**. It tests the whole patient path on real background
+sequence and real host variation: calling, CxSV clustering and classification,
+breakpoint-level panel matching (a planted event must come out *private*, E13
+*public* with 3 carriers) and the private VCF.
 
 > **Data handling.** Sample 3559 is exempt (Chris Faulk, 2026-10-28), so
 > its derived tables may be shared like the public panel data. The CRAMs stay
@@ -22,7 +24,7 @@ segments to scale, deleted segments hatched. Lower track(s): derivative
 haplotype(s), arrows pointing left are reverse-complemented. A segment keeps its
 letter and colour in every track; red triangles mark novel junctions (the truth
 set). Flanks are shortened; the two inter-chromosomal events are drawn
-schematically.*
+schematically. E13 is the public spike-in (also in 3 panel genomes).*
 
 ## The catalogue
 
@@ -45,12 +47,21 @@ haplotype, `+` reference orientation, `-` reverse complement, `p`/`q` flanks.
 | E10 | multi-breakpoint cluster | intergenic | chr5:25,003,550-25,041,800 | `der: p+ A+ C- D+ E- G+ q+` | Multi_breakpoint_cluster |
 | E11 | simple deletion (specificity control) | intergenic | chr10:29,098,000-29,115,650 | `der: p+ q+` | not a CxSV |
 | E12 | simple inversion (specificity control) | intergenic | chr12:74,754,175-74,814,325 | `der: p+ I- q+` | not a CxSV |
+| E13 | public spike-in: deletion-inversion cluster (also in HG00125, HG00111, HG00096) | intergenic | chr13:54,982,500-55,017,500 | `der: p+ A+ C- D+ E- F+ q+` | Multi_breakpoint_cluster; **public, 3 carriers** |
 
 Placement rules (`design_events.py`, seed 3559): each catalogue template is
 centred on its gene (gene events must disrupt an exon); every breakpoint is
 moved by up to +/-5 kb to sequence with no segmental duplication within 10 kb
 and <=30% soft-masked bases within +/-250 bp, so that the control measures the
-pipeline rather than mappability. 37 novel junctions in total.
+pipeline rather than mappability. 37 novel junctions in E01-E12, 41 with E13.
+
+E13 was added on 2026-10-28 (roadmap item 3) with the same placement rules:
+`design_events.py --append-to events.yaml --only E13` places it while avoiding
+every existing event and re-writes E01-E12 unchanged (checked: identical
+entries and identical text). It is intergenic (no gene within 200 kb of the
+event), so it never competes with the gene events in pathogenicity scoring
+(item 5): 6 segments over 35 kb, B deleted, C and E inverted, 4 junctions.
+Expected: a CxSV, **public with exactly 3 panel carriers**.
 
 ## How it is built
 
@@ -88,6 +99,26 @@ All stages are scripts in `tests/positive_control/`; outputs live under
    **no MM/ML methylation tags**. `check_splice.py` compares host and spliced
    depth in 2 kb bins across each window. -> `release/`
 
+6. **E13 spike-in (add-on, spliced at regression time)** - `build_haplotypes.py`
+   on the E13-only catalogue, then `make_spikein_reads.py`: for the control and
+   each of the 3 background carriers, badread simulates the derivative and the
+   reference window at half the host's local depth each (control 43x, HG00125
+   30x, HG00111 25x, HG00096 25x), seeds 3559*100+host index. Reads are aligned
+   like the panel (`RG ID:sim_E13`, `SM` = the host's own), and those with an
+   alignment in the replace window (chr13:54,932,500-55,067,500) are kept.
+   -> `addons/E13/` (`events_E13.yaml`, `build/`, `truth/`, `reads/<host>.E13.sim.bam`,
+   `reads/simulation_plan.tsv`, `MD5SUMS`).
+
+   **Why at regression time, not in a new control release:** the background
+   genomes must be spliced at regression time anyway, because they are sliced
+   from the public 1kGP CRAMs on every run. A new release would duplicate the
+   ~105 GB control CRAM for one event. The release CRAM, its `truth/` (E01-E12)
+   and `MD5SUMS` stay byte-identical. Determinism holds because the spliced
+   reads are fixed, checksummed files (the regression runs `md5sum -c` on
+   them first) and the splice (`samtools view -N ^dropped | samtools merge`)
+   is deterministic. The scorer reads E13's truth from `addons/E13/truth` via
+   `--extra-truth`.
+
 ## Running the regression
 
 ```bash
@@ -96,12 +127,32 @@ bash tests/lab/pos_control_regression.sh ~/scratch/cxsv_posctrl_regression 10
 RERUN=1 bash tests/lab/pos_control_regression.sh ...   # plus determinism check
 ```
 
-The script slices every replace window +/- 1 Mb from the control and from 10
-background genomes (registry sheet, >=17x), builds a panel from the
-background slices, runs the patient workflow on the control slice and scores
-it with `score_pos_control.py` (junctions matched within +/-1 kb; per-event
-verdict against `expect` in `events.yaml`). Exit 0 means every event meets its
-expectation.
+The script does the following:
+
+1. Slices every replace window (release + E13 add-on) +/- 1 Mb from the
+   control and from 10 background genomes (registry sheet, first 10 with
+   `passes_17x`).
+2. Splices E13 into the control slice and into the slices of its 3 carriers.
+   It stops if a carrier is not among the backgrounds.
+3. Builds a panel from the background slices, including junction sites and
+   Sniffles2 population genotypes, with sex and superpopulation from the
+   registry `individuals.tsv`.
+4. Runs the patient workflow on the control slice.
+5. Scores the result with `score_pos_control.py`: junctions are matched within
+   +/-1 kb, and each event's verdict is checked against `expect` in
+   `events.yaml`:
+   - complex events must be CxSV loci that are **not public** (private or
+     shared_junctions, 0 rearrangement carriers);
+   - E13 must be **public with exactly 3 carriers**;
+   - the simple controls E11/E12 must not be CxSVs, and every one of their
+     truth junctions must be **matched on breakpoints** by a patient junction
+     with 0 panel carriers.
+
+Exit 0 means every event meets its expectation or is a listed known failure
+that still fails. With `RERUN=1`, the patient workflow runs again into a fresh
+results root, and the records of `merged_sv.vcf`, `junctions/junctions.tsv`,
+`private/cxsv_panel_status.tsv`, `private/junction_panel_status.tsv` and
+`private/private_cxsv.vcf` must be byte-identical.
 
 ## Splice checks (2026-10-28)
 
@@ -121,61 +172,80 @@ expectation.
   `pos_control_3559.hs1.minimap2.cram` (md5 77d1b04f9c27fcd9d6b4b25a469743eb),
   `truth/`, `MD5SUMS`.
 
-## Latest regression result (2026-10-28, 10 background slices)
+## Latest regression result (2026-10-28, roadmap item 3: breakpoint-level matching)
 
-Patient workflow on the control slice (15 merged regions, 32.2 Mb) against a
-panel of 10 ONT background genomes (>=17x) sliced the same way. A second run
-gave identical `merged_sv.vcf`, `cxsv_panel_status.tsv` and `private_cxsv.vcf`
-records.
+Patient workflow on the control slice (16 merged regions, 34.4 Mb, E13
+included) against a panel of 10 ONT background genomes (first 10 with
+`passes_17x`) sliced the same way. E13 was spliced into the control (760 host
+reads dropped, 914 simulated records added) and into HG00125, HG00111 and
+HG00096. Workdir: `freya:/home/minknow/scratch/cxsv_item3_regression_v2`, run
+with `RERUN=1`. The second patient run gave byte-identical records for
+`merged_sv.vcf`, `junctions/junctions.tsv`, `private/cxsv_panel_status.tsv`,
+`private/junction_panel_status.tsv` and `private/private_cxsv.vcf`.
 
-| ID | Junctions exact/partial/missed | Pipeline class | Expected class | Panel status (carriers) | Verdict |
-|---|---|---|---|---|---|
-| E01 | 2/0/0 | Chromothripsis_like | DUP+INV | private (0) | PASS |
-| E02 | 2/0/0 | Chromothripsis_like | DEL+INV | private (0) | PASS |
-| E03 | 2/0/0 | Chromothripsis_like | DUP+INV | private (0) | PASS |
-| E04 | 3/0/0 | Chromothripsis_like | DEL+DUP+INV | **public (4)** | known failure |
-| E05 | 4/0/0 | Chromothripsis_like | DEL+INV | private (0) | PASS |
-| E06 | 3/0/0 | DUP+INV | INS+DEL | private (0) | PASS |
-| E07 | 2/0/0 | Complex_other (2 loci) | BND_cluster | private (0) | PASS |
-| E08 | 2/1/0 | Complex_other | BND_cluster | private (0) | PASS |
-| E09 | 9/0/0 | Chromothripsis_like | Chromothripsis_like | private (0) | PASS |
-| E10 | 4/0/0 | Chromothripsis_like | Multi_breakpoint_cluster | private (0) | PASS |
-| E11 | 1/0/0 | not a CxSV | not a CxSV | - | PASS |
-| E12 | 2/0/0 | **Nested_SV (CxSV)** | not a CxSV | private (0) | known failure |
+| ID | Junctions exact/partial/missed | Pipeline class | Expected | Panel status (carriers) | Region-overlap carriers | Junction panel carriers | Verdict |
+|---|---|---|---|---|---|---|---|
+| E01 | 2/0/0 | Chromothripsis_like | private | private (0) | 0 | 0,0 | PASS |
+| E02 | 2/0/0 | Chromothripsis_like | private | private (0) | 0 | 0,0 | PASS |
+| E03 | 2/0/0 | Chromothripsis_like | private | private (0) | 0 | 0,0 | PASS |
+| E04 | 3/0/0 | Chromothripsis_like | private | **private (0)**, hotspot | 4 | 0,0,0 | **PASS** (was a known failure) |
+| E05 | 4/0/0 | Chromothripsis_like | private | private (0) | 0 | 0,0,0,0 | PASS |
+| E06 | 3/0/0 | DUP+INV | private | private (0) | 0 | 0,0,0 | PASS |
+| E07 | 2/0/0 | Complex_other (2 loci) | private | private (0) | 0 | 0,0 | PASS |
+| E08 | 2/1/0 | Complex_other | private | private (0) | 0 | -,0,0 | PASS |
+| E09 | 9/0/0 | Chromothripsis_like | private | private (0) | 0 | 0 x 9 | PASS |
+| E10 | 4/0/0 | Chromothripsis_like | private | private (0) | 0 | 0,0,0,0 | PASS |
+| E11 | 1/0/0 | not a CxSV | not a CxSV, junction private | - | - | 0 | PASS |
+| E12 | 2/0/0 | **Nested_SV (CxSV)** | not a CxSV, junction private | private (0) | 0 | 0,0 | known failure (item 5) |
+| E13 | 4/0/0 | Chromothripsis_like | **public, 3 carriers** | **public (3)** | 3 | 3,3,3,3 | **PASS** |
 
-Summary: 36 of 37 junctions recovered exactly, 1 partially, none missed. The
-partial one is E08's chr4-chr9 junction: no chr4-chr9 call was made; it scores
-partial only because the chr13 junction calls end within the 1 kb slop of it
-(the chromoplexy junction deletions are 375-500 bp).
-Ten of twelve events meet their expectation. Outside the events, the slices
-hold 17 CxSV loci of the host's own, 16 of them public in the 10-genome panel.
+Summary:
 
-Findings (listed in `tests/positive_control/known_failures.tsv`; the
-regression fails on any new failure, or if a listed one starts passing):
+- **Junctions:** 40 of 41 recovered exactly, 1 partially (E08's chr4-chr9
+  junction, as before), none missed.
+- **Events:** 12 of 13 meet their expectation; E12 is the only listed known
+  failure.
+- **Breakpoint matching:** E11's and E12's simple-SV junctions are matched on
+  breakpoints (1/1 and 2/2) with 0 panel carriers.
+- **Host loci outside the events:** the slices hold 17 CxSV loci of the
+  host's own, 13 public and 4 shared_junctions. Region overlap had made 16 of
+  17 public.
 
-1. **E04 is labelled public.** The planted event is absent from the panel, but
-   its locus overlaps a different panel CxSV at the *SHANK3* subtelomeric
-   hotspot (chr22:51,150,520-51,229,698, 5 of 10 background genomes). This is
-   the masking failure that roadmap item 3 (breakpoint-level matching) targets.
-2. **A simple inversion is called a CxSV (E12).** Sniffles2 reports both
-   reciprocal breakends of one inversion; SURVIVOR keeps them as two INV
-   records with identical coordinates, and C2 (nested SV) fires on a record
-   "nested" in its own mate. Every balanced inversion is exposed to this.
-   Fix: collapse records with the same breakpoint pair before C1-C5.
-3. **Class labels.** `annotate_cxsv.py` tests C5 (>=3 SVs in 10-50 kb) before the
-   type-based labels, so compact events with 2-4 junctions are labelled
-   `Chromothripsis_like`; the label matched the expected class for 1 of 10
-   complex events (E09). The README class table also omits the `Nested_SV`,
-   `Overlapping_types` and `CN_plus_orientation_change` labels the code emits.
-   Belongs with roadmap item 5.
-4. **Caller support.** Of 37 junctions, Sniffles2 recovers 32, cuteSV 19 and
-   SVIM 15; 11 junctions are carried by a single caller. Raising
-   `survivor_params.min_callers` above 1 would lose them. The inter-chromosomal
-   junctions (E07, E08) come mostly from SVIM/cuteSV records.
+What changed with item 3:
 
-Score tables: `score.events.tsv`, `score.junctions.tsv` in the regression
-work directory, next to the off-target table (`score.offtarget.tsv`), which
-lists the host's own CxSV loci.
+1. **E04 now passes.** Its 4 patient junctions (3 INV, 1 DUP, after collapsing
+   Sniffles2's reciprocal breakends) match no panel site. The different panel
+   CxSV at the *SHANK3* hotspot is a cluster of deletions at
+   chr22:51,150,520-51,229,698 and is still visible as 4 region-overlap
+   carriers (`Panel_Hotspot = yes`). It no longer makes E04 public.
+2. **E13 is public with exactly 3 carriers.** Each of its 4 junctions is
+   carried by the 3 spiked background genomes and no other.
+3. **E12 remains a known failure of the classifier, not of matching.** Its
+   reciprocal breakends collapse to one junction for matching, but
+   `classify_cxsv.py` still sees two records, and C2 (nested SV) fires.
+   Fixing that is roadmap item 5 and was deliberately not done here.
+
+Previous result (before item 3, region-overlap matching, 12 events): 36/37
+junctions exact; E04 labelled public (4 carriers) because it overlapped the
+hotspot CxSV; E12 called a CxSV.
+
+Further findings (unchanged; for roadmap item 5):
+
+1. **Class labels.** `annotate_cxsv.py` tests C5 (>=3 SVs in 10-50 kb)
+   before the type-based labels. Compact events with 2-4 junctions are
+   therefore labelled `Chromothripsis_like`; the label matched the expected
+   class for 1 of 11 complex events (E09). The README class table also omits
+   the `Nested_SV`, `Overlapping_types` and `CN_plus_orientation_change` labels
+   the code emits.
+2. **Caller support.** 13 of the 37 E01-E12 junctions are recovered by
+   Sniffles2 alone (SUPP_VEC 001), and the inter-chromosomal junctions (E07,
+   E08) come mostly from SVIM/cuteSV records. Single-caller junctions
+   therefore cannot be discounted in matching (docs/JUNCTIONS.md).
+
+Score tables: `score.events.tsv`, `score.junctions.tsv` and
+`score.offtarget.tsv` (the host's own CxSV loci) in the regression work
+directory. `score.junctions.tsv` gives, for each truth junction, the patient
+junction matched on breakpoints and its panel carriers.
 
 ## Replaces
 

@@ -3,8 +3,9 @@ CxSV PATIENT SCORER
 ===================
 Calls SVs and CxSVs in one patient (or a family) with exactly the panel's
 calling module, checks that the calling fingerprint matches the panel release,
-then labels every patient CxSV locus public or private with its panel carrier
-count. Pathogenicity scoring of private loci is added in roadmap item 5.
+then matches every patient CxSV locus against the panel's junction sites,
+breakpoint by breakpoint, and labels it private, shared_junctions or public
+with its panel carrier count. Pathogenicity scoring of private loci is added in roadmap item 5.
 
 Inputs: the patient alignments and a panel release directory. No background
 reads are needed, so this runs inside a restricted environment.
@@ -31,6 +32,7 @@ include: "../rules/common.smk"
 include: "../rules/indexing.smk"
 include: "../rules/calling.smk"
 include: "../rules/per_sample.smk"
+include: "../rules/junctions.smk"
 include: "../rules/sample_report.smk"
 include: "../rules/fingerprint.smk"
 include: "../rules/patient_private.smk"
@@ -43,5 +45,6 @@ rule all:
         per_sample(f"{S}/private/cxsv_panel_status.tsv"),
         per_sample(f"{S}/private/private_cxsv_master_table.tsv"),
         per_sample(f"{S}/private/private_cxsv.vcf"),
+        per_sample(f"{S}/private/junction_panel_status.tsv"),
         per_sample(f"{S}/plots/genomic_context.pdf"),
         per_sample(f"{S}/plots/complexity_class_heatmap.pdf"),

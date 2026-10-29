@@ -13,10 +13,15 @@ Events (reference coordinates, 0-based half-open):
   RARE    (panel2, patient)                   CxSV at 500-526 kb, same shape
   PRIVATE (patient only)                      nested CxSV at 800-829 kb:
           DEL 806,000-809,000 inside INV 800,000-820,000, + DUP 826,000-829,000
+  DECOY   (panel1, panel3)                    a DIFFERENT CxSV at the PRIVATE locus (hotspot):
+          DEL 802,000-804,000 + INV 812,000-818,000 + tandem DUP 821,000-824,000
   SIMPLE  (everyone)                          DEL 1,000,000-1,003,000 (not a CxSV)
 
-Expected: the patient's CxSV loci overlapping COMMON, RARE and PRIVATE have
-panel carriers 3, 1 and 0, so COMMON and RARE are public and PRIVATE is private.
+Expected (breakpoint-level matching, roadmap item 3): the patient's CxSV loci
+overlapping COMMON, RARE and PRIVATE have panel carriers 3, 1 and 0, so COMMON
+and RARE are public and PRIVATE is private, although DECOY gives PRIVATE 2
+region-overlap carriers (it would have been called public by region overlap).
+The SIMPLE deletion's junction has 3 panel carriers.
 
 Usage: make_synthetic_data.py <outdir> [--coverage 25] [--seed 7] [--threads 4]
 Needs minimap2 and samtools on PATH. Writes:
@@ -40,12 +45,13 @@ EVENTS = {
     "RARE":    [("DEL", 500_000, 505_000), ("INV", 510_000, 518_000), ("DUP", 522_000, 526_000)],
     # INVDEL: the 800-820 kb segment is inverted after deleting 806-809 kb inside it
     "PRIVATE": [("INVDEL", 800_000, 820_000, 806_000, 809_000), ("DUP", 826_000, 829_000)],
+    "DECOY":   [("DEL", 802_000, 804_000), ("INV", 812_000, 818_000), ("DUP", 821_000, 824_000)],
     "SIMPLE":  [("DEL", 1_000_000, 1_003_000)],
 }
 SAMPLES = {
-    "panel1":  ["COMMON", "SIMPLE"],
+    "panel1":  ["COMMON", "DECOY", "SIMPLE"],
     "panel2":  ["COMMON", "RARE", "SIMPLE"],
-    "panel3":  ["COMMON", "SIMPLE"],
+    "panel3":  ["COMMON", "DECOY", "SIMPLE"],
     "patient": ["COMMON", "RARE", "PRIVATE", "SIMPLE"],
 }
 SPAN = {name: (min(e[1] for e in ev), max(e[2] for e in ev)) for name, ev in EVENTS.items()}
@@ -171,7 +177,11 @@ def main():
         "patient_expectations": {
             "COMMON":  {"cxsv": True, "panel_carriers": 3, "status": "public"},
             "RARE":    {"cxsv": True, "panel_carriers": 1, "status": "public"},
-            "PRIVATE": {"cxsv": True, "panel_carriers": 0, "status": "private"},
+            "PRIVATE": {"cxsv": True, "panel_carriers": 0, "status": "private",
+                        "region_carriers": 2, "hotspot": "yes"},
+        },
+        "junction_expectations": {
+            "SIMPLE": {"svtype": "DEL", "pos1": 1_000_000, "pos2": 1_003_000, "panel_carriers": 3},
         },
         "samples": SAMPLES,
         "seed": a.seed, "coverage": a.coverage,

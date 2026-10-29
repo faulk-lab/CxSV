@@ -10,8 +10,13 @@
 #    called would surface as false "private" CxSVs. Override only for
 #    exploratory work with allow_fingerprint_mismatch: true (the mismatch is
 #    then written into panel_compatibility.txt and every output carries it).
-# 2. classify_patient_cxsv — carrier count, frequency and public/private label
-#    for every patient CxSV locus.
+# 2. classify_patient_cxsv — breakpoint-level matching (roadmap item 3): each
+#    patient CxSV locus's junctions are matched against the panel's junction
+#    sites; a panel individual carries the locus when it carries at least
+#    panel_match.min_junction_fraction of them. Status private /
+#    shared_junctions / public, carrier count and frequency by platform and
+#    superpopulation, plus region-overlap carriers as a hotspot flag. Every
+#    patient junction (also outside CxSV loci) gets its panel carriers too.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 PANEL_RELEASE = config.get("panel_release")
@@ -64,25 +69,35 @@ rule check_panel_compatibility:
 
 rule classify_patient_cxsv:
     input:
-        table   = f"{S}/cxsv/cxsv_master_table.tsv",
-        calls   = f"{PANEL_RELEASE}/panel_cxsv_calls.tsv",
-        summary = f"{PANEL_RELEASE}/panel_summary.tsv",
-        compat  = f"{RESULTS_ROOT}/panel_compatibility.txt",
-        script  = f"{SCRIPTS}/classify_patient_cxsv.py"
+        table       = f"{S}/cxsv/cxsv_master_table.tsv",
+        junctions   = f"{S}/junctions/junctions.tsv",
+        carriers    = f"{PANEL_RELEASE}/panel_junction_carriers.tsv",
+        sites       = f"{PANEL_RELEASE}/panel_junction_sites.tsv",
+        individuals = f"{PANEL_RELEASE}/panel_individuals.tsv",
+        calls       = f"{PANEL_RELEASE}/panel_cxsv_calls.tsv",
+        compat      = f"{RESULTS_ROOT}/panel_compatibility.txt",
+        script      = f"{SCRIPTS}/classify_patient_cxsv.py"
     output:
-        all_loci = f"{S}/private/cxsv_panel_status.tsv",
-        private  = f"{S}/private/private_cxsv_master_table.tsv",
-        bed      = f"{S}/private/private_cxsv_loci.bed"
+        all_loci  = f"{S}/private/cxsv_panel_status.tsv",
+        private   = f"{S}/private/private_cxsv_master_table.tsv",
+        bed       = f"{S}/private/private_cxsv_loci.bed",
+        junctions = f"{S}/private/junction_panel_status.tsv"
     params:
-        window       = MATCH.get("window", 1000),
-        min_carriers = MATCH.get("min_carriers", 1)
+        tolerance     = MATCH.get("tolerance", 500),
+        ins_ratio     = MATCH.get("ins_len_ratio", 0.5),
+        min_fraction  = MATCH.get("min_junction_fraction", 0.75),
+        min_carriers  = MATCH.get("min_carriers", 1),
+        window        = MATCH.get("hotspot_window", 1000)
     log: f"{S}/logs/classify_patient_cxsv.log"
     shell:
         """
-        python {input.script} --master-table {input.table} --panel-calls {input.calls} \
-            --panel-summary {input.summary} --window {params.window} \
-            --min-carriers {params.min_carriers} --out-all {output.all_loci} \
-            --out-private {output.private} --out-bed {output.bed} 2> {log}
+        python {input.script} --master-table {input.table} --junctions {input.junctions} \
+            --panel-carriers {input.carriers} --panel-sites {input.sites} \
+            --panel-individuals {input.individuals} --panel-calls {input.calls} \
+            --tolerance {params.tolerance} --ins-len-ratio {params.ins_ratio} \
+            --min-junction-fraction {params.min_fraction} --min-carriers {params.min_carriers} \
+            --window {params.window} --out-all {output.all_loci} --out-private {output.private} \
+            --out-bed {output.bed} --out-junctions {output.junctions} 2> {log}
         """
 
 

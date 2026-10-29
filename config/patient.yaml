@@ -20,13 +20,35 @@ panel_release: "results/panel/release"
 #       samples: /restricted/family_042/sheet.tsv
 patient_runs: {}
 
-# How patient loci are matched against the panel's per-sample CxSV calls.
-# A locus is public when at least min_carriers panel individuals have a CxSV
-# overlapping it after padding both sides by window bp. Breakpoint-level
-# matching replaces this in roadmap item 3.
+# How patient CxSV loci are matched against the panel (roadmap item 3; not
+# fingerprinted: matching can be re-run against a release without re-calling).
+# A patient junction matches a panel junction site when svtype and contigs agree
+# and both ends lie within `tolerance` bp of the site (INS: lengths within
+# ins_len_ratio). A panel individual carries a locus when it carries at least
+# min_junction_fraction of the locus's junctions; the locus is public when at
+# least min_carriers individuals do, shared_junctions when some junctions are in
+# the panel but not the rearrangement, private otherwise.
+#   tolerance 500: the panel clustering tolerance (panel_sites.tolerance); ONT
+#     breakpoints of one event agree within a few bp in unique sequence and
+#     within a few hundred bp in tandem repeats.
+#   min_junction_fraction 0.75: every junction for loci of <= 3 junctions
+#     (one junction can be the whole difference between two rearrangements),
+#     one unmatched junction tolerated from 4 junctions on. Needed because
+#     callers add artefact junctions: in the synthetic test the patient's COMMON
+#     CxSV carries a cuteSV-only DEL inside its inversion that no panel genome
+#     has (3/4 matched), and single-caller junctions cannot simply be ignored
+#     (13 of the 37 planted control junctions are found by Sniffles2 alone).
+#     Leave-one-out on the 10-genome regression panel (docs/JUNCTIONS.md): of
+#     164 panel CxSV loci, 105 match another genome fully, 135 at >= 0.75,
+#     122 at >= 0.8, 154 at >= 0.67.
+# hotspot_window: region-overlap padding for the informational
+# Panel_Region_Carriers / Panel_Hotspot columns (the previous matching rule).
 panel_match:
-  window: 1000
+  tolerance: 500
+  ins_len_ratio: 0.5
+  min_junction_fraction: 0.75
   min_carriers: 1
+  hotspot_window: 1000
 
 # Exploratory use only: continue (and record the differences) when this run's
 # calling fingerprint differs from the panel's.

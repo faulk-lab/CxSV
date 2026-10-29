@@ -7,7 +7,8 @@ in their rearranged order; an arrow pointing right is in reference orientation,
 left is reverse-complemented. A segment keeps its letter and colour in every
 track. Triangles mark the novel junctions listed in the truth set. Flanks are
 drawn as short stubs; inter-chromosomal events (translocation, chromoplexy) are
-drawn schematically, coloured by chromosome, not to scale.
+drawn schematically, coloured by chromosome, not to scale. Spike-in events
+(spike_in in events.yaml, e.g. E13) say how many panel genomes also carry them.
 
 Usage: plot_events.py events.yaml out_prefix   (writes out_prefix.png and .pdf)
 """
@@ -157,7 +158,12 @@ def draw_event(ax, ev):
         gtxt = "/".join("$\\it{" + g + "}$" for g in gene.split("/"))
     else:
         gtxt = "intergenic"
-    ax.annotate(gtxt + "  (" + loc + ")", (0, 1), xycoords="axes fraction", xytext=(0, 3),
+    spike = ev.get("spike_in")
+    if spike:      # add-on event planted in background genomes too (E13): expected public
+        gtxt += f"  ({loc}; also in {len(spike['backgrounds'])} panel genomes)"
+    else:
+        gtxt += "  (" + loc + ")"
+    ax.annotate(gtxt, (0, 1), xycoords="axes fraction", xytext=(0, 3),
                 textcoords="offset points", fontsize=6, color="#444444", va="bottom", ha="left")
     title = textwrap.fill(f"{ev['id']}  {ev['name']}", 34)
     ax.annotate(title, (0, 1), xycoords="axes fraction", xytext=(0, 12),
