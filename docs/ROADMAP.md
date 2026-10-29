@@ -313,6 +313,10 @@ awaiting merge). Item 6 grows with each later item. Queued next: 8 (read-level m
 >   - Class concordance went from 1/11 to 11/11 against the revised
 >     expectations (4/11 against the original labels; 7 expectations revised
 >     with reasons in `events.yaml`).
+> - **Bundle** `cxsv-bundle-20261029-1dcabd9770f7` (commit 1dcabd9, 7.6 GiB,
+>   scoring resources included) validated offline: Singularity and Docker
+>   runs agree with the conda run, and tampered releases are refused
+>   (docs/RELEASE_AND_BUNDLE.md 6a).
 > - Not yet: the curated literature set of pathogenic CxSVs named in "done
 >   when" (only the planted control so far); ClinGen's region-level dosage
 >   list; calibration of the weights on real patients.

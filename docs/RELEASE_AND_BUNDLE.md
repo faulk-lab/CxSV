@@ -286,6 +286,50 @@ Docker archive.
 
 ## 6. Validation record
 
+### 6a. Bundle with scoring (roadmap items 4–5), 2026-10-29
+
+Built and validated on freya with the same scripts (`make_bundle.sh image|bundle`,
+`tests/lab/validate_bundle.sh`). The bundle now also ships `resources/scoring/`
+(ClinGen dosage, gnomAD v4.1 constraint, HPO v2026-09-01, CHM13v2 PARs) and
+`resources/resources_manifest.tsv`, verified against the manifest before
+copying. `bundle_site.yaml` points the scorer at `/bundle/resources/scoring`
+and at the catalogues in `/bundle/catalogues`. Full log: `validation.log`
+(saved with the item-5 deliverables).
+
+| | |
+|---|---|
+| bundle | `/mnt/sargasso1/CxSV/bundles/cxsv-bundle-20261029-1dcabd9770f7` |
+| commit | `1dcabd9770f70e2e7f5a194ad3b1d370b23bc15e` (branch `item5-scoring`; this docs record was committed after it) |
+| size | 8,089,067,107 bytes (7.6 GiB), 238 files in `MANIFEST.sha256`. By component: reference 6,296,932,150; container 1,511,291,981; resources 229,273,577; catalogues 46,466,039; source 2,767,920; repo 1,694,273; panel release 570,431 |
+| image | reused, `cxsv-pipeline:ba820f7b2bd3` (Dockerfile and lock unchanged since 144a4ff), SIF sha256 `9f4e049f…` |
+| build time | test release 431 s (panel workflow in the SIF, network off), bundle assembly 52 s (35 s copying + 16 s checksums) |
+| panel release | `TEST-posctrl10slice-20261029-cd7e1d194cd4`, **test release**, the same 10 sliced genomes as before (slices from the item-5 regression workdir). Fingerprint `cd7e1d194cd4` (was `ad454c604bdd`: the classifier is fingerprinted). It equals the fingerprint of the conda-built regression panel |
+| stand-in patient | HG00130 slice, as before |
+
+| Check | Result |
+|---|---|
+| 1. bundle integrity | PASS: all 238 files (14 s) |
+| 2. panel release integrity | PASS: 25 files verified (manifest sha256 `e5f14d9e…`) |
+| 3. network off (Singularity, Docker) + controls | PASS: loopback only, TCP/DNS/HTTPS fail, host paths absent, `/bundle` read-only; the controls with `--no-netns` connect |
+| 4. patient run, Singularity, bundle only | PASS (85 s) |
+| 5. patient run, Docker, image loaded from the bundle archive | PASS (87 s) |
+| 6. patient run outside the bundle (clean worktree at the commit, conda env, NAS resources and catalogues) | PASS (85 s) |
+| 7. records, 4 vs 6 and 5 vs 6 | PASS, both. Of 58 output files: 52 identical; 4 identical after path normalisation (bundle vs NAS paths of resources and catalogues: `catalogue_check.tsv`, `scoring_params.json`, plus the two from item 2); 2 expected run-record differences; 0 unexpected |
+| 8a/8b. tampered release (one digit / one extra file) | PASS: refused before any job ran |
+
+Stand-in result:
+
+- 13 CxSV loci: 11 public and 2 shared_junctions.
+- Scores: 12 Benign_likely and 1 Tier 3 (the chr9 *EHMT1* shared_junctions
+  hotspot locus).
+- The same in all three runs.
+
+No bundle failed or was superseded in this round. `/mnt/sargasso1/CxSV/bundles/`
+holds only this bundle and the previous validated one
+(`cxsv-bundle-20261028-26085cdd9977`); nothing was removed.
+
+### 6b. First bundle (roadmap item 2), 2026-10-28
+
 Run on freya (Singularity CE 4.4.1, Docker 29.9.2), 2026-10-28, with
 `tests/lab/validate_bundle.sh`. Full log: `validation.log` (saved with the
 item-2 deliverables).
