@@ -107,7 +107,7 @@ if [ "$RUNTIME" = docker ]; then
     D=(docker run --rm -i --user "$(id -u):$(id -g)" -e HOME=/tmp -w /work
        -v "$BUNDLE:/bundle:ro" -v "$WORKDIR:/work")
     $NETNS && D+=(--network none)
-    [ "$CMD" = shell ] && D+=(-t)
+    [ "$CMD" = shell ] && [ -t 0 ] && D+=(-t)
     for b in "${BINDS[@]}"; do D+=(-v "$b:$b:ro"); done
     for e in "${ENVS[@]}"; do D+=(-e "$e"); done
     exec "${D[@]}" "$CXSV_IMAGE" "${INNER[@]}"

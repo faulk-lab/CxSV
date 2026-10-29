@@ -4,12 +4,13 @@
 # Needs only a panel release directory (config: panel_release), never the
 # background reads, so it can run inside a restricted environment.
 #
-# 0. verify_panel_release — the release must match its release_manifest.tsv
-#    (every listed file present with its size and sha256, nothing unlisted;
-#    workflow/lib/cxsv_release.py). A release that does not verify is refused
-#    before anything reads it; classify_patient_cxsv verifies it again right
-#    before use, so a file changed after this step (even with its mtime kept)
-#    is caught too.
+# 0. The release must match its release_manifest.tsv (every listed file present
+#    with its size and sha256, nothing unlisted; workflow/lib/cxsv_release.py).
+#    Checked three times: when the workflow is parsed (a release that does not
+#    verify stops the run before any job starts, dry runs included), by rule
+#    verify_panel_release (the record, results/panel_release_check.txt), and
+#    by classify_patient_cxsv right before it reads the release (a file changed
+#    during a run, even with its mtime kept, is caught too).
 # 1. check_panel_compatibility — this run's calling fingerprint must equal the
 #    panel's (same parameters, reference, tool versions and loci code). A
 #    mismatch stops the run: otherwise differences in how the two sides were
@@ -36,6 +37,13 @@ if not PANEL_RELEASE:
     raise ValueError("[patient] config['panel_release'] must point at a panel release directory")
 PANEL_RELEASE = os.path.abspath(PANEL_RELEASE)
 MATCH = config.get("panel_match", {})
+
+_release_check = cxsv_release.verify(PANEL_RELEASE)
+if not _release_check["ok"]:
+    raise ValueError(
+        f"[patient] panel release {PANEL_RELEASE} does not verify against its "
+        f"{cxsv_release.MANIFEST}; refusing it ({len(_release_check['problems'])} problem(s)):\n  "
+        + "\n  ".join(_release_check["problems"][:20]))
 
 
 def release_listed_files():

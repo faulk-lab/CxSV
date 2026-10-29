@@ -92,8 +92,8 @@ panel_release: "$W/release_tampered"
 YAML
 if "${SM[@]}" -s workflow/patient/Snakefile --configfile "$W/site.yaml" "$W/tampered.yaml" > "$W/tampered.log" 2>&1; then
     echo "FAIL patient run against a tampered release was NOT refused"; RC=1
-elif grep -q "sha256 differs: panel_junction_carriers.tsv" "$W/results/patient_tampered/logs/panel_release_check.log"; then
-    echo "PASS tampered release refused: $(grep 'sha256 differs' "$W/results/patient_tampered/logs/panel_release_check.log" | xargs)"
+elif grep -q "sha256 differs: panel_junction_carriers.tsv" "$W/tampered.log" && [ ! -d "$W/results/patient_tampered/samples" ]; then
+    echo "PASS tampered release refused before any job ran: $(grep -m1 'sha256 differs' "$W/tampered.log" | xargs)"
 else
     echo "FAIL run failed, but not at the release check (log: $W/tampered.log)"; RC=1
 fi
