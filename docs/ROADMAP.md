@@ -180,7 +180,16 @@ with each later item.
   private while a spiked-in common panel CxSV is classed public, and E11/E12
   (simple SVs) are matched on breakpoints rather than region overlap.
 
-### 4. External SV catalogues as additional background
+### 4. External SV catalogues as additional background — **acquisition done (2026-10-28); matching integration pending**
+
+> Done: CoLoRSdb v1.2.0, HGSVC3 HGSVC2024v1.0, HPRC release 2 (MC v2.1) and
+> gnomAD-SV v4.1 are downloaded with verified checksums to
+> `/mnt/sargasso1/CxSV/datasets/external_catalogues/`, gnomAD-SV is lifted to hs1
+> breakpoint by breakpoint (2.13% site loss), and each is converted to the shared
+> junction-site schema with a manifest ([`acquisition/catalogues/`](../acquisition/catalogues/README.md);
+> survey, licences and caveats in [`docs/EXTERNAL_CATALOGUES.md`](EXTERNAL_CATALOGUES.md)).
+> None had to be excluded. Still to do: bundle them as panel-release components
+> and make the scorer report the catalogue hits per call.
 
 - Bundle published SV frequency resources the same way as the panel. They
   widen the ancestry and platform coverage beyond 1kGP.
