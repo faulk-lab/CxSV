@@ -80,7 +80,15 @@ workflow/
 scripts/
   run_pipeline.sh         `run_pipeline.sh panel|patient [--extra-config FILE] [--resume] [--dry-run]`
 acquisition/              background-panel acquisition and alignment (lab fleet)
-docs/ROADMAP.md
+tests/
+  unit/                   pytest: sample discovery, fingerprint, panel/patient scripts, config guard
+  synthetic/              seeded artificial genome, panel + patient end to end (runs in CI)
+  positive_control/       generator for the lab positive control: design, haplotypes,
+                          read simulation and splicing, scoring, structure figure
+  lab/                    lab-only regression on the real positive control (never in CI)
+docs/
+  ROADMAP.md
+  POSITIVE_CONTROL.md     the planted-CxSV catalogue, how it is built, latest regression result
 ```
 
 ---
@@ -261,6 +269,24 @@ loci are retained (most CxSVs are expected there).
 | `Multi_breakpoint_cluster` | Any | ≥5 breakpoints, <10 |
 | `Chromothripsis_like` | Any | ≥10 breakpoints in window |
 | `Complex_other` | ≥2 types, none of above | |
+
+---
+
+## Tests
+
+| Test | Data | Where it runs | Command |
+|---|---|---|---|
+| Unit | none | CI + anywhere | `pytest tests/unit` |
+| Synthetic end to end | seeded artificial 1.2 Mb genome, 3 panel genomes + 1 patient | CI on every push | `bash tests/synthetic/run_synthetic.sh` |
+| Positive control | sample 3559 with 12 planted heterozygous CxSVs (lab NAS only) | lab fleet | `bash tests/lab/pos_control_regression.sh [WORKDIR] [N_BACKGROUND]` |
+
+The positive control is described in [docs/POSITIVE_CONTROL.md](docs/POSITIVE_CONTROL.md):
+ten complex rearrangements at clinically relevant genes and two simple-SV
+specificity controls, each with a breakend-level truth set. Its reads are
+human-subject data and never leave the lab NAS; the repository holds only the
+generator, the event catalogue and the truth coordinates.
+
+![Planted positive-control events](docs/figures/pos_control_events.png)
 
 ---
 

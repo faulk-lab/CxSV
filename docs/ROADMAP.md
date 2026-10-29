@@ -117,9 +117,10 @@ with each later item.
 - In the patient, force-genotype the panel's known SVs (Sniffles2
   `--genotype-vcf`), so a common SV the callers missed is not mistaken for
   a private one.
-- **Done when:** the panel release carries per-locus frequencies; the
-  nested-inversion positive control stays private while a spiked-in common
-  panel CxSV is classed public.
+- **Done when:** the panel release carries per-locus frequencies; every
+  planted event in the positive control (docs/POSITIVE_CONTROL.md) stays
+  private while a spiked-in common panel CxSV is classed public, and E11/E12
+  (simple SVs) are matched on breakpoints rather than region overlap.
 
 ### 4. External SV catalogues as additional background
 
@@ -146,11 +147,17 @@ with each later item.
   - inheritance (de novo vs inherited) when parents are sequenced.
 - Weights live in config, and each call's report lists every feature's
   contribution, so a clinician can see why a CxSV ranked where it did.
-- **Done when:** known pathogenic CxSVs (positive control plus a curated
-  literature set) rank in the top tier and the score breakdown is in the
-  report.
+- Known issue to fix first: `resources/repeats.final.bed` holds UCSC
+  RepeatMasker "joined" spans, which overstate repeat cover (e.g. *MECP2* is
+  annotated LINE although only ~1.9% of it is soft-masked in hs1). Rebuild it
+  from per-element RepeatMasker records (or the hs1 soft mask) before any
+  repeat-based penalty is weighted.
+- **Done when:** known pathogenic CxSVs (the planted gene events E01-E09 of the
+  positive control, plus a curated literature set) rank in the top tier, the
+  intergenic and simple-SV controls (E10-E12) rank below them, and the score
+  breakdown is in the report.
 
-### 6. Tests — **in progress (CI done 2026-10-28; lab positive control pending)**
+### 6. Tests — **done (2026-10-28; bundle validation pending with item 2)**
 
 > Done: `tests/unit` (pytest: sample discovery, fingerprint, panel/patient
 > scripts, and a guard that no committed config overrides a fingerprinted
@@ -160,13 +167,19 @@ with each later item.
 > carriers 3/1/0, public/public/private, private VCF confined to the private
 > event, and rejection of a changed fingerprinted parameter);
 > `.github/workflows/ci.yml` runs both on every push. Passed on freya in 27 s.
-> Pending: the real positive control is being rebuilt with a catalogue of
-> planted CxSVs (docs/POSITIVE_CONTROL.md); its lab-only regression test
-> follows it.
+> Lab positive control rebuilt (docs/POSITIVE_CONTROL.md): sample 3559 with
+> 12 heterozygous planted events (10 CxSVs at MECP2, NF1, PMP22, SHANK3,
+> NRXN1, AUTS2, SATB2/FOXP2, NSD2/EHMT1/ZIC2, CHD2, one intergenic; a simple
+> DEL and INV as specificity controls) and a 37-junction truth set;
+> `tests/lab/pos_control_regression.sh` scores it. First result: 36/37
+> junctions exact, 10/12 events as expected; E04 (hotspot overlap -> item 3)
+> and E12 (simple inversion called CxSV -> classifier fix) are listed known
+> failures.
 
 
-- CI on every push: a tiny synthetic dataset plus the nested-inversion
-  positive control, run through both workflows.
+- CI on every push: the tiny synthetic dataset through both workflows. The
+  real positive control is human-subject data and is lab-only
+  (`tests/lab/pos_control_regression.sh`).
 - Before the first patient run, validate the restricted-environment bundle
   with a dry run, then a full run, on public data.
 - **Done when:** CI is green on `main`, and the bundle validation is recorded
