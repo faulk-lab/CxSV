@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 # =============================================================================
-# LAB-ONLY regression test with the real positive control (never in CI).
+# Lab-fleet regression test with the real positive control (too large for CI).
 #
-# The positive control is sample 3559 (human-subject data; lab NAS only) with
-# a catalogue of 12 heterozygous planted CxSVs (tests/positive_control/events.yaml,
-# docs/POSITIVE_CONTROL.md). Nothing derived from it beyond counts, coordinates
-# and the planted-event truth set may leave the NAS.
+# The positive control is sample 3559 (exempt; its ~105 GB CRAM stays on the
+# lab NAS) with a catalogue of 12 heterozygous planted CxSVs
+# (tests/positive_control/events.yaml, docs/POSITIVE_CONTROL.md).
 #
 # What it does (lab NAS / node-local scratch):
 #   1. slices every planted event's replace window +/- 1 Mb (merged) from the

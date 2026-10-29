@@ -8,11 +8,11 @@ on real background sequence and real host variation: calling, CxSV clustering
 and classification, panel matching (a planted event must come out *private*)
 and the private VCF.
 
-> **Data handling.** Sample 3559 is human-subject data (lab-only). The control
-> CRAM, the host CRAM and anything else containing its reads stay on the lab
-> NAS. Only the generator code, `events.yaml`, the truth set and summary
-> counts are in the repository. The control is never used in CI; CI runs the
-> fully synthetic test in `tests/synthetic/`.
+> **Data handling.** Sample 3559 is exempt (Chris Faulk, 2026-10-28), so
+> its derived tables may be shared like the public panel data. The CRAMs stay
+> on the lab NAS because of their size (~105 GB each); the repository holds the
+> generator code, `events.yaml`, the truth set and summary counts. CI runs the
+> fully synthetic test in `tests/synthetic/` instead.
 
 ![Planted events](figures/pos_control_events.png)
 
@@ -174,13 +174,15 @@ regression fails on any new failure, or if a listed one starts passing):
    junctions (E07, E08) come mostly from SVIM/cuteSV records.
 
 Score tables: `score.events.tsv`, `score.junctions.tsv` in the regression
-work directory; the off-target table (`score.offtarget.tsv`) lists host loci
-and stays on the NAS.
+work directory, next to the off-target table (`score.offtarget.tsv`), which
+lists the host's own CxSV loci.
 
 ## Replaces
 
-The previous control (`/mnt/sargasso2/CxSV/synthetic_pos_control/BloodofChildren_3559.T2T.nested-inv.bam`,
-RefSeq contig names) was meant to carry a nested inversion but holds a single
-~100 kb homozygous inversion at chr1:10,750,000-10,850,000: VISOR/LASeR
-simulated only one haplotype, replaced the real reads of chr1:10-11 Mb, and
-gave ~2x depth there. It is superseded by this control.
+The previous control (`BloodofChildren_3559.T2T.nested-inv.bam`, RefSeq
+contig names) was meant to carry a nested inversion but holds a single ~100 kb
+homozygous inversion at chr1:10,750,000-10,850,000: VISOR/LASeR simulated only
+one haplotype, replaced the real reads of chr1:10-11 Mb, and gave ~2x depth
+there. It is superseded by this control. On 2026-10-28 the BAM was moved to
+the sargasso2 recycle bin, and the old `/mnt/sargasso2/CxSV` tree (renamed
+`CxSV-old`) is scheduled for deletion; the old control is not kept.
