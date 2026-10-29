@@ -20,7 +20,8 @@
 #   4. patient run offline, Singularity/Apptainer (bundle only)
 #   5. patient run offline, Docker (image loaded from the bundle's archive)
 #   6. patient run outside the bundle: repository clone + conda env + lab paths
-#   7. records identical: 4 vs 6 and 5 vs 6 (compare_patient_runs.py)
+#   7. records identical: 4 vs 6 and 5 vs 6 (compare_patient_runs.py; files that
+#      differ only by the run's absolute paths are reported as such)
 #   8. tampered release refused: one byte changed / one unlisted file added
 # Writes WORKDIR/validation.log and WORKDIR/compare_*.tsv. Exit 0 = all passed.
 # =============================================================================
@@ -124,7 +125,11 @@ if (cd "$REPO" && snakemake -s workflow/patient/Snakefile --cores "$CORES" --kee
 
 hdr "7. outputs identical (records)"
 for x in offline_singularity offline_docker; do
+    # same files, different absolute paths: results root and reference inside the container vs on the host
     if python "$REPO/tests/lab/compare_patient_runs.py" "$W/$x/results/patient" "$W/normal/results/patient" \
+            --alias-a /work/results/patient=@RESULTS@ --alias-a /bundle/reference=@REF@ --alias-a /work=@WORKDIR@ \
+            --alias-b "$W/normal/results/patient=@RESULTS@" --alias-b /mnt/sargasso1/CxSV/refs=@REF@ \
+            --alias-b "$REPO=@WORKDIR@" \
             --out "$W/compare_${x}_vs_normal.tsv" | tail -1; then pass "$x vs normal: no unexpected difference"
     else fail "$x vs normal differ (see $W/compare_${x}_vs_normal.tsv)"; grep -vE "identical|expected" "$W/compare_${x}_vs_normal.tsv"; fi
 done

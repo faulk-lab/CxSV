@@ -78,8 +78,9 @@ for f in "${CONFIGS[@]}"; do
     cp "$f" "$WORKDIR/config/$(basename "$f")"; CFG_IN+=("/work/config/$(basename "$f")")
 done
 
+# XDG_CACHE_HOME: snakemake's source cache in the writable run directory
 ENVS=(CXSV_BUNDLE_ID="$CXSV_BUNDLE_ID" CXSV_COMMIT="$CXSV_COMMIT" CXSV_IMAGE_ID="$CXSV_IMAGE_ID"
-      CXSV_SIF_SHA256="$CXSV_SIF_SHA256" CXSV_RUNTIME="$RUNTIME")
+      CXSV_SIF_SHA256="$CXSV_SIF_SHA256" CXSV_RUNTIME="$RUNTIME" XDG_CACHE_HOME=/work/.cache)
 
 case "$CMD" in
     patient|panel)

@@ -55,7 +55,8 @@ LABEL org.opencontainers.image.title="cxsv-pipeline" \
 # Smoke test at build time: every fingerprinted tool and the workflow engine.
 RUN snakemake --version && sniffles --version && cuteSV --version && svim --version \
  && samtools --version | head -1 && bcftools --version | head -1 && bedtools --version \
- && mosdepth --version && (SURVIVOR 2>&1 | grep -i version) && Rscript -e 'library(ggplot2)' >/dev/null
+ && mosdepth --version && (SURVIVOR 2>&1 | grep -i version) && Rscript -e 'library(ggplot2)' >/dev/null \
+ && rm -rf /tmp/.cache /tmp/* && chmod 1777 /tmp
 
 WORKDIR /work
 ENTRYPOINT []

@@ -6,9 +6,10 @@
 #   scripts/make_bundle.sh image  --commit REV [--out ROOT]
 #       build the container image from the commit's container/Dockerfile and
 #       envs/cxsv-pipeline.explicit.txt, save it (Docker archive) and convert
-#       it to a SIF, under ROOT/_images/<lock sha12>/ (image.env records the
+#       it to a SIF, under ROOT/_images/img-<key>/ (image.env records the
 #       image id and SIF sha256). Reused when it already exists: the image
-#       holds the environment only, so it is keyed by the lock, not the commit.
+#       holds the environment only, so it is keyed by sha256(Dockerfile, lock),
+#       not by the commit.
 #
 #   scripts/make_bundle.sh bundle --commit REV --release DIR [--out ROOT]
 #           [--bundle-id ID] [--refs DIR] [--resources DIR] [--catalogues DIR]
@@ -55,8 +56,10 @@ log() { echo "[$(date +%H:%M:%S)] $*"; }
 EXPORT=$(mktemp -d "${TMPDIR:-/tmp}/cxsv_export.XXXXXX"); trap 'rm -rf "$EXPORT"' EXIT
 git -C "$REPO" archive --format=tar "$COMMIT" | tar -x -C "$EXPORT"
 LOCK_SHA=$(sha256sum "$EXPORT/envs/cxsv-pipeline.explicit.txt" | cut -c1-64)
-IMG_DIR="$OUT/_images/lock-${LOCK_SHA:0:12}"
-IMAGE_TAG="cxsv-pipeline:lock-${LOCK_SHA:0:12}"
+DOCKERFILE_SHA=$(sha256sum "$EXPORT/container/Dockerfile" | cut -c1-64)
+IMAGE_KEY=$(printf '%s\n%s\n' "$DOCKERFILE_SHA" "$LOCK_SHA" | sha256sum | cut -c1-12)
+IMG_DIR="$OUT/_images/img-$IMAGE_KEY"
+IMAGE_TAG="cxsv-pipeline:$IMAGE_KEY"
 
 build_image() {
     if [ -f "$IMG_DIR/image.env" ]; then log "image: reusing $IMG_DIR"; return 0; fi
@@ -78,6 +81,7 @@ CXSV_IMAGE_ID=$id
 CXSV_SIF_SHA256=$(sha256sum "$IMG_DIR.partial/cxsv-pipeline.sif" | cut -c1-64)
 CXSV_DOCKER_ARCHIVE_SHA256=$(sha256sum "$IMG_DIR.partial/cxsv-pipeline.docker.tar.gz" | cut -c1-64)
 CXSV_ENV_LOCK_SHA256=$LOCK_SHA
+CXSV_DOCKERFILE_SHA256=$DOCKERFILE_SHA
 CXSV_IMAGE_BASE=$(grep -m1 '^FROM ' "$EXPORT/container/Dockerfile" | cut -d' ' -f2)
 CXSV_IMAGE_BUILT_FROM_COMMIT=$COMMIT
 CXSV_IMAGE_BUILD_SECONDS=$(( $(date +%s) - t0 ))
