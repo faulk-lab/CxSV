@@ -31,6 +31,14 @@ DIR/truth_junctions.tsv and DIR/truth_events.bed.
 Outside the events: CxSV loci not overlapping any event span are listed as the
 host's own CxSV-like calls (expected; a 10-genome panel cannot make most public).
 
+Scoring (roadmap item 5; SAMPLE_DIR/scoring/cxsv_scores.tsv, when present): each
+event's best-scoring overlapping locus gives score, tier and top-3 contributions;
+expect.score 'top' -> that locus is in the top tier (the first tier of
+config/scoring.yaml), 'below_top' -> not in the top tier and below every 'top'
+event, 'not_scored' -> no scored locus. The score expectation is part of the verdict.
+class_match compares with expect.ideal_class; class_match_before with
+expect.ideal_class_before (the label before roadmap item 5) when given.
+
 Known failures (--known-failures TSV: event<TAB>reason) turn FAIL into XFAIL; a
 listed event that passes is XPASS (update the list). The regression counts FAIL
 and XPASS as failures, so it catches new problems without masking old ones.
@@ -138,6 +146,19 @@ def main():
             if line.strip() and not line.startswith("#"):
                 eid, reason = (line.rstrip("\n").split("\t", 1) + [""])[:2]
                 known[eid] = reason
+    import os
+    score_path = f"{a.sample}/scoring/cxsv_scores.tsv"
+    scores = list(csv.DictReader(open(score_path), delimiter="\t")) if os.path.exists(score_path) else None
+    top_tier = "Tier1_high_priority"        # first tier of config/scoring.yaml
+
+    def best_score(eid):
+        if scores is None:
+            return None
+        ov = [r for r in scores if overlaps(r, eid)]
+        return max(ov, key=lambda r: float(r["Total_Score"])) if ov else None
+
+    top_scores = [float(b["Total_Score"]) for e, ev in evs.items()
+                  if ev.get("expect", {}).get("score") == "top" and (b := best_score(e))]
     erows = []
     for eid, ev in evs.items():
         ov = [r for r in loci if overlaps(r, eid)]
@@ -157,6 +178,18 @@ def main():
             # simple SV controls: not a CxSV, and matched on breakpoints (not region overlap):
             # every truth junction has a patient junction with 0 panel carriers
             ok_cx = not ov and bp_ok and all(x == 0 for x in jp)
+        b = best_score(eid)
+        want_score = exp.get("score")
+        if scores is None or want_score is None:
+            ok_score = True
+        elif want_score == "top":
+            ok_score = b is not None and b["Tier"] == top_tier
+        elif want_score == "below_top":
+            ok_score = b is not None and b["Tier"] != top_tier and bool(top_scores) \
+                and float(b["Total_Score"]) < min(top_scores)
+        else:
+            ok_score = b is None
+        before = exp.get("ideal_class_before", exp.get("ideal_class"))
         erows.append(dict(event=eid, name=ev["name"], gene=ev.get("gene") or "intergenic",
                           expect_cxsv=exp.get("cxsv"), ideal_class=exp.get("ideal_class", "."),
                           junctions=n, exact=js["exact"], partial=js["partial"], missed=js["missed"],
@@ -172,7 +205,13 @@ def main():
                           junction_panel_carriers=",".join("." if x is None else str(x) for x in jp) or ".",
                           class_match=("yes" if exp.get("ideal_class") in {r["Cmplx_Class"] for r in ov}
                                        else ("n/a" if not exp.get("cxsv") else "no")),
-                          verdict=verdict(detected and ok_cx, eid in known)))
+                          ideal_class_before=before or ".",
+                          class_match_before=("yes" if before in {r["Cmplx_Class"] for r in ov}
+                                              else ("n/a" if not exp.get("cxsv") else "no")),
+                          expect_score=want_score or ".",
+                          score=b["Total_Score"] if b else ".", tier=b["Tier"] if b else ".",
+                          rank=b["Rank"] if b else ".", top_features=b["Top_Features"] if b else ".",
+                          verdict=verdict(detected and ok_cx and ok_score, eid in known)))
     off = [r for r in loci if not any(overlaps(r, eid, pad=a.slop) for eid in spans)]
 
     def write(path, rows):
@@ -195,7 +234,11 @@ def main():
               f"cxsv_loci={r['cxsv_loci']} class={r['classes']} (expected {r['ideal_class']}, match {r['class_match']}) "
               f"status={r['panel_status']} (expected {r['expect_status']}) carriers={r['carriers']} "
               f"region_carriers={r['region_carriers']} bp_matched={r['junctions_matched_bp']} "
-              f"junction_panel_carriers={r['junction_panel_carriers']}")
+              f"junction_panel_carriers={r['junction_panel_carriers']} score={r['score']} tier={r['tier']} "
+              f"(expected {r['expect_score']})")
+    cx = [r for r in erows if r["class_match"] != "n/a"]
+    print(f"class concordance: {sum(r['class_match'] == 'yes' for r in cx)}/{len(cx)} with expect.ideal_class, "
+          f"{sum(r['class_match_before'] == 'yes' for r in cx)}/{len(cx)} with the labels before roadmap item 5")
     print(f"junctions: {sum(r['status'] == 'exact' for r in jrows)} exact, "
           f"{sum(r['status'] == 'partial' for r in jrows)} partial, "
           f"{sum(r['status'] == 'missed' for r in jrows)} missed of {len(jrows)}")

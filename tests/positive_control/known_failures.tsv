@@ -1,2 +1,1 @@
-# event	reason (E12 first seen 2026-10-28; E04 fixed by breakpoint-level matching, roadmap item 3)
-E12	simple inversion called CxSV: reciprocal INV breakend records kept as two calls, C2_nested_SV fires (classifier; roadmap item 5)
+# event	reason (none open since 2026-10-29: E04 fixed by breakpoint-level matching, roadmap item 3; E12 by the classifier on distinct junctions, roadmap item 5)

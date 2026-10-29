@@ -61,6 +61,8 @@ config/
   panel.yaml              panel builder: cohorts, output root, panel_individuals, panel_sites,
                           release (name/date/test flag), panel_callability
   patient.yaml            patient scorer: runs, panel_release, panel_match (junction matching)
+  scoring.yaml            patient scorer: external catalogues, scoring resources, weights, tiers,
+                          patient info (sex, HPO terms, parents) — docs/SCORING.md
   sites/                  site overlays (paths, cohort sheets), e.g. faulk_lab_panel.yaml
 envs/
   cxsv-pipeline.yaml      the one pinned environment for both workflows
@@ -76,7 +78,8 @@ workflow/
   lib/                    plain-Python modules (unit-tested): sample discovery, fingerprint,
                           junction model (cxsv_junctions), site clustering + matching (cxsv_matching),
                           release identity + manifest verification (cxsv_release), callability
-                          (cxsv_callability)
+                          (cxsv_callability), locus structure + classes (cxsv_classes),
+                          scoring features (cxsv_scoring)
   rules/
     common.smk            shared: inputs, wildcards, CRAM reference cache env
     indexing.smk          shared: reference cache, CRAM M5 check, BAM/CRAM indexes
@@ -91,14 +94,18 @@ workflow/
                           versioned release (release.json + release_manifest.tsv)
     patient_private.smk   patient: release verification, compatibility check, breakpoint-level
                           panel status with callability, plots
+    patient_scoring.smk   patient: external catalogue hits, locus read depth, scoring + report
   scripts/                scripts invoked by the rules (Python, R)
 scripts/
   run_pipeline.sh         `run_pipeline.sh panel|patient [--extra-config FILE] [--resume] [--dry-run]`
   make_bundle.sh          `make_bundle.sh image|bundle --commit REV [--release DIR]`: offline bundle
 acquisition/              background-panel acquisition and alignment (lab fleet)
   catalogues/             external SV catalogues: verified download, liftover, junction-site tables
+  resources/              annotation + scoring resources (RepeatMasker, ClinGen, gnomAD constraint,
+                          HPO, PARs): download, build, resources_manifest.tsv
 tests/
-  unit/                   pytest: sample discovery, fingerprint, panel/patient scripts, config guard
+  unit/                   pytest: sample discovery, fingerprint, panel/patient scripts, config guard,
+                          classifier (test_classes), scoring features and scorer (test_scoring)
   synthetic/              seeded artificial genome, panel + patient end to end (runs in CI)
   positive_control/       generator for the lab positive control: design, haplotypes,
                           read simulation and splicing, scoring, structure figure
@@ -109,7 +116,9 @@ docs/
   JUNCTIONS.md            junction model, shared junction-site schema, panel sites, patient matching
   RELEASE_AND_BUNDLE.md   panel release format, callability, container image, offline bundle, validation
   POSITIVE_CONTROL.md     the planted-CxSV catalogue, how it is built, latest regression result
-  EXTERNAL_CATALOGUES.md  CoLoRSdb, HGSVC3, HPRC r2, gnomAD-SV: licences, builds, fields, conversion counts
+  EXTERNAL_CATALOGUES.md  CoLoRSdb, HGSVC3, HPRC r2, gnomAD-SV: licences, builds, fields, conversion counts,
+                          catalogue hits per patient call
+  SCORING.md              points system, features, resources, PI criteria 1-8, tiers, validation
 ```
 
 ---
@@ -243,6 +252,13 @@ pair.
 | `samples/<run>/<sample>/private/private_cxsv_master_table.tsv` | loci that are not public (`private` and `shared_junctions`) |
 | `samples/<run>/<sample>/private/private_cxsv.vcf` | the patient's SV records inside those loci |
 | `samples/<run>/<sample>/private/junction_panel_status.tsv` | every patient junction (also simple SVs) with its panel sites, carriers, `panel_callable`, carrier frequency and site allele frequency |
+| `samples/<run>/<sample>/private/cxsv_catalogue_hits.tsv` | per CxSV locus and external catalogue (CoLoRSdb, HGSVC3, HPRC, gnomAD-SV): junctions matched / total, max AF, max group AF, contains yes/no; `Catalogues_Containing`, `Catalogue_Max_AF` (roadmap item 4) |
+| `samples/<run>/<sample>/private/junction_catalogue_hits.tsv` | per locus junction: matched sites, max AF and best site per catalogue |
+| `samples/<run>/<sample>/private/catalogue_check.tsv` | every catalogue table verified against its manifest (sha256) |
+| `samples/<run>/<sample>/scoring/cxsv_scores.tsv` | every CxSV locus ranked: total points, tier, top-3 contributions, and each feature's value and points (roadmap item 5; [docs/SCORING.md](docs/SCORING.md)) |
+| `samples/<run>/<sample>/scoring/cxsv_score_features.tsv` | the same, one row per (locus, feature) with the rule applied |
+| `samples/<run>/<sample>/scoring/cxsv_score_report.md` | human-readable per-call report |
+| `samples/<run>/<sample>/scoring/locus_depth.tsv`, `scoring_params.json` | read depth of locus segments (copy number); the weights, tiers, resources and patient information used |
 | `samples/<run>/<sample>/plots/` | genomic context and complexity class plots |
 
 Patient loci are matched against the panel **on breakpoints**, not on region
@@ -296,8 +312,16 @@ Alternatively, regenerate them yourself from the original sources:
 |----------|--------|--------|
 | `genes.final.bed`   | UCSC Table Browser → knownGene → BED         | chr start end gene_name |
 | `exons.filtered.bed`| UCSC Table Browser → knownGene exons          | chr start end gene_name |
-| `repeats.final.bed` | UCSC rmsk table → BED                          | chr start end rep_class |
+| `repeats.final.bed` | T2T consortium CHM13v2 RepeatMasker 4.1.2p1.2022Apr14, **per-element records** (`acquisition/resources/build_resources.py`; replaced the UCSC "joined" spans on 2026-10-29, kept as `repeats.final.bed.bak`) | chr start end rep_class |
 | `segdup.final.bed`  | UCSC genomicSuperDups → BED                    | chr start end |
+
+Scoring resources (roadmap item 5; free sources only, built by
+`python acquisition/resources/build_resources.py --download`, versions and
+checksums in `resources/resources_manifest.tsv`, details in
+[docs/SCORING.md](docs/SCORING.md)): `scoring/clingen_dosage.tsv` (ClinGen
+dosage HI/TS), `scoring/gnomad_constraint.tsv` (gnomAD v4.1 LOEUF),
+`scoring/hpo_genes_to_phenotype.txt` + `scoring/hp.obo` (HPO), `scoring/par.bed`
+(CHM13v2 PARs). OMIM is optional and needs the lab's licence (off by default).
 
 > **Note:** All resources must use the same chromosome naming convention as
 > the reference (e.g. `chr1`, not `1`, for hs1/CHM13).
@@ -306,30 +330,69 @@ Alternatively, regenerate them yourself from the original sources:
 
 ## CxSV Definition (Computational)
 
-A locus is classified as a CxSV if, within a **50 kb window**, it satisfies
-any of five criteria (see `workflow/scripts/classify_cxsv.py`):
+Each sample's SV calls are clustered within 50 kb (`cxsv_params.cluster_distance`).
+Every cluster is then described by its **distinct junctions**, not by VCF
+records (`workflow/lib/cxsv_classes.py`, roadmap item 5):
 
-- **C1** — ≥ 3 unique breakpoints
-- **C2** — Nested SV (one interval wholly inside another)
-- **C3** — Overlapping SV types (physically share coordinates)
-- **C4** — Copy-number shift (DEL/DUP) + orientation change (INV/BND/TRA)
-- **C5** — Chromoanagenesis cluster: ≥ 3 SVs in a 10–50 kb window
+- duplicate and reciprocal records (same svtype and contigs, both ends within
+  `junction_params.collapse_distance`, 300 bp) are one junction, e.g.
+  Sniffles2's two records per inversion breakpoint or a BND and its mate. A
+  simple balanced inversion is one junction with two breakends;
+- a single-caller record at the midpoint of two other overlapping junctions of
+  the same type (SVIM's composite inversion between two offset inversion
+  junctions) is not counted;
+- **breakends** are the distinct break positions (ends within 300 bp merged).
 
-CxSVs are never filtered by genomic context — intergenic, repeat, and segdup
-loci are retained (most CxSVs are expected there).
+A cluster is a CxSV if any criterion holds (`workflow/scripts/classify_cxsv.py`):
+
+- **C1**: ≥ 3 distinct junctions, or ≥ 2 junctions with ≥ 3 breakends of
+  which at least one changes orientation (INV/BND): an inversion or
+  translocation whose junctions do not share their breakpoints (sequence
+  lost or gained at the breaks, e.g. delINVdel, an unbalanced reciprocal
+  translocation). Two nearby deletions are not a CxSV by C1.
+- **C2**: nested: one span junction wholly inside another.
+- **C3**: overlapping span junctions of two different types.
+- **C4**: copy-number junction (DEL/DUP) + orientation junction (INV/BND).
+- **C5**: chromoanagenesis cluster: ≥ 3 junctions within a 10–50 kb window.
+
+CxSVs are never filtered by genomic context: intergenic, repeat and segdup
+loci are kept (most CxSVs are expected there). The structure is written to
+`cxsv_summary.tsv` / `cxsv_master_table.tsv`: `N_Junctions`, `N_Breakpoints` /
+`N_Breakends`, `Max_Interleaved` (largest group of interleaved junctions,
+PI criterion 1), `N_Inter_Junctions`, `Complexity_Tier`, `N_Composite`.
+
+**Since 2026-10-29 these rules are part of the calling fingerprint: panels built
+before then must be rebuilt** (a patient run refuses an older panel release).
 
 ## Complexity Class Labels
 
-| Class Label | SV Types Present | Notes |
-|-------------|-------------------|-------|
-| `DEL+INV` | DEL + INV | |
-| `DUP+INV` | DUP + INV | |
-| `DEL+DUP+INV` | DEL + DUP + INV | |
-| `INS+DEL` | INS + DEL | |
-| `BND_cluster` | BND + ≥1 other | ≥3 breakpoints |
-| `Multi_breakpoint_cluster` | Any | ≥5 breakpoints, <10 |
-| `Chromothripsis_like` | Any | ≥10 breakpoints in window |
-| `Complex_other` | ≥2 types, none of above | |
+First matching row wins (`cxsv_classes.complexity_class`). Types are the
+*called* junction types: a deletion or duplication created by an inversion
+junction (delINVdel, dupINVdup) has no DEL/DUP record and is not a type here;
+copy number is assessed from read depth in scoring. Tiers follow the PI's
+criterion 2: intermediate 3–5 breakends, extreme > 5. All cut-offs are
+operational choices, not validated thresholds.
+
+| Class label | Rule |
+|---|---|
+| `Chromothripsis_like` | extreme tier (≥ 6 breakends) **and** interleaving: a component of ≥ `min_interleaved` (3) interleaved junctions, or ≥ 3 interleaved + ≥ 4 interchromosomal junctions |
+| `DEL+DUP+INV` | DEL, DUP and INV junctions |
+| `DEL+INV` | DEL and INV junctions |
+| `DUP+INV` | DUP and INV junctions |
+| `INS+DEL` | INS and DEL junctions |
+| `BND_cluster` | ≥ 2 distinct translocation (BND) junctions |
+| `Multi_breakpoint_cluster` | extreme tier without interleaving |
+| `Nested_SV` | C2 fired (nested junctions) |
+| `Overlapping_types` | C3 fired |
+| `CN_plus_orientation_change` | C4 fired (e.g. DEL + BND) |
+| `Complex_inversion` | ≥ 2 distinct inversion junctions and nothing else (e.g. delINVdel, dupINVdup, DUP-TRP/INV-DUP fold-backs) |
+| `Complex_other` | any other CxSV (e.g. three deletions within 50 kb) |
+| `NA` | not a CxSV (in `cxsv_summary.tsv` only) |
+
+Before 2026-10-29, C5 alone made a locus `Chromothripsis_like` (compact 2–4
+junction events were labelled so), and duplicate reciprocal INV records made
+C2 fire on simple inversions. Both are fixed; docs/POSITIVE_CONTROL.md has the
+class concordance before and after.
 
 ---
 

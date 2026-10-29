@@ -5,7 +5,9 @@ Calls SVs and CxSVs in one patient (or a family) with exactly the panel's
 calling module, checks that the calling fingerprint matches the panel release,
 then matches every patient CxSV locus against the panel's junction sites,
 breakpoint by breakpoint, and labels it private, shared_junctions or public
-with its panel carrier count. Pathogenicity scoring of private loci is added in roadmap item 5.
+with its panel carrier count, reports which external SV catalogue contains each
+locus, and scores every locus with the configurable points system of
+config/scoring.yaml (roadmap items 4 and 5; docs/SCORING.md).
 
 Inputs: the patient alignments and a panel release directory. No background
 reads are needed, so this runs inside a restricted environment.
@@ -21,6 +23,7 @@ or  bash scripts/run_pipeline.sh patient --extra-config config/sites/<site>_pati
 Config (later files override earlier ones; nested keys merge):
     config/calling.yaml   shared + fingerprinted calling/discovery parameters
     config/patient.yaml   patient runs, panel release, matching settings
+    config/scoring.yaml   catalogues, scoring resources, weights, tiers, patient info
     --configfile ...      site overlay: paths, patient sample sheet
 """
 
@@ -32,6 +35,7 @@ import os
 PROJECT_DIR = os.path.abspath(os.path.join(workflow.basedir, "..", ".."))
 configfile: os.path.join(PROJECT_DIR, "config", "calling.yaml")
 configfile: os.path.join(PROJECT_DIR, "config", "patient.yaml")
+configfile: os.path.join(PROJECT_DIR, "config", "scoring.yaml")
 
 WORKFLOW_NAME = "patient"
 COHORT_SPECS  = config.get("patient_runs") or {}
@@ -45,6 +49,7 @@ include: "../rules/junctions.smk"
 include: "../rules/sample_report.smk"
 include: "../rules/fingerprint.smk"
 include: "../rules/patient_private.smk"
+include: "../rules/patient_scoring.smk"
 
 
 rule all:
@@ -58,3 +63,6 @@ rule all:
         per_sample(f"{S}/private/junction_panel_status.tsv"),
         per_sample(f"{S}/plots/genomic_context.pdf"),
         per_sample(f"{S}/plots/complexity_class_heatmap.pdf"),
+        per_sample(f"{S}/private/cxsv_catalogue_hits.tsv"),
+        per_sample(f"{S}/scoring/cxsv_scores.tsv"),
+        per_sample(f"{S}/scoring/cxsv_score_report.md"),

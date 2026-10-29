@@ -21,7 +21,10 @@ events:
     mediated; MECP2/PLP1 type)
   expect:
     cxsv: true
-    ideal_class: DUP+INV
+    ideal_class: Complex_inversion
+    ideal_class_before: DUP+INV
+    ideal_class_reason: "2026-10-29 (roadmap item 5, classes on called junction types): the duplications create no DUP junction of their own: the callers report two unpaired inversion junctions (fold-backs, D+|C- and C-|B+), so by the called junction types this is a Complex_inversion; the copy gain is seen by read depth in scoring (criterion 5) and the fold-backs by criterion 8"
+    score: top
   zygosity: heterozygous
   segments:
     B:
@@ -61,7 +64,10 @@ events:
   note: inversion with a deletion at each breakpoint
   expect:
     cxsv: true
-    ideal_class: DEL+INV
+    ideal_class: Complex_inversion
+    ideal_class_before: DEL+INV
+    ideal_class_reason: "2026-10-29 (roadmap item 5, classes on called junction types): the two deletions sit at the inversion's junctions (p+|I-, I-|q+) and have no DEL junction of their own; two offset inversion junctions = Complex_inversion; the losses are seen by read depth in scoring"
+    score: top
   zygosity: heterozygous
   segments:
     D1:
@@ -95,7 +101,10 @@ events:
   note: inversion of B with inverted duplications of the flanking segments A and C
   expect:
     cxsv: true
-    ideal_class: DUP+INV
+    ideal_class: Complex_inversion
+    ideal_class_before: DUP+INV
+    ideal_class_reason: "2026-10-29 (roadmap item 5, classes on called junction types): the inverted duplications of A and C are represented only by the two offset inversion junctions (A+|C-, A-|C+); no DUP junction exists; the gains are seen by read depth in scoring"
+    score: top
   zygosity: heterozygous
   segments:
     A:
@@ -133,7 +142,10 @@ events:
   note: deletion of B, inversion of C and tandem duplication of E within 24 kb
   expect:
     cxsv: true
-    ideal_class: DEL+DUP+INV
+    ideal_class: DUP+INV
+    ideal_class_before: DEL+DUP+INV
+    ideal_class_reason: "2026-10-29 (roadmap item 5, classes on called junction types): the deletion of B has no junction of its own (A+|C- joins across it); the called junction types are INV + DUP (tandem duplication of E)"
+    score: top
   zygosity: heterozygous
   segments:
     A:
@@ -180,7 +192,10 @@ events:
     (D)
   expect:
     cxsv: true
-    ideal_class: DEL+INV
+    ideal_class: Nested_SV
+    ideal_class_before: DEL+INV
+    ideal_class_reason: "2026-10-29 (roadmap item 5, classes on called junction types): the inner deletion D has no junction of its own (C+|B- joins across it); the called junctions are nested inversions only (5 breakends, intermediate tier)"
+    score: top
   zygosity: heterozygous
   segments:
     A:
@@ -226,7 +241,10 @@ events:
     copy of T2 (from ~30 kb downstream)
   expect:
     cxsv: true
-    ideal_class: INS+DEL
+    ideal_class: DUP+INV
+    ideal_class_before: INS+DEL
+    ideal_class_reason: "2026-10-29 (roadmap item 5, classes on called junction types): long-read callers resolve the templated insertions to the junctions they create (U1+|T1+ duplication-like, T1+|T2- and T2-|U2+ inversions), not to INS+DEL records; mechanism (FoSTeS/MMBIR templating) is criterion 6, deferred"
+    score: top
   zygosity: heterozygous
   segments:
     T1:
@@ -274,6 +292,7 @@ events:
   expect:
     cxsv: true
     ideal_class: BND_cluster
+    score: top
   zygosity: heterozygous
   segments:
     d2:
@@ -315,6 +334,7 @@ events:
     cxsv: true
     ideal_class: BND_cluster
     caveat: each chromosome carries only two breakends, so per-locus criteria C1-C5 may not fire
+    score: top
   zygosity: heterozygous
   segments:
     d4:
@@ -371,6 +391,7 @@ events:
   expect:
     cxsv: true
     ideal_class: Chromothripsis_like
+    score: top
   zygosity: heterozygous
   segments:
     S1:
@@ -449,6 +470,7 @@ events:
   expect:
     cxsv: true
     ideal_class: Multi_breakpoint_cluster
+    score: below_top
   zygosity: heterozygous
   segments:
     A:
@@ -503,6 +525,7 @@ events:
   expect:
     cxsv: false
     ideal_class: null
+    score: not_scored
   zygosity: heterozygous
   segments:
     X:
@@ -528,6 +551,7 @@ events:
   expect:
     cxsv: false
     ideal_class: null
+    score: not_scored
   zygosity: heterozygous
   segments:
     I:
@@ -554,9 +578,12 @@ events:
     genomes (expected public, 3 carriers)
   expect:
     cxsv: true
-    ideal_class: Multi_breakpoint_cluster
+    ideal_class: Nested_SV
+    ideal_class_before: Multi_breakpoint_cluster
+    ideal_class_reason: "2026-10-29 (roadmap item 5, classes on called junction types): 5 distinct breakends (54987500, 54992101, 54999500, 55005500, 55010801) = intermediate tier (< 6, PI criterion 2), so not Multi_breakpoint_cluster; the called junctions are nested inversions (C- inside the A+|C- junction)"
     panel_status: public
     panel_carriers: 3
+    score: below_top
   spike_in:
     splice: regression
     backgrounds:

@@ -19,7 +19,9 @@
 #      population genotypes) and runs the patient scorer on the control slice;
 #   4. scores each event against the truth set (score_pos_control.py):
 #      junction recovery, CxSV classification, breakpoint-level panel status
-#      (private / shared_junctions / public, E13 public with 3 carriers);
+#      (private / shared_junctions / public, E13 public with 3 carriers), and the
+#      pathogenicity score (E01-E09 top tier; E10, E13 below them; E11/E12 not
+#      scored; config/scoring.yaml, external catalogues from the NAS);
 #   5. with RERUN=1, runs the patient workflow a second time into a fresh
 #      results root and requires byte-identical records (determinism).
 #
@@ -133,6 +135,8 @@ python tests/positive_control/score_pos_control.py "$TRUTH" "$S" "$EVENTS" "$W/s
     --extra-truth "$ADDON/truth" \
     --known-failures tests/positive_control/known_failures.tsv | tee "$W/score.txt"
 cp "$W/results/panel/release/panel_frequency_comparison_summary.tsv" "$W/frequency_comparison_summary.tsv"
+cp "$S/scoring/cxsv_scores.tsv" "$W/score.cxsv_scores.tsv"; cp "$S/scoring/cxsv_score_report.md" "$W/score.report.md"
+cp "$S/scoring/cxsv_score_features.tsv" "$W/score.features.tsv"
 set -e
 # FAIL = new failure; XPASS = a listed known failure now passes (update the list)
 FAILS=$(awk -F'\t' 'NR>1 && ($NF=="FAIL" || $NF=="XPASS")' "$W/score.events.tsv" | wc -l)
@@ -143,8 +147,10 @@ if [ "$RERUN" = "1" ]; then
     "${SM[@]}" -s workflow/patient/Snakefile --configfile "$W/site_rerun.yaml" > "$W/patient_rerun.log" 2>&1 \
       || { tail -30 "$W/patient_rerun.log"; exit 1; }
     S2="$W/results/patient_rerun/samples/pos_control/pos_control"
-    for f in merged_sv.vcf junctions/junctions.tsv private/cxsv_panel_status.tsv \
-             private/junction_panel_status.tsv private/private_cxsv.vcf; do
+    for f in merged_sv.vcf cxsv/cxsv_summary.tsv junctions/junctions.tsv private/cxsv_panel_status.tsv \
+             private/junction_panel_status.tsv private/private_cxsv.vcf private/cxsv_catalogue_hits.tsv \
+             private/junction_catalogue_hits.tsv scoring/locus_depth.tsv scoring/cxsv_scores.tsv \
+             scoring/cxsv_score_features.tsv scoring/cxsv_score_report.md; do
         # VCF '##' meta lines carry dates and command lines; compare records only
         if cmp -s <(grep -v '^##' "$S/$f") <(grep -v '^##' "$S2/$f"); then echo "rerun identical: $f"
         else echo "RERUN DIFFERS: $f"; FAILS=$((FAILS+1)); fi

@@ -26,6 +26,7 @@ The SIMPLE deletion's junction has 3 panel carriers.
 Usage: make_synthetic_data.py <outdir> [--coverage 25] [--seed 7] [--threads 4]
 Needs minimap2 and samtools on PATH. Writes:
   ref/chr20.fa(.fai)  resources/{genes,exons,repeats,segdup}.bed
+  resources/scoring/*  stand-in scoring resources; resources/catalogues/SYNCAT  a catalogue containing COMMON
   bams/<sample>.bam(.bai)  (panel3 additionally as CRAM)  expected.json
 """
 import argparse
@@ -134,6 +135,39 @@ def write_resources(res: Path):
     (res / "repeats.bed").write_text(
         f"{CONTIG}\t300000\t301000\tLINE\n{CONTIG}\t600000\t600300\tSINE\n")
     (res / "segdup.bed").write_text(f"{CONTIG}\t650000\t660000\n")
+    write_scoring_resources(res)
+
+
+def write_scoring_resources(res: Path):
+    """Tiny stand-ins for the scoring resources and one external catalogue
+    (roadmap items 4-5), so CI exercises every scoring code path: SYNP is a
+    curated haploinsufficient gene, the catalogue SYNCAT contains COMMON."""
+    import gzip
+    import hashlib
+    sd = res / "scoring"
+    sd.mkdir(parents=True, exist_ok=True)
+    (sd / "clingen_dosage.tsv").write_text("gene_symbol\tgene_id\thi_score\tts_score\tlast_evaluated\n"
+                                           "SYNA\t1\t0\t0\t2020-01-01\nSYNP\t2\t3\t0\t2020-01-01\n"
+                                           "SYNS\t3\t1\t0\t2020-01-01\n")
+    (sd / "gnomad_constraint.tsv").write_text("gene_symbol\ttranscript\tloeuf\tpli\ttranscript_choice\n"
+                                              "SYNA\tT1\t0.9\t0\tmane_select\n")
+    (sd / "par.bed").write_text("")
+    (sd / "hpo_genes_to_phenotype.txt").write_text(
+        "ncbi_gene_id\tgene_symbol\thpo_id\thpo_name\tfrequency\tdisease_id\n"
+        "2\tSYNP\tHP:0002373\tFebrile seizure\t-\tSYN:1\n")
+    (sd / "hp.obo").write_text("format-version: 1.2\ndata-version: synthetic\n\n[Term]\nid: HP:0000001\n\n"
+                               "[Term]\nid: HP:0000118\nis_a: HP:0000001\n\n[Term]\nid: HP:0001250\n"
+                               "is_a: HP:0000118\n\n[Term]\nid: HP:0002373\nis_a: HP:0001250\n")
+    cd = res / "catalogues" / "SYNCAT" / "v1"
+    cd.mkdir(parents=True, exist_ok=True)
+    table = cd / "SYNCAT.v1.junction_sites.tsv.gz"
+    with gzip.GzipFile(table, "wb", mtime=0) as fh:
+        fh.write(("chrom1\tpos1\tchrom2\tpos2\tsvtype\tsvlen\tac\tan\taf\tsource\tversion\n"
+                  + "".join(f"{CONTIG}\t{s}\t{CONTIG}\t{e}\t{t}\t{e - s}\t60\t200\t0.3\tSYNCAT\tv1\n"
+                            for t, s, e in EVENTS["COMMON"])).encode())
+    sha = hashlib.sha256(table.read_bytes()).hexdigest()
+    (cd / "SYNCAT.v1.manifest.tsv").write_text(
+        f"field\tvalue\nsource\tSYNCAT\nversion\tv1\noutput_file\t{table.name}\noutput_sha256\t{sha}\n")
 
 
 def main():
@@ -179,6 +213,13 @@ def main():
             "RARE":    {"cxsv": True, "panel_carriers": 1, "status": "public"},
             "PRIVATE": {"cxsv": True, "panel_carriers": 0, "status": "private",
                         "region_carriers": 2, "hotspot": "yes"},
+        },
+        "scoring_expectations": {
+            # PRIVATE breaks the curated HI gene SYNP and matches the patient's HPO term
+            "PRIVATE": {"rank": 1, "tier": "Tier1_high_priority", "hpo_match": True},
+            # COMMON is public in the panel and contained in the synthetic catalogue
+            "COMMON": {"catalogue": "SYNCAT", "tier_below": "PRIVATE"},
+            "RARE": {"tier_below": "PRIVATE"},
         },
         "junction_expectations": {
             "SIMPLE": {"svtype": "DEL", "pos1": 1_000_000, "pos2": 1_003_000, "panel_carriers": 3},

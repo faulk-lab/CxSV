@@ -101,10 +101,15 @@ rule sample_cluster_sv:
 
 rule sample_classify_cxsv:
     """
-    Classify this sample's clusters against criteria C1-C5
-    (workflow/scripts/classify_cxsv.py). Genomic context is never a criterion.
+    Classify this sample's clusters against criteria C1-C5 on distinct
+    junctions (duplicate/reciprocal records collapsed, SVIM composites not
+    counted) and label them (workflow/scripts/classify_cxsv.py,
+    workflow/lib/cxsv_classes.py). Genomic context is never a criterion.
     """
-    input:  f"{S}/cxsv/clusters.bed"
+    input:
+        bed = f"{S}/cxsv/clusters.bed",
+        vcf = f"{S}/merged_sv.vcf",
+        fai = f"{REFERENCE}.fai"
     output: f"{S}/cxsv/cxsv_summary.tsv"
     params:
         min_bp      = config["cxsv_params"]["min_breakpoints"],
@@ -112,18 +117,34 @@ rule sample_classify_cxsv:
         ca_min      = config["cxsv_params"]["chromoanag_min_window"],
         ca_max      = config["cxsv_params"]["chromoanag_max_window"],
         ca_min_sv   = config["cxsv_params"]["chromoanag_min_svs"],
-        max_cluster = config["cxsv_params"]["max_cluster_size"]
+        max_cluster = config["cxsv_params"]["max_cluster_size"],
+        extreme     = config["cxsv_params"]["extreme_min_breakends"],
+        min_il      = config["cxsv_params"]["min_interleaved"],
+        il_intra    = config["cxsv_params"]["interleave_alt_min_intra"],
+        il_inter    = config["cxsv_params"]["interleave_alt_min_inter"],
+        composite   = config["cxsv_params"]["composite_fraction"],
+        collapse    = config["junction_params"]["collapse_distance"],
+        ins_ratio   = config["junction_params"]["ins_len_ratio"]
     log: f"{S}/logs/classify_cxsv.log"
     shell:
         """
         python {SCRIPTS}/classify_cxsv.py \
-            --bed               {input} \
+            --bed               {input.bed} \
+            --vcf               {input.vcf} \
+            --fai               {input.fai} \
             --output            {output} \
+            --collapse-distance {params.collapse} \
+            --ins-len-ratio     {params.ins_ratio} \
+            --composite-fraction {params.composite} \
             --min-bp            {params.min_bp} \
             --max-window        {params.max_win} \
             --chromoanag-min    {params.ca_min} \
             --chromoanag-max    {params.ca_max} \
             --chromoanag-min-sv {params.ca_min_sv} \
+            --extreme-min-breakends {params.extreme} \
+            --min-interleaved   {params.min_il} \
+            --interleave-alt-min-intra {params.il_intra} \
+            --interleave-alt-min-inter {params.il_inter} \
             --max-cluster-size  {params.max_cluster} \
             2> {log}
         """

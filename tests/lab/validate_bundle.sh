@@ -128,7 +128,10 @@ for x in offline_singularity offline_docker; do
     # same files, different absolute paths: results root and reference inside the container vs on the host
     if python "$REPO/tests/lab/compare_patient_runs.py" "$W/$x/results/patient" "$W/normal/results/patient" \
             --alias-a /work/results/patient=@RESULTS@ --alias-a /bundle/reference=@REF@ --alias-a /work=@WORKDIR@ \
+            --alias-a /bundle/resources=@RES@ --alias-a /bundle/catalogues=@CAT@ \
             --alias-b "$W/normal/results/patient=@RESULTS@" --alias-b /mnt/sargasso1/CxSV/refs=@REF@ \
+            --alias-b /mnt/sargasso1/CxSV/resources=@RES@ \
+            --alias-b /mnt/sargasso1/CxSV/datasets/external_catalogues=@CAT@ \
             --alias-b "$REPO=@WORKDIR@" \
             --out "$W/compare_${x}_vs_normal.tsv" | tail -1; then pass "$x vs normal: no unexpected difference"
     else fail "$x vs normal differ (see $W/compare_${x}_vs_normal.tsv)"; grep -vE "identical|expected" "$W/compare_${x}_vs_normal.tsv"; fi

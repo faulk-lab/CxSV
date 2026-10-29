@@ -53,8 +53,8 @@ one image built from its explicit package list (`container/Dockerfile`).
 **Start condition:** `cram-input` and `acquisition-code` are merged into
 `main`, and the registry has been rebuilt after the PacBio download.
 
-**Suggested order:** 1 → 6 (test scaffold) → 3 → 2 → 4 → 5. Done: 1, 6, 3. Item 6 grows
-with each later item.
+**Suggested order:** 1 → 6 (test scaffold) → 3 → 2 → 4 → 5. Done: 1, 6, 3, 2, 4, 5 (item 2 and 5 branches
+awaiting merge). Item 6 grows with each later item. Queued next: 8 (read-level mechanism axes).
 
 ### 1. Two workflows, one shared calling module — **done (2026-10-28)**
 
@@ -218,16 +218,37 @@ with each later item.
   private while a spiked-in common panel CxSV is classed public, and E11/E12
   (simple SVs) are matched on breakpoints rather than region overlap.
 
-### 4. External SV catalogues as additional background — **acquisition done (2026-10-28); matching integration pending**
+### 4. External SV catalogues as additional background — **done (2026-10-29)**
 
-> Done: CoLoRSdb v1.2.0, HGSVC3 HGSVC2024v1.0, HPRC release 2 (MC v2.1) and
-> gnomAD-SV v4.1 are downloaded with verified checksums to
-> `/mnt/sargasso1/CxSV/datasets/external_catalogues/`, gnomAD-SV is lifted to hs1
-> breakpoint by breakpoint (2.13% site loss), and each is converted to the shared
-> junction-site schema with a manifest ([`acquisition/catalogues/`](../acquisition/catalogues/README.md);
-> survey, licences and caveats in [`docs/EXTERNAL_CATALOGUES.md`](EXTERNAL_CATALOGUES.md)).
-> None had to be excluded. Still to do: bundle them as panel-release components
-> and make the scorer report the catalogue hits per call.
+> Acquisition (2026-10-28): CoLoRSdb v1.2.0, HGSVC3 HGSVC2024v1.0, HPRC
+> release 2 (MC v2.1) and gnomAD-SV v4.1 were downloaded with verified
+> checksums to `/mnt/sargasso1/CxSV/datasets/external_catalogues/`. gnomAD-SV
+> was lifted to hs1 breakpoint by breakpoint (2.13% site loss). Each catalogue
+> was converted to the shared junction-site schema with a manifest
+> ([`acquisition/catalogues/`](../acquisition/catalogues/README.md); survey,
+> licences and caveats in [`docs/EXTERNAL_CATALOGUES.md`](EXTERNAL_CATALOGUES.md)).
+>
+> **Integration (2026-10-29, branch `item5-scoring`):**
+>
+> - Rule `catalogue_hits` (`workflow/scripts/match_catalogues.py`) matches
+>   every junction of every patient CxSV locus against each catalogue with
+>   the item-3 matcher (`cxsv_matching.SiteIndex.query`, 500 bp, one
+>   implementation; tolerance and fraction configurable in
+>   `config/scoring.yaml → external_catalogues`).
+> - Per locus and catalogue it reports junctions matched / total, max AF, max
+>   group AF and whether the catalogue *contains* the locus (≥ 0.75 of its
+>   junctions), plus `Catalogues_Containing` and `Catalogue_Max_AF`. A
+>   per-junction side table gives the matched sites.
+> - Each table is verified against its manifest's sha256 before use
+>   (`catalogue_check.tsv`); a mismatch stops the run.
+> - The bundle ships the four tables with their manifests (as since item 2),
+>   and `bundle_site.yaml` points the scorer at them.
+> - Catalogue frequency is a scoring feature (most severe catalogue; never
+>   summed).
+>
+> **Result** on the positive control: no planted event is in any catalogue.
+> Of the host's 16 other loci, 11 are contained in ≥ 1 catalogue (max AF
+> 0.45–0.83).
 
 - Bundle published SV frequency resources the same way as the panel. They
   widen the ancestry and platform coverage beyond 1kGP.
@@ -237,7 +258,68 @@ with each later item.
 - **Done when:** each catalogue is a versioned, checksummed bundle component;
   the scorer reports which catalogue, if any, contains each call.
 
-### 5. Scoring as a separate, configurable module
+### 5. Scoring as a separate, configurable module — **done (2026-10-29)**
+
+> Done (branch `item5-scoring`; [docs/SCORING.md](SCORING.md)):
+>
+> - **Scorer.** `workflow/lib/cxsv_scoring.py` + `workflow/scripts/score_cxsv.py`
+>   + `rules/patient_scoring.smk`, weights and tiers in `config/scoring.yaml`.
+>   It is an ACMG/ClinGen-style points system:
+>   - privacy (panel carriers × callability; catalogues, max AF, never summed);
+>   - genes broken / lost / gained, weighted by ClinGen HI/TS and gnomAD LOEUF;
+>     exons; gene count; no gene;
+>   - class and size; caller agreement and read support;
+>   - a repeat / segdup artefact penalty;
+>   - the PI's chromothripsis criteria 1 (interleaving), 2 (breakpoint tier),
+>     5 (read-depth copy-number oscillation, sex-aware, PAR excluded),
+>     7 (clustering vs a chromosome-intrinsic null, descriptive) and
+>     8 (fold-back / BFB modifier);
+>   - optional HPO match, inheritance (parents in the run) and OMIM (licence
+>     key; off by default).
+>
+>   Each call gets a TSV row, long-format feature rows and a markdown report
+>   with every feature's raw value, rule and points, the total and a tier.
+>   Thresholds are operational choices, not validated cutoffs. Criteria 3, 4
+>   and 6 are queued as item 8.
+> - **Resources** (free only), versioned with URL, date and sha256 in
+>   `resources/resources_manifest.tsv`
+>   (`acquisition/resources/build_resources.py`):
+>   - ClinGen gene dosage list (2026-10-28);
+>   - gnomAD v4.1 constraint;
+>   - HPO v2026-09-01;
+>   - CHM13v2 PARs;
+>   - CHM13v2 RepeatMasker 4.1.2p1.2022Apr14.
+>
+>   All are shipped in the bundle.
+> - **Classifier fixes** found by the positive control (fingerprinted; panels
+>   must be rebuilt):
+>   - C1–C5 run on distinct junctions (duplicate / reciprocal records
+>     collapsed, SVIM composites dropped), so a simple inversion is no longer
+>     a CxSV (E12);
+>   - `Chromothripsis_like` needs the extreme tier (> 5 breakends) plus
+>     interleaving, and C5 no longer overrides type labels;
+>   - new label `Complex_inversion`;
+>   - the README class table lists every label.
+> - **Repeats rebuilt.** `repeats.final.bed` now holds per-element
+>   RepeatMasker records. Genome cover dropped from 2.82 Gb to 1.70 Gb. On
+>   *MECP2*, repeat cover went from 83.8% to 50.6% (soft mask 50.4%), and exon
+>   cover from 31.0% to 3.6%. The old file is kept as `.bak`.
+> - **Result** (lab regression, fresh panel, `RERUN=1`):
+>   - E01–E09 are all Tier 1 (1.37–2.74); E10 scores 0.33 (Tier 3) and the
+>     public E13 −1.15 (Benign_likely);
+>   - E12 is no longer a CxSV, and `known_failures.tsv` is empty;
+>   - 40/41 junctions exact;
+>   - the rerun was byte-identical.
+>   - Class concordance went from 1/11 to 11/11 against the revised
+>     expectations (4/11 against the original labels; 7 expectations revised
+>     with reasons in `events.yaml`).
+> - **Bundle** `cxsv-bundle-20261029-1dcabd9770f7` (commit 1dcabd9, 7.6 GiB,
+>   scoring resources included) validated offline: Singularity and Docker
+>   runs agree with the conda run, and tampered releases are refused
+>   (docs/RELEASE_AND_BUNDLE.md 6a).
+> - Not yet: the curated literature set of pathogenic CxSVs named in "done
+>   when" (only the planted control so far); ClinGen's region-level dosage
+>   list; calibration of the weights on real patients.
 
 - Start with an explicit points system modelled on the ACMG/ClinGen CNV
   scoring framework, not machine learning: labelled pathogenic CxSVs are few.
@@ -291,6 +373,27 @@ with each later item.
   section 6); repeat with the first real panel release and its tag.
 - **Done when:** CI is green on `main`, and the bundle validation is recorded
   with the release tag it used.
+
+### 8. Read-level mechanism axes (PI criteria 3, 4, 6) — **queued (deferred by PI decision 2026-10-28)**
+
+The PI's germline-chromothripsis criteria (germline-chromothripsis-pipeline-criteria)
+have eight axes. Criteria 1, 2, 5, 7 and 8 are computed and scored since item 5
+(docs/SCORING.md). The three axes below need read-level evidence (phased
+SNVs, read sequence, reads spanning several breakpoints) that the per-sample
+calling path does not keep. They are not implemented. As with every number
+in this pipeline, the cutoffs are the doc's operational starting points, not
+validated thresholds.
+
+| Criterion | Doc's suggested cutoff | What it needs |
+|---|---|---|
+| **3. Single haplotype of origin** (interspersed heterozygosity) | all break-ends phase to one parental homolog; where CN loss exists, retained-heterozygosity segments interspersed with LOH; phrased so a balanced, copy-neutral event still passes (haplotype of the break-ends themselves) | read-backed SNV phasing of the patient (WhatsHap / margin / native ONT phasing; a small-variant caller such as Clair3 in the image), then assignment of each junction's supporting reads to a haplotype block; parents (trio) for parental origin |
+| **4. Reconstructability** (derivative-chromosome walk) | graded score W = % of clustered breakpoints spanned by a consistent walk; ≥ 80% (tunable) via direct long-read span, local assembly contig or graph-inferred adjacency; gaps allowed only at annotated repeat / centromere / segdup; walk score gated by the BFB modifier (criterion 8) | reads or local-assembly contigs that span several breakpoints in cis (supporting-read names per junction from the callers, or a local assembly of each locus), a junction graph and a walk search; repeat/segdup tracks (present) for excused gaps |
+| **6. Junction templating / microhomology** (primary discriminator) | per junction, from ±50–100 bp flanking sequence taken from the reads: short microhomology (~0–6 bp) with blunt joins leans NHEJ / chromothripsis; longer templated insertions homologous to a distant donor lean MMBIR / FoSTeS; leaning, not deterministic | the reads (or a consensus) across each junction, so the junction sequence and any inserted sequence are known; alignment of insertions to find donor loci; the reference for microhomology at both ends |
+
+- **Done when:** each axis is a computed feature with its raw value in the
+  score report, its weight in config/scoring.yaml (0 until calibrated), and a
+  positive-control check (E06 templated insertions for criterion 6; E09 for 3
+  and 4).
 
 ---
 

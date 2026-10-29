@@ -37,7 +37,7 @@ def test_calling_yaml_defines_all_fingerprinted_sections():
 
 
 def test_no_committed_config_overrides_fingerprinted_sections():
-    paths = [REPO / "config/panel.yaml", REPO / "config/patient.yaml", *sorted((REPO / "config/sites").glob("*.yaml"))]
+    paths = [REPO / "config/panel.yaml", REPO / "config/patient.yaml", REPO / "config/scoring.yaml", *sorted((REPO / "config/sites").glob("*.yaml"))]
     assert paths
     for p in paths:
         cfg = yaml.safe_load(p.read_text()) or {}

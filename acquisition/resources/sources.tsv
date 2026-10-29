@@ -1,0 +1,7 @@
+name	version	file	url	licence	used_for
+RepeatMasker_CHM13v2	4.1.2p1.2022Apr14	chm13v2.0_RepeatMasker_4.1.2p1.2022Apr14.bed	https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/CHM13/assemblies/annotation/chm13v2.0_RepeatMasker_4.1.2p1.2022Apr14.bed	T2T consortium open data (AWS Open Data)	repeats.final.bed (per-element records)
+PAR_CHM13v2	chm13v2.0	chm13v2.0_PAR.bed	https://s3-us-west-2.amazonaws.com/human-pangenomics/T2T/CHM13/assemblies/analysis_set/chm13v2.0_PAR.bed	T2T consortium open data (AWS Open Data)	scoring/par.bed (copy number on chrX/chrY)
+ClinGen_dosage	header-date	ClinGen_gene_curation_list_GRCh38.tsv	https://ftp.clinicalgenome.org/ClinGen_gene_curation_list_GRCh38.tsv	ClinGen terms of use (free, attribution)	scoring/clingen_dosage.tsv (HI/TS scores by gene symbol)
+gnomAD_constraint	v4.1	gnomad.v4.1.constraint_metrics.tsv	https://storage.googleapis.com/gcp-public-data--gnomad/release/4.1/constraint/gnomad.v4.1.constraint_metrics.tsv	gnomAD (CC0 1.0)	scoring/gnomad_constraint.tsv (LOEUF by gene symbol)
+HPO_genes_to_phenotype	release-tag	genes_to_phenotype.txt	https://github.com/obophenotype/human-phenotype-ontology/releases/download/{HPO_TAG}/genes_to_phenotype.txt	HPO licence (free with attribution)	scoring/hpo_genes_to_phenotype.txt (optional HPO match)
+HPO_ontology	release-tag	hp.obo	https://github.com/obophenotype/human-phenotype-ontology/releases/download/{HPO_TAG}/hp.obo	HPO licence (free with attribution)	scoring/hp.obo (term ancestors for the HPO match)
