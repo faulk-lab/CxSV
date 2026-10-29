@@ -14,6 +14,9 @@ patient is called exactly as the panel was.
 Run from the project root:
     snakemake -s workflow/panel/Snakefile --cores 32 \
         --configfile config/sites/<site>_panel.yaml
+or from any working directory (relative paths in the config then resolve there):
+    snakemake -s <repo>/workflow/panel/Snakefile --directory <workdir> --cores 32 \
+        --configfile <site>_panel.yaml
 or  bash scripts/run_pipeline.sh panel --extra-config config/sites/<site>_panel.yaml
 
 Config (later files override earlier ones; nested keys merge):
@@ -22,8 +25,14 @@ Config (later files override earlier ones; nested keys merge):
     --configfile ...      site overlay: paths, cohort sample sheets
 """
 
-configfile: "config/calling.yaml"
-configfile: "config/panel.yaml"
+import os
+
+# Config files are found relative to this Snakefile, so the workflow also runs
+# from a read-only copy of the repository with a separate working directory
+# (snakemake --directory <workdir>; the offline bundle, docs/RELEASE_AND_BUNDLE.md).
+PROJECT_DIR = os.path.abspath(os.path.join(workflow.basedir, "..", ".."))
+configfile: os.path.join(PROJECT_DIR, "config", "calling.yaml")
+configfile: os.path.join(PROJECT_DIR, "config", "panel.yaml")
 
 WORKFLOW_NAME = "panel"
 COHORT_SPECS  = config.get("panel_cohorts") or {}
@@ -37,6 +46,7 @@ include: "../rules/junctions.smk"
 include: "../rules/sample_report.smk"
 include: "../rules/fingerprint.smk"
 include: "../rules/panel_cohort.smk"
+include: "../rules/panel_callability.smk"
 include: "../rules/panel_aggregate.smk"
 
 

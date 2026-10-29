@@ -1,0 +1,4 @@
+# `git archive` writes the commit hash into workflow/COMMIT, so an exported copy
+# of the code (the offline bundle) still knows which commit it is
+# (workflow/lib/cxsv_release.py: source_info).
+workflow/COMMIT export-subst

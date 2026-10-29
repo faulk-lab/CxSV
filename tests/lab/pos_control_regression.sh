@@ -108,6 +108,11 @@ panel_results_root:   "$W/results/panel"
 patient_results_root: "$1"
 panel_release:        "$W/results/panel/release"
 panel_individuals:    "$INDIVIDUALS"
+release:
+  name: "${RELEASE_NAME:-TEST-posctrl-slices}"
+  date: ${RELEASE_DATE:-null}
+  test_release: true
+  description: "TEST RELEASE: $N background genomes sliced to the positive-control regions; not for patient interpretation"
 panel_cohorts:
   lab_background_pos_control_slices: {samples: "$W/background.tsv"}
 patient_runs:

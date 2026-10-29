@@ -3,7 +3,9 @@
 
 For each planted CxSV (COMMON, RARE, PRIVATE) the patient must have at least
 one CxSV locus overlapping it, and every such locus must carry the expected
-panel carrier count and status (breakpoint-level matching). PRIVATE must also
+panel carrier count and status (breakpoint-level matching). Every panel
+individual must be callable at those loci (25x synthetic coverage) and the
+release must have verified against its manifest. PRIVATE must also
 show the HOTSPOT DECOY's region-overlap carriers (Panel_Region_Carriers,
 Panel_Hotspot) while staying private. The SIMPLE deletion's junction must be
 matched to its panel carriers (private/junction_panel_status.tsv). The private
@@ -33,6 +35,8 @@ def main(expected_json, patient_root, run, sample):
 
     compat = (root / "panel_compatibility.txt").read_text()
     check("status: COMPATIBLE" in compat, "patient fingerprint matches the panel release")
+    rcheck = (root / "panel_release_check.txt").read_text()
+    check("status: VERIFIED" in rcheck, "panel release verified against its manifest")
 
     with open(sdir / "private" / "cxsv_panel_status.tsv", newline="") as fh:
         rows = list(csv.DictReader(fh, delimiter="\t"))
@@ -49,6 +53,9 @@ def main(expected_json, patient_root, run, sample):
             check(int(r["Panel_Carriers"]) == want["panel_carriers"] and r["Panel_Status"] == want["status"],
                   f"{name}: locus {r['Chr']}:{r['Start']}-{r['End']} carriers={r['Panel_Carriers']} "
                   f"status={r['Panel_Status']} (want {want['panel_carriers']}/{want['status']})")
+            check(r["Panel_Callable"] == r["Panel_Individuals"] == str(exp.get("n_panel", 3)),
+                  f"{name}: every panel individual callable at the locus's junctions "
+                  f"(Panel_Callable={r['Panel_Callable']}, Panel_Individuals={r['Panel_Individuals']})")
             if "region_carriers" in want:
                 check(int(r["Panel_Region_Carriers"]) == want["region_carriers"]
                       and r["Panel_Hotspot"] == want["hotspot"],

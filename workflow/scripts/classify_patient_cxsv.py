@@ -21,33 +21,48 @@ previous rule), and Panel_Hotspot = yes when that count reaches --min-carriers
 although the locus is not public — the case where region overlap would have
 masked a private event.
 
+Callability (roadmap item 2): Panel_Callable is the number of panel individuals
+callable at every junction of the locus (both breakpoints of each junction;
+workflow/lib/cxsv_callability.py), reported next to Panel_Carriers; with
+Panel_Individuals it tells "absent from the panel" (private, Panel_Callable
+close to Panel_Individuals) from "the panel could not have seen it"
+(Panel_Callable low). Per junction: panel_callable. With --release-dir the
+release is verified against its manifest first (refused if it does not
+verify) and the callability masks and flank are taken from it.
+
 Outputs
 -------
 --out-all        master table + Panel_Junctions, Panel_Junctions_Seen, Panel_Carriers,
+                 Panel_Callable, Panel_Individuals,
                  Panel_Carrier_Freq, Panel_Carriers_By_Platform,
                  Panel_Carriers_By_Superpopulation, Panel_Best_Junction_Fraction,
                  Panel_Region_Carriers, Panel_Hotspot, Panel_Status
 --out-private    rows that are not public (private and shared_junctions)
 --out-bed        those loci as BED (Chr, Start, End) for VCF extraction
 --out-junctions  every patient junction (whole SV set) with its panel carriers,
-                 carrier frequency and best-matching site's allele frequency
+                 panel individuals callable there, carrier frequency and
+                 best-matching site's allele frequency
 """
 import argparse
 import bisect
 import csv
+import json
 import os
 import sys
 from collections import defaultdict
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lib"))
+import cxsv_callability as cc  # noqa: E402
 import cxsv_junctions as cj  # noqa: E402
 import cxsv_matching as cm   # noqa: E402
+import cxsv_release as cr    # noqa: E402
 
-STATUS_COLS = ["Panel_Junctions", "Panel_Junctions_Seen", "Panel_Carriers", "Panel_Carrier_Freq",
+STATUS_COLS = ["Panel_Junctions", "Panel_Junctions_Seen", "Panel_Carriers", "Panel_Callable",
+               "Panel_Individuals", "Panel_Carrier_Freq",
                "Panel_Carriers_By_Platform", "Panel_Carriers_By_Superpopulation",
                "Panel_Best_Junction_Fraction", "Panel_Region_Carriers", "Panel_Hotspot", "Panel_Status"]
 JUNCTION_OUT = ["chrom1", "pos1", "chrom2", "pos2", "svtype", "svlen", "locus_id", "supp_vec", "dosage",
-                "panel_sites", "panel_carriers", "panel_carrier_freq", "panel_af", "panel_status"]
+                "panel_sites", "panel_carriers", "panel_callable", "panel_carrier_freq", "panel_af", "panel_status"]
 
 
 def interval(row):
@@ -125,11 +140,28 @@ def main():
     ap.add_argument("--min-junction-fraction", type=float, default=0.75)
     ap.add_argument("--min-carriers", type=int, default=1)
     ap.add_argument("--window", type=int, default=1000)
+    ap.add_argument("--release-dir", default=None,
+                    help="panel release: verified against its manifest; callability masks + flank from it")
+    ap.add_argument("--callability-dir", default=None, help="callability masks (default: <release>/callability)")
+    ap.add_argument("--flank", type=int, default=None, help="callability flank (default: from release.json)")
     ap.add_argument("--out-all", required=True)
     ap.add_argument("--out-private", required=True)
     ap.add_argument("--out-bed", required=True)
     ap.add_argument("--out-junctions", required=True)
     a = ap.parse_args()
+
+    if a.release_dir:
+        check = cr.verify(a.release_dir)
+        if not check["ok"]:
+            sys.exit(f"panel release {a.release_dir} does not verify against its manifest; refusing it:\n  "
+                     + "\n  ".join(check["problems"]))
+        with open(os.path.join(a.release_dir, cr.METADATA)) as fh:
+            meta = json.load(fh)
+        a.callability_dir = a.callability_dir or os.path.join(a.release_dir, "callability")
+        if a.flank is None:
+            a.flank = int(meta["callability"]["flank_bp"])
+    if a.callability_dir and a.flank is None:
+        sys.exit("--callability-dir needs --flank (or --release-dir)")
 
     inds = load_panel_individuals(a.panel_individuals)
     n_panel = len(inds)
@@ -138,9 +170,19 @@ def main():
     region = load_region_calls(a.panel_calls)
     junctions = cj.read_table(a.junctions)
     by_locus = defaultdict(list)
+    callable_at = {}
+    if a.callability_dir:
+        sets = cc.callable_individuals(a.callability_dir, junctions, a.flank)
+        callable_at = {id(j): s for j, s in zip(junctions, sets)}
     for j in junctions:
         for L in j["loci"]:
             by_locus[L].append(j)
+
+    def n_callable(js):
+        """Panel individuals callable at every junction in js; NA without masks or junctions."""
+        if not a.callability_dir or not js:
+            return "NA"
+        return len(set.intersection(*(callable_at[id(j)] for j in js)))
 
     # every junction: panel carriers (for simple SVs and for the locus table)
     with open(a.out_junctions, "w") as fj:
@@ -151,7 +193,7 @@ def main():
                    for s in hits]
             afs = [float(x) for x in afs if x not in (".", "")]
             row = [j["chrom1"], j["pos1"], j["chrom2"], j["pos2"], j["svtype"], j["svlen"], j["locus_id"],
-                   j["supp_vec"], j["dosage"], len(hits), len(carriers),
+                   j["supp_vec"], j["dosage"], len(hits), len(carriers), n_callable([j]),
                    f"{len(carriers) / n_panel:.6f}" if n_panel else "NA",
                    f"{max(afs):.6f}" if afs else ".",
                    "public" if len(carriers) >= a.min_carriers else "private"]
@@ -179,6 +221,8 @@ def main():
             r["Panel_Junctions"] = res["n_junctions"]
             r["Panel_Junctions_Seen"] = res["n_seen"]
             r["Panel_Carriers"] = len(carriers)
+            r["Panel_Callable"] = n_callable(by_locus.get(locus_id, []))
+            r["Panel_Individuals"] = n_panel
             r["Panel_Carrier_Freq"] = f"{len(carriers) / n_panel:.6f}" if n_panel else "NA"
             r["Panel_Carriers_By_Platform"] = breakdown(carriers, inds, "platforms")
             r["Panel_Carriers_By_Superpopulation"] = breakdown(carriers, inds, "superpopulation")
