@@ -96,8 +96,9 @@ BND).
 For `source=cxsv_panel`, `ac` is the sum of carrier dosages (het 1, hom 2,
 capped by ploidy). `an` is the sum of ploidy over all panel individuals, with
 chrX/chrY hemizygous in males; PAR is not modelled, and sex comes from the
-registry `individuals.tsv`. `af` = ac/an. `version` is `panel_release_id` or
-`fp-<first 12 hex of the calling fingerprint>`.
+registry `individuals.tsv`. `af` = ac/an. `version` is the panel release id,
+`<release.name>-<YYYYMMDD>-<first 12 hex of the calling fingerprint>`
+(docs/RELEASE_AND_BUNDLE.md).
 
 ## 3. Panel junction sites (panel workflow)
 

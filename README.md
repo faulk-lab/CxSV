@@ -58,17 +58,25 @@ about 90 samples the pooled list already covered ~12% of the genome.)
 ```
 config/
   calling.yaml            shared + [FINGERPRINTED] calling/discovery parameters, reference, annotation
-  panel.yaml              panel builder: cohorts, output root, panel_individuals, panel_sites
+  panel.yaml              panel builder: cohorts, output root, panel_individuals, panel_sites,
+                          release (name/date/test flag), panel_callability
   patient.yaml            patient scorer: runs, panel_release, panel_match (junction matching)
   sites/                  site overlays (paths, cohort sheets), e.g. faulk_lab_panel.yaml
 envs/
   cxsv-pipeline.yaml      the one pinned environment for both workflows
   cxsv-pipeline.lock.yaml exact solved versions (conda env export)
+  cxsv-pipeline.explicit.txt  package URLs + MD5s: what the container image installs
+container/
+  Dockerfile              the one pinned image (Docker / Singularity / Apptainer)
+  run_cxsv.sh             offline-bundle entry point (copied to the bundle root)
+  BUNDLE_README.md        template of the bundle's README
 workflow/
   panel/Snakefile         panel builder entry point
   patient/Snakefile       patient scorer entry point
   lib/                    plain-Python modules (unit-tested): sample discovery, fingerprint,
-                          junction model (cxsv_junctions), site clustering + matching (cxsv_matching)
+                          junction model (cxsv_junctions), site clustering + matching (cxsv_matching),
+                          release identity + manifest verification (cxsv_release), callability
+                          (cxsv_callability)
   rules/
     common.smk            shared: inputs, wildcards, CRAM reference cache env
     indexing.smk          shared: reference cache, CRAM M5 check, BAM/CRAM indexes
@@ -78,11 +86,15 @@ workflow/
     sample_report.smk     shared: per-sample text report
     fingerprint.smk       shared: tool versions + calling fingerprint
     panel_cohort.smk      panel: per-cohort population call sets and QC plots
-    panel_aggregate.smk   panel: carrier table, junction sites, Sniffles2 population mode, release
-    patient_private.smk   patient: compatibility check, breakpoint-level panel status, plots
+    panel_callability.smk panel: mosdepth CALLABLE masks per sample, callability per junction site
+    panel_aggregate.smk   panel: carrier table, junction sites, Sniffles2 population mode,
+                          versioned release (release.json + release_manifest.tsv)
+    patient_private.smk   patient: release verification, compatibility check, breakpoint-level
+                          panel status with callability, plots
   scripts/                scripts invoked by the rules (Python, R)
 scripts/
   run_pipeline.sh         `run_pipeline.sh panel|patient [--extra-config FILE] [--resume] [--dry-run]`
+  make_bundle.sh          `make_bundle.sh image|bundle --commit REV [--release DIR]`: offline bundle
 acquisition/              background-panel acquisition and alignment (lab fleet)
   catalogues/             external SV catalogues: verified download, liftover, junction-site tables
 tests/
@@ -90,10 +102,12 @@ tests/
   synthetic/              seeded artificial genome, panel + patient end to end (runs in CI)
   positive_control/       generator for the lab positive control: design, haplotypes,
                           read simulation and splicing, scoring, structure figure
-  lab/                    regression on the real positive control (lab fleet; too large for CI)
+  lab/                    regression on the real positive control (lab fleet; too large for CI),
+                          offline-bundle validation (validate_bundle.sh, compare_patient_runs.py)
 docs/
   ROADMAP.md
   JUNCTIONS.md            junction model, shared junction-site schema, panel sites, patient matching
+  RELEASE_AND_BUNDLE.md   panel release format, callability, container image, offline bundle, validation
   POSITIVE_CONTROL.md     the planted-CxSV catalogue, how it is built, latest regression result
   EXTERNAL_CATALOGUES.md  CoLoRSdb, HGSVC3, HPRC r2, gnomAD-SV: licences, builds, fields, conversion counts
 ```
@@ -113,7 +127,11 @@ conda activate cxsv-pipeline
 ```
 
 Caller versions are part of the panel's identity: use the same environment
-(or the same container, roadmap item 2) for the panel and every patient.
+(or the same container) for the panel and every patient. The container image
+(`container/Dockerfile`) installs exactly the packages of
+`envs/cxsv-pipeline.explicit.txt`; in a restricted environment, use the
+**offline bundle** (image, reference, resources, panel release, code) and its
+`run_cxsv.sh`, with no network: [docs/RELEASE_AND_BUNDLE.md](docs/RELEASE_AND_BUNDLE.md).
 
 ### 2. Reference and annotation
 
@@ -208,7 +226,10 @@ pair.
 | `release/panel_cxsv_loci.tsv` | overlapping calls merged across samples, with carrier counts by platform (summary only) |
 | `release/panel_summary.tsv` | samples / individuals / calls per cohort, per platform, total |
 | `release/calling_fingerprint.json` | what a patient run must reproduce |
-| `release/release_manifest.tsv` | sha256 of every release file |
+| `release/release.json` | release id (`<name>-<YYYYMMDD>-<fingerprint12>`), source commit, fingerprint, samples/individuals by platform and superpopulation, callability definition and summary, tools, container image id / SIF sha256 |
+| `release/panel_junction_callability.tsv` | per junction site: panel samples / individuals callable at both breakpoints (by platform), next to `ac` |
+| `release/panel_callability_summary.tsv`, `release/callability/` | site-level callability totals; one CALLABLE mask per panel sample (mosdepth, depth >= `panel_callability.min_depth` at MAPQ >= `min_mapq`) |
+| `release/release_manifest.tsv` | file, bytes, sha256 of every other release file; the patient workflow refuses a release that does not verify |
 | `panel/plots/cxsv_population_sharing.pdf` | carriers per locus and their genomic distribution |
 | `cohorts/<cohort>/` | population VCF, consensus VCF, SV counts, stacked CxSV table, QC plots (SV types, sizes, chromosome density, breakpoint resolution, caller Venn, genomic context, complexity classes) |
 
@@ -216,11 +237,12 @@ pair.
 
 | File | Description |
 |---|---|
+| `panel_release_check.txt` | the release verified against its manifest: release id, test flag, source commit, manifest sha256, runtime image / SIF / bundle |
 | `panel_compatibility.txt` | fingerprint comparison with the panel release; written only when compatible (or overridden). The full report, including every difference on a mismatch, is `logs/panel_compatibility.log` |
-| `samples/<run>/<sample>/private/cxsv_panel_status.tsv` | every CxSV locus + `Panel_Junctions`, `Panel_Junctions_Seen`, `Panel_Carriers`, `Panel_Carrier_Freq`, `Panel_Carriers_By_Platform`, `Panel_Carriers_By_Superpopulation`, `Panel_Best_Junction_Fraction`, `Panel_Region_Carriers`, `Panel_Hotspot`, `Panel_Status` |
+| `samples/<run>/<sample>/private/cxsv_panel_status.tsv` | every CxSV locus + `Panel_Junctions`, `Panel_Junctions_Seen`, `Panel_Carriers`, `Panel_Callable` (panel individuals callable at all its junctions), `Panel_Individuals`, `Panel_Carrier_Freq`, `Panel_Carriers_By_Platform`, `Panel_Carriers_By_Superpopulation`, `Panel_Best_Junction_Fraction`, `Panel_Region_Carriers`, `Panel_Hotspot`, `Panel_Status` |
 | `samples/<run>/<sample>/private/private_cxsv_master_table.tsv` | loci that are not public (`private` and `shared_junctions`) |
 | `samples/<run>/<sample>/private/private_cxsv.vcf` | the patient's SV records inside those loci |
-| `samples/<run>/<sample>/private/junction_panel_status.tsv` | every patient junction (also simple SVs) with its panel sites, carriers, carrier frequency and site allele frequency |
+| `samples/<run>/<sample>/private/junction_panel_status.tsv` | every patient junction (also simple SVs) with its panel sites, carriers, `panel_callable`, carrier frequency and site allele frequency |
 | `samples/<run>/<sample>/plots/` | genomic context and complexity class plots |
 
 Patient loci are matched against the panel **on breakpoints**, not on region
@@ -249,7 +271,10 @@ Panel settings (`config/panel.yaml`):
 - `panel_individuals`: the registry `individuals.tsv`, which supplies sex
   (chrX/chrY allele numbers) and superpopulation (`af_<group>`);
 - `panel_sites.tolerance`: 500 bp, keep it equal to `panel_match.tolerance`;
-- `panel_release_id`: the `version` column; unset, it is `fp-<fingerprint hash>`;
+- `release`: `name`, `date`, `test_release`, `description` of the release; the
+  id `<name>-<YYYYMMDD>-<fingerprint12>` is the `version` column;
+- `panel_callability`: `min_depth` (10) and `flank` (100 bp) of the callability
+  definition (docs/RELEASE_AND_BUNDLE.md);
 - `sniffles_population.extra`: options for very large panels.
 
 ---
@@ -314,6 +339,7 @@ loci are retained (most CxSVs are expected there).
 |---|---|---|---|
 | Unit | none | CI + anywhere | `pytest tests/unit` |
 | Synthetic end to end | seeded artificial 1.2 Mb genome, 3 panel genomes + 1 patient | CI on every push | `bash tests/synthetic/run_synthetic.sh` |
+| Offline bundle | the bundle + a public stand-in patient slice | lab fleet, network off | `bash tests/lab/validate_bundle.sh BUNDLE WORKDIR STANDIN_DIR [RELEASE]` |
 | Positive control | sample 3559 with 12 planted heterozygous events + the E13 public spike-in (also in 3 background genomes) (~105 GB CRAM on the lab NAS) | lab fleet | `bash tests/lab/pos_control_regression.sh [WORKDIR] [N_BACKGROUND]` |
 
 The positive control is described in [docs/POSITIVE_CONTROL.md](docs/POSITIVE_CONTROL.md):
@@ -341,6 +367,12 @@ committed configs on purpose; declare them in a site overlay passed with
 A row points at a missing alignment or index, repeats a `sample_id`, or names a
 file that is not `.bam`/`.cram`. The error lists the lines. Fix or regenerate
 the sheet; index sheet files yourself (`samtools index FILE`).
+
+### `panel release ... does not verify against its release_manifest.tsv; refusing it`
+A release file is missing, changed, or not listed in the manifest (each one is
+named). Restore the release from its source (the bundle, or the panel
+builder's `results/panel/release/`); never edit a release in place. A new panel
+build writes a new release with a new manifest.
 
 ### `check_panel_compatibility`: `this run is not comparable with the panel`
 The patient run's calling fingerprint differs from the panel release's.
