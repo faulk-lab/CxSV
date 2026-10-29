@@ -105,7 +105,8 @@ if [ "$RUNTIME" = docker ]; then
     fi
     got=$(docker image inspect -f '{{.Id}}' "$CXSV_IMAGE")
     [ "$got" = "$CXSV_IMAGE_ID" ] || { echo "image $CXSV_IMAGE is $got, bundle expects $CXSV_IMAGE_ID"; exit 1; }
-    D=(docker run --rm -i --user "$(id -u):$(id -g)" -e HOME=/tmp -w /work
+    # the calling uid has no passwd entry in the image: USER/LOGNAME satisfy getpass (snakemake)
+    D=(docker run --rm -i --user "$(id -u):$(id -g)" -e HOME=/tmp -e USER=cxsv -e LOGNAME=cxsv -w /work
        -v "$BUNDLE:/bundle:ro" -v "$WORKDIR:/work")
     $NETNS && D+=(--network none)
     [ "$CMD" = shell ] && [ -t 0 ] && D+=(-t)
