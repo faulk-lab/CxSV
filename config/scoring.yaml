@@ -1,0 +1,125 @@
+# =============================================================================
+# CxSV PATIENT SCORER — scoring of patient CxSV loci (roadmap item 5)
+# Loaded by workflow/patient/Snakefile after calling.yaml and patient.yaml.
+# Not fingerprinted: scoring can be re-run against the same calls.
+#
+# An explicit points system modelled on the ACMG/ClinGen CNV scoring framework
+# (Riggs et al., Genet Med 2020), plus the computed chromothripsis criteria 1,
+# 2, 5, 7 and 8 of the PI's germline-chromothripsis criteria. Every number here
+# is an operational, cohort-specific choice, NOT a validated cutoff; the report
+# lists every feature's raw value and points so a reviewer can see why a call
+# ranked where it did (docs/SCORING.md).
+# =============================================================================
+
+# ─── Free resources (acquisition/resources/build_resources.py; versions and
+# checksums in <resources>/resources_manifest.tsv). null = feature off.
+scoring_resources:
+  manifest:        "/mnt/sargasso1/CxSV/resources/resources_manifest.tsv"
+  clingen_dosage:  "/mnt/sargasso1/CxSV/resources/scoring/clingen_dosage.tsv"
+  constraint:      "/mnt/sargasso1/CxSV/resources/scoring/gnomad_constraint.tsv"
+  hpo_annotations: "/mnt/sargasso1/CxSV/resources/scoring/hpo_genes_to_phenotype.txt"
+  hpo_ontology:    "/mnt/sargasso1/CxSV/resources/scoring/hp.obo"
+  par_bed:         "/mnt/sargasso1/CxSV/resources/scoring/par.bed"
+  # OMIM needs a licence: point this at the lab's genemap2.txt to switch the
+  # omim feature on. Off by default; never downloaded by the pipeline.
+  omim_genemap2:   null
+
+# ─── External SV catalogues (roadmap item 4; acquisition/catalogues). Tables at
+# <root>/<name>/<version>/<name>.<version>.junction_sites.tsv.gz, each verified
+# against <name>.<version>.manifest.tsv before use. Matching uses the panel
+# matcher's rules. A catalogue "contains" a locus when >= min_junction_fraction
+# of its junctions match.
+external_catalogues:
+  root: "/mnt/sargasso1/CxSV/datasets/external_catalogues"
+  match: {tolerance: 500, ins_len_ratio: 0.5, min_junction_fraction: 0.75}
+  tables:
+    - {name: CoLoRSdb,  version: v1.2.0}
+    - {name: HGSVC3,    version: HGSVC2024v1.0}
+    - {name: HPRC,      version: release2-mc-v2.1}
+    - {name: gnomAD-SV, version: v4.1}
+
+# ─── Per-patient information (all optional). Keyed by sample_id. Sample-sheet
+# columns sex, hpo_terms (comma/semicolon list), mother, father are read too;
+# values here win. Parents must be samples of the same patient run.
+patients: {}
+#  example:
+#    proband_01: {sex: female, hpo_terms: [HP:0001250, HP:0001263],
+#                 mother: mother_01, father: father_01, parents_affected: false}
+
+# ─── Read-depth copy number (criterion 5) ────────────────────────────────────
+copy_number:
+  flank_bp: 20000           # baseline windows left and right of the outermost breakends
+  gap_bp: 1000              # gap between breakend and flank
+  margin_bp: 200            # segments trimmed by this at both ends
+  min_mapq: 20
+  min_segment_bp: 1000      # shorter segments get no copy-number call
+  min_baseline_depth: 5
+  min_cn_delta: 0.6         # |CN - ploidy| needed to call a change (het loss/gain = 1)
+  sex_ratio_male: 0.75      # chrX/autosome flank-depth ratio below which sex is inferred male
+  sex_ratio_female: 0.85
+
+# ─── Breakpoint clustering (criterion 7; descriptive) ───────────────────────
+clustering:
+  n_simulations: 1000
+  seed: 20261029
+  mask_segdups: true        # segdup.final.bed (annotation.segdup_bed) masked before the null
+  # breakends of junctions with panel carriers (public) are left out: recurrent
+  # polymorphic / NAHR hotspot SVs are not the patient's breakage
+
+# ─── Fold-back / BFB (criterion 8) ──────────────────────────────────────────
+foldback:
+  max_span: 30000           # Xing et al. 2019 practical detector
+  min_fraction: 0.5         # fold-backs / inversion-type junctions for "BFB-like"
+  subtelomeric_bp: 5000000
+
+# ─── Points (ClinGen-style; positive = towards pathogenic) ─────────────────
+weights:
+  panel_privacy:
+    private_callable: 0.30    # x (Panel_Callable / Panel_Individuals); unknown callability x 0.5
+    shared_junctions: 0.0
+    public: -1.00             # ClinGen 4O-like: the rearrangement is in presumed-healthy genomes
+  catalogue_frequency:        # most severe containing catalogue only (never summed)
+    common_af: 0.01
+    common: -1.00
+    rare_af: 0.001
+    rare: -0.50
+    seen: -0.25               # contained, AF below rare_af or not given
+  gene_dosage:                # max over affected genes (ClinGen section 2)
+    hi_broken: {"3": 0.90, "2": 0.45, "1": 0.15}
+    hi_lost:   {"3": 1.00, "2": 0.45, "1": 0.15}
+    ts_gained: {"3": 1.00, "2": 0.45, "1": 0.15}
+    loeuf:     {"0.35": 0.30, "0.6": 0.15}    # only without curated HI evidence
+  exons: 0.15                 # >= 1 exon in the rearranged interval or hit by a breakend
+  gene_count: {"25": 0.45, "35": 0.90}       # ClinGen section 3 (affected genes)
+  no_genes: -0.60             # ClinGen 1B: no gene broken, lost or gained
+  complexity_class:
+    Chromothripsis_like: 0.30
+    DEL+DUP+INV: 0.20
+    BND_cluster: 0.15
+    DEL+INV: 0.10
+    DUP+INV: 0.10
+    INS+DEL: 0.10
+    Complex_inversion: 0.10
+    Multi_breakpoint_cluster: 0.10
+    Nested_SV: 0.10
+    default: 0.05
+  size: {"100000": 0.05, "1000000": 0.15}     # locus span (bp) at least ...
+  caller_agreement: {multi_fraction: 0.5, multi: 0.10, none: -0.10}
+  read_support: {min_reads: 5, weak: -0.15}
+  artefact_context: {segdup: -0.30, low_complexity: -0.15, window_bp: 50,
+                     low_complexity_classes: [Simple_repeat, Low_complexity, Satellite]}
+  ct_interleaving: {"3": 0.20, "6": 0.30}     # largest interleaved component (criterion 1)
+  ct_breakpoint_tier: {intermediate: 0.05, extreme: 0.25}   # criterion 2
+  ct_cn_oscillation: {change: 0.10, oscillation: 0.20, osc_min_segments: 3}   # criterion 5
+  ct_clustering: {q_max: 0.20, points: 0.10}  # criterion 7 (FDR ~0.2 precedent, descriptive)
+  ct_bfb_modifier: {factor: 0.50, subtelomeric_factor: 0.75}  # x chromothripsis subtotal, subtracted
+  hpo_match: {any: 0.30, half: 0.45}
+  omim: {phenotype_gene: 0.15}
+  inheritance: {de_novo: 0.45, inherited_unaffected: -0.30, inherited_affected: 0.15}
+
+# ─── Tiers (total points) ───────────────────────────────────────────────────
+tiers:
+  - {name: Tier1_high_priority, min: 0.99}
+  - {name: Tier2,               min: 0.50}
+  - {name: Tier3,               min: 0.00}
+  - {name: Benign_likely,       min: -1000}

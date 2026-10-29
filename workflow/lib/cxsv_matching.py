@@ -279,3 +279,63 @@ def classify_locus(locus_junctions, index, tolerance, ins_len_ratio, min_junctio
     return {"n_junctions": n, "n_seen": n_seen, "carriers": carriers,
             "best_fraction": max(frac.values()) if frac else 0.0, "per_junction": per_j,
             "status": status}
+
+
+# ─── point sites: external catalogues and family members (roadmap items 4, 5) ─
+# The same matcher (SiteIndex.query) is used for the panel, the external SV
+# catalogues and a patient's parents. A catalogue site or a parent's junction
+# is a single point: its envelope is the point itself, and `tolerance` is
+# applied around it exactly as around a panel site's envelope.
+def point_site(svtype, chrom1, pos1, chrom2, pos2, svlen, **extra):
+    s = {"svtype": svtype, "chrom1": chrom1, "pos1": pos1, "chrom2": chrom2, "pos2": pos2, "svlen": svlen,
+         "min_pos1": pos1, "max_pos1": pos1, "min_pos2": pos2, "max_pos2": pos2,
+         "min_svlen": svlen, "max_svlen": svlen, "carrier_set": set()}
+    s.update(extra)
+    return s
+
+
+def _near_any(sorted_pos, p, tol):
+    i = bisect.bisect_left(sorted_pos, p - tol)
+    return i < len(sorted_pos) and sorted_pos[i] <= p + tol
+
+
+def read_catalogue_sites(path, query_pos1=None, tolerance=0):
+    """Rows of a shared-schema junction-site table (plain or gzip) as point sites.
+
+    With query_pos1 ({chrom1: sorted positions}), only rows whose pos1 lies
+    within `tolerance` of a query position are kept (a 1.2 M-row catalogue is
+    streamed once, not held in memory). Each site keeps af (float or None) and
+    the per-group af_<group> values (dict)."""
+    import gzip
+    opener = gzip.open if path.endswith((".gz", ".bgz")) else open
+    out = []
+    with opener(path, "rt", newline="") as fh:
+        header = fh.readline().rstrip("\n").split("\t")
+        ix = {c: i for i, c in enumerate(header)}
+        groups = [c for c in header if c.startswith("af_")]
+        for line in fh:
+            f = line.rstrip("\n").split("\t")
+            c1, p1 = f[ix["chrom1"]], int(f[ix["pos1"]])
+            if query_pos1 is not None:
+                qp = query_pos1.get(c1)
+                if not qp or not _near_any(qp, p1, tolerance):
+                    continue
+            af = f[ix["af"]]
+            out.append(point_site(f[ix["svtype"]], c1, p1, f[ix["chrom2"]], int(f[ix["pos2"]]),
+                                  parse_svlen(f[ix["svlen"]]),
+                                  af=None if af in (".", "") else float(af),
+                                  group_af={g[3:]: float(f[ix[g]]) for g in groups if f[ix[g]] not in (".", "")}))
+    return out
+
+
+def junction_point_sites(junction_rows, carrier=None):
+    """A sample's junction-table rows (cxsv_junctions.read_table) as point sites;
+    `carrier` (e.g. the parent's id) is put in each site's carrier_set."""
+    return [point_site(j["svtype"], j["chrom1"], j["pos1"], j["chrom2"], j["pos2"], j["svlen"],
+                       carrier_set={carrier} if carrier else set()) for j in junction_rows]
+
+
+def match_fraction(locus_junctions, index, tolerance, ins_len_ratio):
+    """(n matched, n, matched sites per junction) of a locus against one point-site index."""
+    per = [index.query(j, tolerance, ins_len_ratio) for j in locus_junctions]
+    return sum(1 for h in per if h), len(per), per

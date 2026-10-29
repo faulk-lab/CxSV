@@ -149,10 +149,13 @@ The script does the following:
      with 0 panel carriers.
 
 Exit 0 means every event meets its expectation or is a listed known failure
-that still fails. With `RERUN=1`, the patient workflow runs again into a fresh
-results root, and the records of `merged_sv.vcf`, `junctions/junctions.tsv`,
-`private/cxsv_panel_status.tsv`, `private/junction_panel_status.tsv` and
-`private/private_cxsv.vcf` must be byte-identical.
+that still fails. Since roadmap item 5, the expectations include the score
+(`expect.score`): `top` means the top tier, `below_top` means not top tier and
+below every `top` event, and `not_scored` means no scored locus. With
+`RERUN=1`, the patient workflow runs again into a fresh results root. The
+records of the merged VCF, the CxSV summary, the junction, panel-status and
+catalogue tables, the locus depth and all scoring outputs must then be
+byte-identical.
 
 ## Splice checks (2026-10-28)
 
@@ -172,7 +175,96 @@ results root, and the records of `merged_sv.vcf`, `junctions/junctions.tsv`,
   `pos_control_3559.hs1.minimap2.cram` (md5 77d1b04f9c27fcd9d6b4b25a469743eb),
   `truth/`, `MD5SUMS`.
 
-## Latest regression result (2026-10-28, roadmap item 3: breakpoint-level matching)
+## Latest regression result (2026-10-29, roadmap item 5: classifier on distinct junctions + scoring)
+
+Fresh workdir `freya:/home/minknow/scratch/cxsv_item5_regression`, `CORES=24
+RERUN=1`, 10 ONT backgrounds (first 10 with `passes_17x`), 16 regions (34.4 Mb),
+E13 spliced into the control and into HG00125, HG00111 and HG00096. The
+classifier change alters the calling fingerprint, so the panel was rebuilt:
+test release `TEST-posctrl-slices-20261028-cd7e1d194cd4` (fingerprint
+`cd7e1d194cd4`; it was `ad454c604bdd`). Run time 785 s. Scores come from
+`config/scoring.yaml` defaults, with the four external catalogues from the NAS
+(docs/SCORING.md).
+
+| ID | Gene | Junctions exact/partial/missed | Class before (item 3 run) | Class now | Expected class (before → now) | Panel status (carriers) | Score | Tier | Top 3 contributions | Verdict |
+|---|---|---|---|---|---|---|---:|---|---|---|
+| E01 | MECP2 | 2/0/0 | Chromothripsis_like | Complex_inversion | DUP+INV → Complex_inversion | private (0) | 1.37 | Tier1 | gene_dosage +0.90; ct_bfb_modifier -0.34; ct_cn_oscillation +0.30 | PASS |
+| E02 | NF1 | 2/0/0 | Chromothripsis_like | Complex_inversion | DEL+INV → Complex_inversion | private (0) | 1.97 | Tier1 | gene_dosage +0.90; ct_cn_oscillation +0.30; panel_privacy +0.27 | PASS |
+| E03 | PMP22 | 2/0/0 | Chromothripsis_like | Complex_inversion | DUP+INV → Complex_inversion | private (0) | 1.75 | Tier1 | gene_dosage +0.90; ct_cn_oscillation +0.30; panel_privacy +0.27 | PASS |
+| E04 | SHANK3 | 3/0/0 | Chromothripsis_like | DUP+INV | DEL+DUP+INV → DUP+INV | private (0) | 1.80 | Tier1 | gene_dosage +0.90; panel_privacy +0.30; exons +0.15 | PASS |
+| E05 | NRXN1 | 4/0/0 | Chromothripsis_like | Nested_SV | DEL+INV → Nested_SV | private (0) | 1.97 | Tier1 | gene_dosage +0.90; ct_cn_oscillation +0.30; panel_privacy +0.27 | PASS |
+| E06 | AUTS2 | 3/0/0 | DUP+INV | DUP+INV | INS+DEL → DUP+INV | private (0) | 1.94 | Tier1 | gene_dosage +0.90; ct_cn_oscillation +0.30; ct_breakpoint_tier +0.25 | PASS |
+| E07 | SATB2/FOXP2 | 2/0/0 | Complex_other | BND_cluster | BND_cluster → BND_cluster | private (0) | 1.60 | Tier1 | gene_dosage +0.90; panel_privacy +0.30; complexity_class +0.15 | PASS |
+| E08 | NSD2/EHMT1/ZIC2 | 2/1/0 | Complex_other | BND_cluster | BND_cluster → BND_cluster | private (0) | 1.47 | Tier1 | gene_dosage +0.90; panel_privacy +0.27; complexity_class +0.15 | PASS |
+| E09 | CHD2 | 9/0/0 | Chromothripsis_like | Chromothripsis_like | Chromothripsis_like → Chromothripsis_like | private (0) | 2.74 | Tier1 | gene_dosage +0.90; panel_privacy +0.30; complexity_class +0.30 | PASS |
+| E10 | intergenic | 4/0/0 | Chromothripsis_like | Multi_breakpoint_cluster | Multi_breakpoint_cluster → Multi_breakpoint_cluster | private (0) | 0.33 | Tier3 | no_genes -0.60; panel_privacy +0.30; ct_breakpoint_tier +0.25 | PASS |
+| E11 | intergenic | 1/0/0 | not a CxSV | not a CxSV | - → - | - | - | not scored | - | PASS |
+| E12 | intergenic | 2/0/0 | Nested_SV (CxSV) | not a CxSV | - → - | - | - | not scored | - | PASS |
+| E13 | intergenic | 4/0/0 | Chromothripsis_like | Nested_SV | Multi_breakpoint_cluster → Nested_SV | public (3) | -1.15 | Benign_likely | panel_privacy -1.00; no_genes -0.60; complexity_class +0.10 | PASS |
+
+Summary:
+
+- **Junctions:** 40 of 41 exact, 1 partial (E08's chr4–chr9 junction), none
+  missed. Unchanged.
+- **Events:** 13 of 13 meet every expectation, scores included.
+  `known_failures.tsv` is **empty**.
+- **E12 is no longer a CxSV.** Its two Sniffles2 records (identical after
+  SURVIVOR) are one junction with 2 breakends. Its junction is still matched
+  on breakpoints with 0 panel carriers.
+- **Detection and privacy verdicts unchanged** for E01–E11 and E13. E13 is
+  public with 3 carriers; E04 is private (4 region-overlap carriers, hotspot).
+- **Scoring:**
+  - E01–E09 are all Tier 1 (1.37–2.74).
+  - E10 (intergenic) scores 0.33 (Tier 3) and E13 (public) −1.15
+    (Benign_likely), both below every gene event.
+  - E11 and E12 are not scored.
+  - The figure below shows each feature's contribution.
+- **Class concordance:**
+  - before (item-3 classifier): 1 of 11 complex events matched the original
+    expected labels (E09);
+  - after: 4 of 11 match the original labels (E07, E08, E09, E10), and 11 of 11
+    match the revised expectations.
+  - Seven expected labels were revised because the classes are now defined on
+    *called* junction types. A deletion or duplication created by an
+    inversion junction has no DEL/DUP record of its own. Each revision is
+    recorded in `events.yaml` as `ideal_class_before` plus
+    `ideal_class_reason`; the truth set is unchanged.
+- **Determinism:** the second patient run gave byte-identical records for
+  `merged_sv.vcf`, `cxsv/cxsv_summary.tsv`, `junctions/junctions.tsv`,
+  `private/{cxsv_panel_status,junction_panel_status}.tsv`,
+  `private/private_cxsv.vcf`,
+  `private/{cxsv,junction}_catalogue_hits.tsv`, `scoring/locus_depth.tsv` and
+  `scoring/cxsv_score{s,_features}.tsv` / `cxsv_score_report.md`.
+- **Host loci outside the events:** 16 (12 public, 4 shared_junctions; 17
+  before, the difference being a DEL pair now collapsed). 11 are contained in
+  ≥ 1 external catalogue (max AF 0.45–0.83). 15 are Benign_likely. One,
+  chr9:150,076,936–150,111,418 (*EHMT1*, shared_junctions), scores 1.00 and
+  reaches Tier 1 (docs/SCORING.md section 7).
+- **Copy number from read depth** matches the designs:
+  - E01: 3,4,3 (MECP2 DUP-TRP/INV-DUP);
+  - E02: 1,2,1;
+  - E03: 3,2,3;
+  - E07: 1 (the 2 kb junction deletion);
+  - E09 and E10: losses at the deleted fragments.
+  - Sex is inferred female from depth (chrX/autosome flank ratio 1.16;
+    the splice check gave 1.03 genome-wide).
+- **Fold-back / BFB modifier:** fires for E01 (subtelomeric) and E03, the two
+  inverted-duplication designs, and lowers their chromothripsis points.
+
+![Positive-control score breakdown](figures/pos_control_score_breakdown.png)
+
+*Feature contributions (points) of each event's best-scoring CxSV locus;
+diamonds are totals, and dashed lines the Tier 2 (0.5) and Tier 1 (0.99)
+thresholds. n = 1 control genome against a 10-genome test panel. Drawn by
+`tests/positive_control/plot_score_breakdown.py`.*
+
+Score tables in the workdir:
+- `score.events.tsv` (per event: score, tier, rank, top-3, class before/now);
+- `score.cxsv_scores.tsv`, `score.features.tsv`, `score.report.md` (every
+  scored locus);
+- `score.junctions.tsv`, `score.offtarget.tsv`.
+
+## Previous regression result (2026-10-28, roadmap item 3: breakpoint-level matching)
 
 Patient workflow on the control slice (16 merged regions, 34.4 Mb, E13
 included) against a panel of 10 ONT background genomes (first 10 with

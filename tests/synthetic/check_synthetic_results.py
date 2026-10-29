@@ -72,6 +72,43 @@ def main(expected_json, patient_root, run, sample):
               f"{name}: junction {want['svtype']} {want['pos1']}-{want['pos2']} matched on breakpoints, "
               f"panel carriers {[j['panel_carriers'] for j in m]} (want [{want['panel_carriers']}])")
 
+    # scoring (roadmap items 4-5)
+    with open(sdir / "scoring" / "cxsv_scores.tsv", newline="") as fh:
+        scores = list(csv.DictReader(fh, delimiter="\t"))
+    check(len(scores) == len(rows), f"every CxSV locus scored ({len(scores)} of {len(rows)})")
+    for r in scores:
+        tot = sum(float(v) for k, v in r.items() if k.endswith("_points"))
+        check(abs(tot - float(r["Total_Score"])) < 0.02,
+              f"{r['Locus_ID']}: feature points add up to the total ({tot:.2f} vs {r['Total_Score']})")
+
+    def event_scores(name):
+        ev = exp["events"][name]
+        return [r for r in scores if r["Chr"] == contig and int(r["Start"]) <= ev["end"] and int(r["End"]) >= ev["start"]]
+
+    tier_rank = {t: i for i, t in enumerate(["Tier1_high_priority", "Tier2", "Tier3", "Benign_likely"])}
+    for name, want in exp.get("scoring_expectations", {}).items():
+        hits = event_scores(name)
+        check(bool(hits), f"{name}: scored locus present")
+        for r in hits:
+            if "rank" in want:
+                check(r["Rank"] == str(want["rank"]) and r["Tier"] == want["tier"],
+                      f"{name}: rank {r['Rank']} tier {r['Tier']} total {r['Total_Score']} "
+                      f"(want rank {want['rank']}, {want['tier']}); top: {r['Top_Features']}")
+            if want.get("hpo_match"):
+                check(float(r["hpo_match_points"]) > 0, f"{name}: HPO match {r['hpo_match_value']}")
+            if "catalogue" in want:
+                check(want["catalogue"] in r["Catalogues_Containing"].split(","),
+                      f"{name}: contained in {r['Catalogues_Containing']} (want {want['catalogue']}; "
+                      f"matched {r.get(want['catalogue'] + '_Junctions_Matched')})")
+            if "tier_below" in want:
+                ref = event_scores(want["tier_below"])
+                check(bool(ref) and all(float(r["Total_Score"]) < float(x["Total_Score"])
+                                        and tier_rank[r["Tier"]] > tier_rank[x["Tier"]] for x in ref),
+                      f"{name}: total {r['Total_Score']} ({r['Tier']}) below {want['tier_below']} "
+                      f"({', '.join(x['Total_Score'] + ' ' + x['Tier'] for x in ref)})")
+    chk = (sdir / "private" / "catalogue_check.tsv").read_text()
+    check("VERIFIED" in chk and "MISMATCH" not in chk, "catalogue table verified against its manifest")
+
     pv = exp["events"]["PRIVATE"]
     recs = [l.split("\t") for l in (sdir / "private" / "private_cxsv.vcf").read_text().splitlines()
             if l and not l.startswith("#")]

@@ -79,38 +79,11 @@ def coverage_fraction(a_bed: str, b_bed: str) -> dict:
 
 
 # ─── Complexity classification ────────────────────────────────────────────────
-
-def classify_complexity(sv_types_str: str, n_breakpoints: int,
-                        criteria_str: str = "") -> str:
-    """
-    Assign a complexity class label.
-    Uses the CxSV_Criteria string from classify_cxsv.py when available so
-    C5 (chromoanagenesis cluster) is correctly labelled even when bp count < 10.
-    Priority order reflects biological severity/complexity.
-    """
-    types    = set(sv_types_str.upper().replace(" ", "").split(","))
-    n        = n_breakpoints
-    criteria = set(criteria_str.split(",")) if criteria_str else set()
-
-    if n >= 10 or "C5_chromoanagenesis_cluster" in criteria:
-        return "Chromothripsis_like"
-    if {"DEL", "INV", "DUP"}.issubset(types):
-        return "DEL+DUP+INV"
-    if {"DEL", "INV"}.issubset(types):
-        return "DEL+INV"
-    if {"DUP", "INV"}.issubset(types):
-        return "DUP+INV"
-    if {"INS", "DEL"}.issubset(types):
-        return "INS+DEL"
-    if "BND" in types and n >= 3:
-        return "BND_cluster"
-    if n >= 5:
-        return "Multi_breakpoint_cluster"
-    # Catch loci that passed via structural criteria even with low bp count
-    if "C2_nested_SV"         in criteria: return "Nested_SV"
-    if "C3_overlapping_types" in criteria: return "Overlapping_types"
-    if "C4_CN_plus_orient"    in criteria: return "CN_plus_orientation_change"
-    return "Complex_other"
+# The class is decided by classify_cxsv.py on distinct junctions
+# (workflow/lib/cxsv_classes.py: complexity_class) and read from the summary's
+# Cmplx_Class column. One implementation: this script only copies it.
+STRUCTURE_COLS = ["N_Junctions", "N_Breakpoints", "Max_Interleaved", "N_Inter_Junctions",
+                  "Complexity_Tier", "N_Composite"]
 
 
 # ─── Genomic context ──────────────────────────────────────────────────────────
@@ -224,6 +197,8 @@ def main():
             ci_is_cxsv  = ix["IsCxSV"]
             # CxSV_Criteria column — present in classify_cxsv.py output
             ci_criteria = ix.get("CxSV_Criteria", None)
+            ci_class    = ix["Cmplx_Class"]
+            ci_struct   = {c: ix[c] for c in STRUCTURE_COLS}
         except KeyError as e:
             sys.exit(f"ERROR: Expected column not found in cxsv_summary.tsv: {e}")
 
@@ -243,6 +218,8 @@ def main():
                 "sv_types":  parts[ci_types],
                 "has_inter": parts[ci_inter] if ci_inter is not None else "NA",
                 "criteria":  parts[ci_criteria] if ci_criteria is not None else "",
+                "class":     parts[ci_class],
+                "struct":    {c: parts[i] for c, i in ci_struct.items()},
             })
 
     if not cxsv_loci:
@@ -338,7 +315,9 @@ def main():
         "Seq_Type", "Has_Inter_Chromosomal",
         "Genomic_Context",              # annotation-only; CxSVs never filtered here
         "Gene_Overlap", "Nearest_Gene", "Distance_To_Nearest_Gene",
-        "Exon_Overlap", "Repeat_Annotation", "SegDup_Overlap"
+        "Exon_Overlap", "Repeat_Annotation", "SegDup_Overlap",
+        "N_Junctions", "N_Breakends", "Max_Interleaved", "N_Inter_Junctions",
+        "Complexity_Tier", "N_Composite"
     ]
 
     n_context: dict = defaultdict(int)   # tally for logging
@@ -355,7 +334,7 @@ def main():
             rep      = ",".join(repeat_annot[uid]) if repeat_annot[uid] else "NA"
             segdup   = f"{segdup_frac.get(uid, 0.0):.4f}"
             criteria = locus.get("criteria", "")
-            cmplx    = classify_complexity(locus["sv_types"], locus["n_bp"], criteria)
+            cmplx    = locus["class"]
             context  = assign_genomic_context(
                 uid, gene_overlap, exon_coverage, nearest_dist,
                 repeat_annot, segdup_frac, args.promoter_window
@@ -376,7 +355,7 @@ def main():
                 context,
                 genes, ng, nd,
                 exon, rep, segdup
-            ]
+            ] + [locus["struct"][c] for c in STRUCTURE_COLS]
             out.write("\t".join(row) + "\n")
 
     # ── 10. Write population BED ──────────────────────────────────────────────

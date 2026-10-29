@@ -9,7 +9,8 @@
 #    minimap2 alignments (panel3 as CRAM to exercise the CRAM path).
 # 2. panel builder on panel1-3, patient scorer on the patient.
 # 3. check_synthetic_results.py: carriers 3 / 1 / 0 and public / public /
-#    private by breakpoint matching, although a HOTSPOT DECOY (a different
+#    private by breakpoint matching; scoring ranks PRIVATE first (Tier 1, HPO
+#    match) and the catalogue SYNCAT contains COMMON; although a HOTSPOT DECOY (a different
 #    CxSV at the PRIVATE locus in panel1 and panel3) overlaps PRIVATE; the
 #    SIMPLE deletion's junction has 3 panel carriers; compatible fingerprint;
 #    private VCF confined to PRIVATE.
@@ -25,7 +26,7 @@ W="$(mkdir -p "${1:-$REPO/.synthetic_test}" && cd "${1:-$REPO/.synthetic_test}" 
 CORES="${CORES:-4}"
 cd "$REPO"
 
-if [ ! -f "$W/data/expected.json" ]; then
+if [ ! -f "$W/data/expected.json" ] || ! grep -q scoring_expectations "$W/data/expected.json"; then
     python tests/synthetic/make_synthetic_data.py "$W/data" --threads "$CORES"
 fi
 D="$W/data"
@@ -52,6 +53,19 @@ panel_cohorts:
   synthetic_panel: {samples: "$W/panel_sheet.tsv"}
 patient_runs:
   synthetic_patient: {samples: "$W/patient_sheet.tsv"}
+scoring_resources:
+  manifest:        null
+  clingen_dosage:  "$D/resources/scoring/clingen_dosage.tsv"
+  constraint:      "$D/resources/scoring/gnomad_constraint.tsv"
+  hpo_annotations: "$D/resources/scoring/hpo_genes_to_phenotype.txt"
+  hpo_ontology:    "$D/resources/scoring/hp.obo"
+  par_bed:         "$D/resources/scoring/par.bed"
+  omim_genemap2:   null
+external_catalogues:
+  root: "$D/resources/catalogues"
+  tables: [{name: SYNCAT, version: v1}]
+patients:
+  patient: {sex: female, hpo_terms: [HP:0001250]}
 YAML
 cat > "$W/mismatch.yaml" <<YAML
 patient_results_root: "$W/results/patient_mismatch"

@@ -60,6 +60,25 @@ survivor_params:
   min_callers_consensus:   2
 
 # ─── [FINGERPRINTED] CxSV discovery (per sample) ────────────────────────────
+# Criteria C1-C5 and the class are computed on DISTINCT junctions of each
+# cluster (workflow/lib/cxsv_classes.py; README "CxSV criteria"): records
+# collapsed with junction_params.collapse_distance, SVIM composite inversions
+# not counted. Since roadmap item 5 (2026-10-29); panels built before that
+# have a different fingerprint and must be rebuilt.
+#   min_breakpoints        C1: >= this many junctions, or >= 2 junctions with
+#                          >= this many breakends and an INV/BND
+#   extreme_min_breakends  breakpoint-count tier (PI criterion 2): intermediate
+#                          < 5, extreme > 5 breakpoints (Ly & Cleveland via Helle
+#                          et al. 2026); 5 itself is counted intermediate
+#   min_interleaved        Chromothripsis_like needs an interleaved component of
+#                          this many junctions (PI criterion 1 candidate floor 3-4;
+#                          the cancer high-confidence value is 6) ...
+#   interleave_alt_min_intra / _inter   ... or >= alt_min_intra interleaved plus
+#                          >= alt_min_inter interchromosomal junctions
+#   composite_fraction     a single-caller junction at the midpoint of two others
+#                          (within max(collapse_distance, this x their distance))
+#                          is a composite record and not counted
+# These are operational, cohort-specific choices, not validated cutoffs.
 cxsv_params:
   cluster_distance:  50000
   min_breakpoints:       3
@@ -68,6 +87,11 @@ cxsv_params:
   chromoanag_max_window: 50000
   chromoanag_min_svs:        3
   max_cluster_size: 500000
+  extreme_min_breakends:     6
+  min_interleaved:           3
+  interleave_alt_min_intra:  3
+  interleave_alt_min_inter:  4
+  composite_fraction:     0.25
 
 # ─── [FINGERPRINTED] Junction tables (per sample; rules/junctions.smk) ──────
 # Every merged SV call becomes a breakpoint junction (docs/JUNCTIONS.md).

@@ -15,7 +15,8 @@
 #           [--bundle-id ID] [--refs DIR] [--resources DIR] [--catalogues DIR]
 #       assemble ROOT/<bundle id>/: repo at the commit (git archive + git
 #       bundle), the image (SIF + Docker archive), hs1 + .fai + MD5 cache,
-#       annotation resources, the panel release DIR (must verify), the external
+#       annotation + scoring resources (verified against resources_manifest.tsv),
+#       the panel release DIR (must verify), the external
 #       catalogue junction-site tables with their manifests (each verified),
 #       run_cxsv.sh, config/bundle_site.yaml, README.md, bundle.json and a
 #       checksum manifest over everything (MANIFEST.sha256, sha256sum -c format;
@@ -130,8 +131,16 @@ rsync -a "$REFS/hs1.fa" "$REFS/hs1.fa.fai" "$STAGE/reference/"
 rsync -a "$REFS/ref_cache/" "$STAGE/reference/ref_cache/"
 step reference "$t"
 
-t=$(date +%s); log "resources"
+t=$(date +%s); log "resources: annotation BEDs, scoring resources, resources_manifest.tsv (verified)"
 rsync -a "$RESOURCES"/*.bed "$STAGE/resources/"
+if [ -f "$RESOURCES/resources_manifest.tsv" ]; then
+    # every file the manifest lists must match its sha256 before it is shipped
+    awk -F'\t' 'NR>1 && $1 !~ /\.bak$/ {print $3"  "$1}' "$RESOURCES/resources_manifest.tsv" \
+        | (cd "$RESOURCES" && sha256sum --quiet -c -) || { echo "resources do not match resources_manifest.tsv"; exit 1; }
+    cp -p "$RESOURCES/resources_manifest.tsv" "$STAGE/resources/"
+    [ -d "$RESOURCES/scoring" ] && rsync -a "$RESOURCES/scoring/" "$STAGE/resources/scoring/"
+    log "  resources verified against resources_manifest.tsv"
+fi
 step resources "$t"
 
 t=$(date +%s); log "panel release $RELEASE_ID"
@@ -168,6 +177,16 @@ annotation:
   repeats_bed: "/bundle/resources/repeats.final.bed"
   segdup_bed:  "/bundle/resources/segdup.final.bed"
 panel_release: "/bundle/panel_release/$RELEASE_ID"
+scoring_resources:
+  manifest:        "/bundle/resources/resources_manifest.tsv"
+  clingen_dosage:  "/bundle/resources/scoring/clingen_dosage.tsv"
+  constraint:      "/bundle/resources/scoring/gnomad_constraint.tsv"
+  hpo_annotations: "/bundle/resources/scoring/hpo_genes_to_phenotype.txt"
+  hpo_ontology:    "/bundle/resources/scoring/hp.obo"
+  par_bed:         "/bundle/resources/scoring/par.bed"
+  omim_genemap2:   null
+external_catalogues:
+  root: "/bundle/catalogues"
 patient_results_root: "/work/results/patient"
 panel_results_root:   "/work/results/panel"
 EOF

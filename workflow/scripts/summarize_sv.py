@@ -89,24 +89,6 @@ def parse_supp_vec(vcf_path):
     return dict(counts)
 
 
-def classify_complexity(sv_types_str, n_bp, criteria_str):
-    """Complexity class — must stay in sync with annotate_cxsv.py."""
-    types    = set(sv_types_str.upper().split(","))
-    criteria = set(criteria_str.split(","))
-    if n_bp >= 10 or "C5_chromoanagenesis_cluster" in criteria:
-        return "Chromothripsis_like"
-    if {"DEL","INV","DUP"}.issubset(types): return "DEL+DUP+INV"
-    if {"DEL","INV"}.issubset(types):       return "DEL+INV"
-    if {"DUP","INV"}.issubset(types):       return "DUP+INV"
-    if {"INS","DEL"}.issubset(types):       return "INS+DEL"
-    if "BND" in types and n_bp >= 3:        return "BND_cluster"
-    if n_bp >= 5:                           return "Multi_breakpoint_cluster"
-    if "C2_nested_SV"         in criteria:  return "Nested_SV"
-    if "C3_overlapping_types" in criteria:  return "Overlapping_types"
-    if "C4_CN_plus_orient"    in criteria:  return "CN_plus_orientation_change"
-    return "Complex_other"
-
-
 def load_cxsv_for_sample(summary_path, sample_cxsv_vcf):
     """Cross-reference population cxsv_summary.tsv with per-sample cxsv VCF."""
     cxsv_regions = []
@@ -122,6 +104,7 @@ def load_cxsv_for_sample(summary_path, sample_cxsv_vcf):
                 ci_criteria = ix["CxSV_Criteria"]
                 ci_types    = ix["SV_Types"]
                 ci_nbp      = ix["N_Breakpoints"]
+                ci_class    = ix["Cmplx_Class"]   # decided by classify_cxsv.py (lib/cxsv_classes.py)
             except KeyError as e:
                 sys.stderr.write(f"WARN: missing column in cxsv_summary.tsv: {e}\n")
                 return 0, {}, {}
@@ -131,7 +114,7 @@ def load_cxsv_for_sample(summary_path, sample_cxsv_vcf):
                     continue
                 cxsv_regions.append((
                     parts[ci_chr], int(parts[ci_start]), int(parts[ci_end]),
-                    parts[ci_criteria], parts[ci_types], int(parts[ci_nbp])
+                    parts[ci_criteria], parts[ci_types], int(parts[ci_nbp]), parts[ci_class]
                 ))
     except FileNotFoundError:
         return 0, {}, {}
@@ -168,18 +151,17 @@ def load_cxsv_for_sample(summary_path, sample_cxsv_vcf):
     criteria_counts = defaultdict(int)
     class_counts    = defaultdict(int)
     for i in sample_hits:
-        rc, rs, re, criteria_str, sv_types, n_bp = cxsv_regions[i]
+        rc, rs, re, criteria_str, sv_types, n_bp, cmplx = cxsv_regions[i]
         for c in criteria_str.split(","):
             if c and c != "NONE":
                 criteria_counts[c] += 1
-        cmplx = classify_complexity(sv_types, n_bp, criteria_str)
         class_counts[cmplx] += 1
 
     return len(sample_hits), dict(criteria_counts), dict(class_counts)
 
 
 CRITERIA_LABELS = {
-    "C1_min_breakpoints":         "C1  >=3 breakpoints in 50 kb window",
+    "C1_min_breakpoints":         "C1  >=3 distinct junctions, or >=2 with >=3 breakends + INV/BND",
     "C2_nested_SV":               "C2  Nested SV (smaller inside larger)",
     "C3_overlapping_types":       "C3  Overlapping SV types at same locus",
     "C4_CN_plus_orient":          "C4  Copy-number shift + orientation change",

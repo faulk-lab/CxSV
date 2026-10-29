@@ -39,6 +39,7 @@ CALLING_CODE = (
     "rules/junctions.smk",
     "scripts/extract_junctions.py",
     "lib/cxsv_junctions.py",
+    "lib/cxsv_classes.py",
 )
 
 TOOLS = ("sniffles", "cuteSV", "svim", "SURVIVOR", "bcftools", "bedtools", "samtools")

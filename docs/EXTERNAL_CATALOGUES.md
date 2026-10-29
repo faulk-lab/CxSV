@@ -117,6 +117,39 @@ free on `/mnt/sargasso1` before and after).
    sites (1.1 %). These were kept and flagged in the stats only; the matcher may want
    to treat them with a size-agnostic breakpoint window.
 
+## Integration: catalogue hits per patient call (2026-10-29)
+
+The patient workflow reports which catalogue, if any, contains each CxSV
+locus (rule `catalogue_hits`, `workflow/scripts/match_catalogues.py`).
+
+- **Matcher.** Every junction of the locus is matched against each table with
+  the panel matcher (`cxsv_matching.SiteIndex.query`; svtype and contigs
+  equal, both ends within 500 bp, INS lengths within 0.5). A catalogue
+  *contains* the locus when ≥ 0.75 of its junctions match.
+- **Configuration.** `config/scoring.yaml → external_catalogues` sets the
+  root, the tables (name + version) and the match settings. The bundle's
+  `bundle_site.yaml` sets the root to `/bundle/catalogues`.
+- **Integrity.** Before use, each table's sha256 is compared with its
+  manifest's `output_sha256` (and the manifest version with the configured
+  one), recorded in `private/catalogue_check.tsv`. A mismatch stops the run.
+- **Outputs.**
+  - `private/cxsv_catalogue_hits.tsv`: per locus and catalogue,
+    `<C>_Junctions_Matched` (k/n), `<C>_Max_AF`, `<C>_Max_Group_AF` (e.g.
+    gnomAD-SV's ancestry groups), `<C>_Contains`; then `Catalogues_Containing`
+    and `Catalogue_Max_AF` over the containing catalogues.
+  - `private/junction_catalogue_hits.tsv`: per locus junction, sites matched,
+    max AF and the best site per catalogue.
+- **Scoring.** The most severe containing catalogue sets the privacy penalty
+  (AF ≥ 0.01 −1, ≥ 0.001 −0.5, else −0.25), combined with the panel as
+  min(panel, catalogue). Following the findings above, frequencies are
+  **never summed** across catalogues or with the panel (docs/SCORING.md).
+- **Positive control** (2026-10-29):
+  - 418 (CoLoRSdb), 532 (HGSVC3), 7,294 (HPRC) and 192 (gnomAD-SV) sites lay
+    near the patient's CxSV junctions;
+  - no planted event matched;
+  - 11 of the host's 16 other CxSV loci were contained in ≥ 1 catalogue (max
+    AF 0.45–0.83); all 11 are public or shared_junctions in the panel as well.
+
 ## References
 1. CoLoRSdb v1.2.0, Zenodo record 14814308 and its README.md. https://zenodo.org/records/14814308 (doi:10.5281/zenodo.14814308)
 2. CoLoRSdb workflows, https://github.com/juniper-lake/CoLoRSdb ; https://colorsdb.org/
