@@ -20,7 +20,10 @@ import cxsv_inputs            # noqa: E402
 import cxsv_fingerprint       # noqa: E402
 
 WORKFLOW_DIR  = os.path.abspath(os.path.join(workflow.basedir, ".."))
-SCRIPTS       = config.get("scripts_dir", "workflow/scripts")
+PROJECT_DIR   = os.path.abspath(os.path.join(WORKFLOW_DIR, ".."))
+# scripts_dir is relative to the repository (not the working directory), so the
+# workflow runs from a read-only repository copy with --directory <workdir>.
+SCRIPTS       = os.path.join(PROJECT_DIR, config.get("scripts_dir", "workflow/scripts"))
 REFERENCE     = config["reference"]
 BAMFILES_ROOT = config.get("bamfiles_root", "bamfiles")
 SAMPLES_ROOT  = f"{RESULTS_ROOT}/samples"

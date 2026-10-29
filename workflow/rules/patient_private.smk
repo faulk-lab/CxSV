@@ -4,6 +4,13 @@
 # Needs only a panel release directory (config: panel_release), never the
 # background reads, so it can run inside a restricted environment.
 #
+# 0. The release must match its release_manifest.tsv (every listed file present
+#    with its size and sha256, nothing unlisted; workflow/lib/cxsv_release.py).
+#    Checked three times: when the workflow is parsed (a release that does not
+#    verify stops the run before any job starts, dry runs included), by rule
+#    verify_panel_release (the record, results/panel_release_check.txt), and
+#    by classify_patient_cxsv right before it reads the release (a file changed
+#    during a run, even with its mtime kept, is caught too).
 # 1. check_panel_compatibility — this run's calling fingerprint must equal the
 #    panel's (same parameters, reference, tool versions and loci code). A
 #    mismatch stops the run: otherwise differences in how the two sides were
@@ -17,12 +24,49 @@
 #    shared_junctions / public, carrier count and frequency by platform and
 #    superpopulation, plus region-overlap carriers as a hotspot flag. Every
 #    patient junction (also outside CxSV loci) gets its panel carriers too.
+#    Next to each carrier count: Panel_Callable / panel_callable, the panel
+#    individuals callable at the locus's junctions (both breakpoints of every
+#    junction), from the release's callability masks — so a private locus in
+#    a region the panel could not see is not mistaken for a rare one.
 # ═══════════════════════════════════════════════════════════════════════════════
+
+import cxsv_release            # noqa: E402
 
 PANEL_RELEASE = config.get("panel_release")
 if not PANEL_RELEASE:
     raise ValueError("[patient] config['panel_release'] must point at a panel release directory")
+PANEL_RELEASE = os.path.abspath(PANEL_RELEASE)
 MATCH = config.get("panel_match", {})
+
+_release_check = cxsv_release.verify(PANEL_RELEASE)
+if not _release_check["ok"]:
+    raise ValueError(
+        f"[patient] panel release {PANEL_RELEASE} does not verify against its "
+        f"{cxsv_release.MANIFEST}; refusing it ({len(_release_check['problems'])} problem(s)):\n  "
+        + "\n  ".join(_release_check["problems"][:20]))
+
+
+def release_listed_files():
+    """Files the release manifest lists (and that exist): inputs of the check, so
+    a changed file re-triggers it. Missing ones are reported by the check itself."""
+    try:
+        rows = cxsv_release.read_manifest(PANEL_RELEASE)
+    except (OSError, ValueError):
+        return []
+    return [f"{PANEL_RELEASE}/{r['file']}" for r in rows if os.path.isfile(f"{PANEL_RELEASE}/{r['file']}")]
+
+
+rule verify_panel_release:
+    """Refuse a panel release whose files do not match its manifest."""
+    input:
+        manifest = f"{PANEL_RELEASE}/{cxsv_release.MANIFEST}",
+        files    = release_listed_files(),
+        script   = f"{SCRIPTS}/verify_panel_release.py"
+    output: f"{RESULTS_ROOT}/panel_release_check.txt"
+    log:    f"{RESULTS_ROOT}/logs/panel_release_check.log"
+    shell:
+        "python {input.script} {PANEL_RELEASE} --out {output} > {log} 2>&1 "
+        "|| {{ cat {log} >&2; exit 1; }}"
 
 
 rule check_panel_compatibility:
@@ -34,7 +78,8 @@ rule check_panel_compatibility:
     """
     input:
         ours   = f"{RESULTS_ROOT}/calling_fingerprint.json",
-        theirs = f"{PANEL_RELEASE}/calling_fingerprint.json"
+        theirs = f"{PANEL_RELEASE}/calling_fingerprint.json",
+        check  = f"{RESULTS_ROOT}/panel_release_check.txt"
     output: f"{RESULTS_ROOT}/panel_compatibility.txt"
     log:    f"{RESULTS_ROOT}/logs/panel_compatibility.log"
     run:
@@ -75,6 +120,8 @@ rule classify_patient_cxsv:
         sites       = f"{PANEL_RELEASE}/panel_junction_sites.tsv",
         individuals = f"{PANEL_RELEASE}/panel_individuals.tsv",
         calls       = f"{PANEL_RELEASE}/panel_cxsv_calls.tsv",
+        release     = f"{PANEL_RELEASE}/{cxsv_release.METADATA}",
+        check       = f"{RESULTS_ROOT}/panel_release_check.txt",
         compat      = f"{RESULTS_ROOT}/panel_compatibility.txt",
         script      = f"{SCRIPTS}/classify_patient_cxsv.py"
     output:
@@ -96,7 +143,8 @@ rule classify_patient_cxsv:
             --panel-individuals {input.individuals} --panel-calls {input.calls} \
             --tolerance {params.tolerance} --ins-len-ratio {params.ins_ratio} \
             --min-junction-fraction {params.min_fraction} --min-carriers {params.min_carriers} \
-            --window {params.window} --out-all {output.all_loci} --out-private {output.private} \
+            --window {params.window} --release-dir {PANEL_RELEASE} \
+            --out-all {output.all_loci} --out-private {output.private} \
             --out-bed {output.bed} --out-junctions {output.junctions} 2> {log}
         """
 

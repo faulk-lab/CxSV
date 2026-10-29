@@ -33,10 +33,33 @@ panel_cohorts: {}
 # the panel junction sites. Unset: sex unknown, no superpopulation groups.
 panel_individuals: null
 
-# Label written into the junction-site tables' `version` column. Unset: "fp-"
-# + the first 12 hex digits of the calling fingerprint (roadmap item 2 adds
-# versioned release ids).
-panel_release_id: null
+# Panel release identity (roadmap item 2; docs/RELEASE_AND_BUNDLE.md). The
+# release id is <name>-<YYYYMMDD>-<first 12 hex digits of the calling
+# fingerprint>, fixed the first time it is made (results/panel/panel/release_id.txt)
+# and written into every junction-site row's `version` column.
+#   date: YYYYMMDD; null = the day the id is first made
+#   test_release: true for panels that must never label a real patient (e.g.
+#     the 10-genome regression slices); recorded in release.json
+release:
+  name: "cxsv-panel"
+  date: null
+  test_release: false
+  description: ""
+
+# Callability (rules/panel_callability.smk): per panel sample, mosdepth depth of
+# reads with MAPQ >= sv_params.min_mapq; a breakpoint is callable when depth
+# >= min_depth over a `flank`-bp window on at least one side of it, a junction
+# when both breakpoints are. Not fingerprinted (it describes coverage, it does
+# not decide which loci exist); recorded in release.json.
+#   min_depth 10: a heterozygous junction then has ~5 supporting reads in
+#     expectation, above sv_params.min_support (3); at the 17x panel floor most
+#     unique sequence passes, collapsed repeats and low-MAPQ segdups do not.
+#   flank 100: about one read-anchor length for the callers' split-read
+#     signatures; short enough to stay off the other side of a small event.
+panel_callability:
+  min_depth: 10
+  flank: 100
+  threads: 4
 
 # Junction sites (scripts/build_panel_sites.py): junctions of different
 # individuals are one site when svtype and contigs agree and both ends lie

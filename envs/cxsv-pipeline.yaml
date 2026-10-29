@@ -6,6 +6,9 @@
 #
 #   mamba env create -f envs/cxsv-pipeline.yaml
 #   conda activate cxsv-pipeline
+# Exact solved versions: envs/cxsv-pipeline.lock.yaml (readable) and
+# envs/cxsv-pipeline.explicit.txt (package URLs + MD5, linux-64), from which the
+# container image is built (container/Dockerfile).
 name: cxsv-pipeline
 channels:
   - conda-forge
@@ -25,6 +28,9 @@ dependencies:
   - samtools=1.21
   - htslib=1.21
   - bedtools=2.31.1
+  # panel callability (rules/panel_callability.smk): quantized depth per panel
+  # sample. 0.3.10 is the newest build against htslib 1.21 (0.3.11+ need >=1.22).
+  - mosdepth=0.3.10
   # aligner: only used by tests/synthetic to align simulated reads; pinned to
   # the version that aligned the background panel
   - minimap2=2.24

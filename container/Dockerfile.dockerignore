@@ -1,0 +1,3 @@
+# Build context = repository root; the image needs only the explicit lock.
+*
+!envs/cxsv-pipeline.explicit.txt

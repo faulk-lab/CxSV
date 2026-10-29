@@ -43,7 +43,8 @@ Code, pushed to feature branches and awaiting review:
 Known gap carried forward: no single environment on the fleet has the whole
 toolchain. Sniffles2, cuteSV/SVIM and Snakemake sit in three different conda
 environments, and SURVIVOR, bcftools and the R plotting packages are missing.
-Item 2 removes this.
+Item 2 removes this. Since 2026-10-28 there is one env (`cxsv-pipeline`) and
+one image built from its explicit package list (`container/Dockerfile`).
 
 ---
 
@@ -80,7 +81,41 @@ with each later item.
 - **Done when:** both workflows run from one repo tag; a CI check fails if
   the calling module's parameters differ between them.
 
-### 2. Panel release and an offline bundle for the restricted environment
+### 2. Panel release and an offline bundle for the restricted environment — **done (2026-10-28; release tag pending the PI)**
+
+> Done (branch `item2-panel-release`; docs/RELEASE_AND_BUNDLE.md):
+>
+> - **Versioned release.** Id `<name>-<YYYYMMDD>-<fingerprint12>`.
+>   `release.json` carries the source commit, fingerprint, samples and
+>   individuals by platform and superpopulation, tools and the container image
+>   id / SIF sha256. `release_manifest.tsv` checksums every file.
+> - **Callability.** Per-sample mosdepth CALLABLE masks ship in the release.
+>   Each junction site gets the number of panel samples / individuals with
+>   depth ≥ 10 (MAPQ ≥ 20) at both breakpoints. Every patient locus reports
+>   `Panel_Callable` next to `Panel_Carriers`.
+> - **Refusal.** The patient workflow refuses a release that does not verify
+>   (checked at parse time, in a recorded rule, and inside the classifier).
+> - **One pinned image.** `container/Dockerfile` installs
+>   `envs/cxsv-pipeline.explicit.txt` (URL + MD5 per package). The lock had
+>   drifted from the env and was regenerated. mosdepth 0.3.10 was added.
+> - **Builder.** `scripts/make_bundle.sh image|bundle --commit` builds the
+>   image, the SIF and the bundle from a `git archive` of the commit.
+> - **Validated offline** (`tests/lab/validate_bundle.sh`):
+>   - bundle `cxsv-bundle-20261028-26085cdd9977`: commit 26085cd, 7.5 GiB,
+>     about 9 min to build;
+>   - test release `TEST-posctrl10slice-20261028-ad454c604bdd`, built from the
+>     10 regression slices in the bundle's SIF;
+>   - the public stand-in HG00130 (not in the panel) ran end to end under
+>     Singularity and Docker with networking verifiably off (loopback only,
+>     TCP/DNS/HTTPS fail, positive control passes);
+>   - records identical to a normal conda run;
+>   - tampered releases were refused before any job ran.
+> - **Positive-control regression** at 26085cd unchanged: 40/41 junctions
+>   exact, E12 the only (known) failure.
+>
+> Not yet: a release **tag** (the PI's decision; the commit hash is
+> recorded), a run on a separate clean machine (validated on freya with the
+> container isolating the run), and a real (non-test) panel release.
 
 - The panel builder's product is a small, versioned, checksummed **panel
   release** instead of genomes:
@@ -98,9 +133,12 @@ with each later item.
   group, or one image, run under Apptainer/Singularity.
 - **Done when:** the bundle, built from a tag, runs end to end on a clean
   machine with networking disabled, using a public sample as stand-in patient.
+  Met for a commit (26085cd) on freya with container isolation; the tag is
+  the PI's to create.
 - **Open question for the restricted environment's IT:** which workflow
   engines and container runtime are allowed. Snakemake plus Apptainer is the
-  assumption.
+  assumption. The bundle also ships a Docker archive, and `run_cxsv.sh` runs
+  under Singularity, Apptainer or Docker.
 
 ### 3. Joint genotyping and breakpoint-level matching — **done (2026-10-28)**
 
@@ -224,7 +262,7 @@ with each later item.
   intergenic and simple-SV controls (E10-E12) rank below them, and the score
   breakdown is in the report.
 
-### 6. Tests — **done (2026-10-28; bundle validation pending with item 2)**
+### 6. Tests — **done (2026-10-28; bundle validated 2026-10-28, release tag pending)**
 
 > Done: `tests/unit` (pytest: sample discovery, fingerprint, panel/patient
 > scripts, and a guard that no committed config overrides a fingerprinted
@@ -248,7 +286,9 @@ with each later item.
   real positive control is too large for CI and runs on the lab fleet
   (`tests/lab/pos_control_regression.sh`).
 - Before the first patient run, validate the restricted-environment bundle
-  with a dry run, then a full run, on public data.
+  with a dry run, then a full run, on public data. Done for the test bundle
+  `cxsv-bundle-20261028-26085cdd9977` (commit 26085cd; docs/RELEASE_AND_BUNDLE.md
+  section 6); repeat with the first real panel release and its tag.
 - **Done when:** CI is green on `main`, and the bundle validation is recorded
   with the release tag it used.
 

@@ -13,8 +13,9 @@
 #    CxSV at the PRIVATE locus in panel1 and panel3) overlaps PRIVATE; the
 #    SIMPLE deletion's junction has 3 panel carriers; compatible fingerprint;
 #    private VCF confined to PRIVATE.
-# 4. negative test: a patient overlay that changes a fingerprinted parameter
-#    must stop at check_panel_compatibility.
+# 4. negative tests: a patient overlay that changes a fingerprinted parameter
+#    must stop at check_panel_compatibility; a panel release with one byte
+#    changed must be refused at verify_panel_release (manifest check).
 # Needs the cxsv-pipeline env (it includes minimap2 for this test). Run from
 # the repository root. Exit status 0 = all checks passed.
 # =============================================================================
@@ -46,6 +47,7 @@ threads: {samtools: 2, sv_callers: $CORES}
 panel_results_root:   "$W/results/panel"
 patient_results_root: "$W/results/patient"
 panel_release:        "$W/results/panel/release"
+release: {name: "synthetic", date: "20260101", test_release: true, description: "CI synthetic panel"}
 panel_cohorts:
   synthetic_panel: {samples: "$W/panel_sheet.tsv"}
 patient_runs:
@@ -73,5 +75,26 @@ elif grep -q "params.cxsv_params.min_breakpoints" "$W/results/patient_mismatch/l
     echo "PASS mismatch rejected and reported: $(grep min_breakpoints "$W/results/patient_mismatch/logs/panel_compatibility.log" | xargs)"
 else
     echo "FAIL run failed, but not at the compatibility check (log: $W/mismatch.log)"; RC=1
+fi
+echo "== negative test: a tampered panel release must be refused"
+rm -rf "$W/release_tampered" "$W/results/patient_tampered"
+cp -r "$W/results/panel/release" "$W/release_tampered"
+# same-size change: one digit of the first carrier site's pos1
+python - "$W/release_tampered/panel_junction_carriers.tsv" <<'PY'
+import sys
+p = sys.argv[1]; lines = open(p).read().split("\n"); f = lines[1].split("\t")
+f[1] = f[1][:-1] + str((int(f[1][-1]) + 1) % 10); lines[1] = "\t".join(f)
+open(p, "w").write("\n".join(lines))
+PY
+cat > "$W/tampered.yaml" <<YAML
+patient_results_root: "$W/results/patient_tampered"
+panel_release: "$W/release_tampered"
+YAML
+if "${SM[@]}" -s workflow/patient/Snakefile --configfile "$W/site.yaml" "$W/tampered.yaml" > "$W/tampered.log" 2>&1; then
+    echo "FAIL patient run against a tampered release was NOT refused"; RC=1
+elif grep -q "sha256 differs: panel_junction_carriers.tsv" "$W/tampered.log" && [ ! -d "$W/results/patient_tampered/samples" ]; then
+    echo "PASS tampered release refused before any job ran: $(grep -m1 'sha256 differs' "$W/tampered.log" | xargs)"
+else
+    echo "FAIL run failed, but not at the release check (log: $W/tampered.log)"; RC=1
 fi
 exit $RC

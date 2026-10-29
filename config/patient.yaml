@@ -9,6 +9,8 @@ patient_results_root: "results/patient"
 
 # Panel release directory produced by the panel builder (results/panel/release
 # on the lab fleet; a copy shipped with the bundle in a restricted environment).
+# It must verify against its release_manifest.tsv or the run stops
+# (rule verify_panel_release; docs/RELEASE_AND_BUNDLE.md).
 panel_release: "results/panel/release"
 
 # One or more patient runs, same spec format as panel cohorts (directory mode

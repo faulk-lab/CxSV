@@ -13,6 +13,9 @@ reads are needed, so this runs inside a restricted environment.
 Run from the project root:
     snakemake -s workflow/patient/Snakefile --cores 32 \
         --configfile config/sites/<site>_patient.yaml
+or from any working directory, e.g. inside the offline bundle's container:
+    snakemake -s <repo>/workflow/patient/Snakefile --directory <workdir> --cores 32 \
+        --configfile <site>_patient.yaml
 or  bash scripts/run_pipeline.sh patient --extra-config config/sites/<site>_patient.yaml
 
 Config (later files override earlier ones; nested keys merge):
@@ -21,8 +24,14 @@ Config (later files override earlier ones; nested keys merge):
     --configfile ...      site overlay: paths, patient sample sheet
 """
 
-configfile: "config/calling.yaml"
-configfile: "config/patient.yaml"
+import os
+
+# Config files are found relative to this Snakefile, so the workflow also runs
+# from a read-only copy of the repository with a separate working directory
+# (snakemake --directory <workdir>; the offline bundle, docs/RELEASE_AND_BUNDLE.md).
+PROJECT_DIR = os.path.abspath(os.path.join(workflow.basedir, "..", ".."))
+configfile: os.path.join(PROJECT_DIR, "config", "calling.yaml")
+configfile: os.path.join(PROJECT_DIR, "config", "patient.yaml")
 
 WORKFLOW_NAME = "patient"
 COHORT_SPECS  = config.get("patient_runs") or {}
@@ -40,6 +49,7 @@ include: "../rules/patient_private.smk"
 
 rule all:
     input:
+        f"{RESULTS_ROOT}/panel_release_check.txt",
         f"{RESULTS_ROOT}/panel_compatibility.txt",
         per_sample(f"{S}/sv_summary.txt"),
         per_sample(f"{S}/private/cxsv_panel_status.tsv"),
