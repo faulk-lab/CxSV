@@ -55,6 +55,72 @@ def test_gene_dosage_uses_clingen_then_loeuf():
     assert f.points == 0.90 and f.rule.startswith("HIG")                           # max, not sum
 
 
+
+# ─── ClinGen region-level dosage (item 9) ───────────────────────────────────
+REGIONS = [{"chrom": "chr1", "start": 1000, "end": 5000, "isca_id": "R_HI3", "name": "HI region", "hi": "3", "ts": "0"},
+           {"chrom": "chr1", "start": 20000, "end": 30000, "isca_id": "R_TS3", "name": "TS region", "hi": "0",
+            "ts": "3"},
+           {"chrom": "chr1", "start": 40000, "end": 44000, "isca_id": "R_HI2", "name": "HI2 region", "hi": "2",
+            "ts": "40"}]
+
+
+def _region_hits(losses=(), gains=(), margin=200):
+    idx = sc.IntervalIndex([(r["chrom"], r["start"], r["end"], i) for i, r in enumerate(REGIONS)])
+    return (sc.region_hits(idx, REGIONS, sc.merge_runs(list(losses), 2 * margin), "lost", margin)
+            + sc.region_hits(idx, REGIONS, sc.merge_runs(list(gains), 2 * margin), "gained", margin))
+
+
+def test_merge_runs_joins_adjacent_trimmed_segments():
+    # two gained segments split at a breakend, each trimmed by 200 bp: one run
+    assert sc.merge_runs([("chr1", 19000, 24800), ("chr1", 25200, 31000)], 400) == [("chr1", 19000, 31000)]
+    assert sc.merge_runs([("chr1", 0, 100), ("chr1", 600, 700)], 400) == [("chr1", 0, 100), ("chr1", 600, 700)]
+    assert sc.merge_runs([("chr1", 0, 100), ("chr2", 200, 300)], 400) == [("chr1", 0, 100), ("chr2", 200, 300)]
+
+
+def test_region_full_containment_vs_partial_overlap():
+    w = W["region_dosage"]
+    # gain: two adjacent gained segments together contain the whole TS-3 region (margin 200 allowed)
+    full = _region_hits(gains=[("chr1", 20150, 24800), ("chr1", 25200, 29900)])
+    assert [h["contained"] for h in full] == [True]
+    f = sc.f_region_dosage(full, 0.0, w)
+    assert f.points == 1.00 and "R_TS3 gained TS 3" in f.value and "contained" in f.value
+    # gain covering 40% of the TS region: partial = 1.00 x 0.25 x 0.40
+    part = _region_hits(gains=[("chr1", 18000, 24000)])
+    assert not part[0]["contained"] and abs(part[0]["fraction"] - 0.4) < 1e-9
+    assert sc.f_region_dosage(part, 0.0, w).points == 0.10
+    # a gain wholly INSIDE the TS region is a partial overlap, not containment
+    inside = _region_hits(gains=[("chr1", 22000, 27000)])
+    assert sc.f_region_dosage(inside, 0.0, w).points == round(1.00 * 0.25 * 0.5, 4)
+
+
+def test_region_hi_scored_for_losses_ts_for_gains():
+    w = W["region_dosage"]
+    # a loss of the whole HI-3 region: 1.00; the same interval gained: TS 0 -> nothing
+    assert sc.f_region_dosage(_region_hits(losses=[("chr1", 900, 5100)]), 0.0, w).points == 1.00
+    assert sc.f_region_dosage(_region_hits(gains=[("chr1", 900, 5100)]), 0.0, w).points == 0.0
+    # a loss of half the HI-3 region: 1.00 x 0.50 x 0.5
+    assert sc.f_region_dosage(_region_hits(losses=[("chr1", 3000, 6000)]), 0.0, w).points == 0.25
+    # HI 2 at the reduced weight; its TS 40 (dosage sensitivity unlikely) earns nothing for a gain
+    assert sc.f_region_dosage(_region_hits(losses=[("chr1", 39000, 45000)]), 0.0, w).points == 0.45
+    f = sc.f_region_dosage(_region_hits(gains=[("chr1", 39000, 45000)]), 0.0, w)
+    assert f.points == 0.0 and "1 more region" in f.value
+    # the TS-3 region deleted: HI 0 -> nothing
+    assert sc.f_region_dosage(_region_hits(losses=[("chr1", 19000, 31000)]), 0.0, w).points == 0.0
+
+
+def test_region_and_gene_dosage_never_summed():
+    w = W["region_dosage"]
+    hits = _region_hits(losses=[("chr1", 900, 5100)])           # region worth 1.00
+    assert sc.f_region_dosage(hits, 0.90, w).points == 0.10      # gene already 0.90: only the excess
+    assert sc.f_region_dosage(hits, 1.00, w).points == 0.0       # gene already at the maximum
+    f = sc.f_region_dosage(_region_hits(losses=[("chr1", 3000, 6000)]), 0.45, w)   # region 0.25 < gene 0.45
+    assert f.points == 0.0 and "max(gene, region)" in f.rule
+    # best region counts, regions are not summed with each other either
+    both = _region_hits(losses=[("chr1", 900, 5100), ("chr1", 39000, 45000)])
+    assert sc.f_region_dosage(both, 0.0, w).points == 1.00
+    assert sc.f_region_dosage([], 0.0, w, enabled=False).value.startswith("off")
+
+
 def test_gene_count_exons_and_intergenic():
     assert sc.f_gene_count(3, W["gene_count"]).points == 0.0
     assert sc.f_gene_count(30, W["gene_count"]).points == 0.45
@@ -275,9 +341,13 @@ def test_match_catalogues_and_score_cli(tmp_path):
     fai = _write(t / "ref.fa.fai", "chr1\t1000000\t6\t60\t61\n")
     dos = _write(t / "dos.tsv", "gene_symbol\tgene_id\thi_score\tts_score\tlast_evaluated\nHIG\t1\t3\t0\t2020\n")
     con = _write(t / "con.tsv", "gene_symbol\ttranscript\tloeuf\tpli\ttranscript_choice\nHIG\tT\t0.1\t1\tmane_select\n")
+    # a curated HI-3 region inside the lost segment 100,200-103,800 (worth 1.00 > HIG broken 0.90)
+    reg = _write(t / "reg.tsv", "chrom\tstart\tend\tisca_id\tregion_name\tcytoband\thi_score\tts_score\t"
+                 "last_evaluated\thg38_location\tlift_status\tspan_ratio\tinterval_pieces\tinterval_mapped_fraction\n"
+                 "chr1\t100500\t103500\tISCA-T1\ttest region\t1p\t3\t0\t2020\tchr1:1-2\tlifted\t1\t1\t1\n")
     cfg = yaml.safe_load((REPO / "config/scoring.yaml").read_text())
     params = {k: cfg[k] for k in ("weights", "tiers", "copy_number", "clustering", "foldback")}
-    params.update({"scoring_resources": {"clingen_dosage": dos, "constraint": con},
+    params.update({"scoring_resources": {"clingen_dosage": dos, "constraint": con, "clingen_regions": reg},
                    "panel_match": {"tolerance": 500, "ins_len_ratio": 0.5, "min_junction_fraction": 0.75},
                    "collapse_distance": 300, "composite_fraction": 0.25, "panel_release_id": "TEST",
                    "patient": {"sex": "female", "hpo_terms": []}})
@@ -293,6 +363,7 @@ def test_match_catalogues_and_score_cli(tmp_path):
     row = dict(zip(lines[0].split("\t"), lines[1].split("\t")))
     assert row["Locus_ID"] == L and row["Rank"] == "1"
     assert row["gene_dosage_points"] == "0.90" and row["Genes_Affected"] == "HIG:broken"
+    assert row["region_dosage_points"] == "0.10" and "ISCA-T1 lost HI 3" in row["region_dosage_value"]
     assert row["panel_privacy_points"] == "0.24"                  # 0.30 x 8/10 callable
     assert row["ct_cn_oscillation_points"] == "0.10"              # two losses, no 3-segment alternation
     total = sum(float(row[f"{n}_points"]) for n in sc.FEATURE_ORDER)

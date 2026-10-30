@@ -141,7 +141,8 @@ def write_resources(res: Path):
 def write_scoring_resources(res: Path):
     """Tiny stand-ins for the scoring resources and one external catalogue
     (roadmap items 4-5), so CI exercises every scoring code path: SYNP is a
-    curated haploinsufficient gene, the catalogue SYNCAT contains COMMON."""
+    curated haploinsufficient gene, SYN-R1 a curated triplosensitive region inside
+    PRIVATE's duplication, the catalogue SYNCAT contains COMMON."""
     import gzip
     import hashlib
     sd = res / "scoring"
@@ -152,6 +153,11 @@ def write_scoring_resources(res: Path):
     (sd / "gnomad_constraint.tsv").write_text("gene_symbol\ttranscript\tloeuf\tpli\ttranscript_choice\n"
                                               "SYNA\tT1\t0.9\t0\tmane_select\n")
     (sd / "par.bed").write_text("")
+    # a curated triplosensitive region (item 9) inside PRIVATE's 3 kb duplication
+    (sd / "clingen_region_dosage.tsv").write_text(
+        "chrom\tstart\tend\tisca_id\tregion_name\tcytoband\thi_score\tts_score\tlast_evaluated\t"
+        "hg38_location\tlift_status\tspan_ratio\tinterval_pieces\tinterval_mapped_fraction\n"
+        f"{CONTIG}\t826500\t828500\tSYN-R1\tsynthetic TS region\tsyn\t0\t3\t2020-01-01\t.\tlifted\t1\t1\t1\n")
     (sd / "hpo_genes_to_phenotype.txt").write_text(
         "ncbi_gene_id\tgene_symbol\thpo_id\thpo_name\tfrequency\tdisease_id\n"
         "2\tSYNP\tHP:0002373\tFebrile seizure\t-\tSYN:1\n")

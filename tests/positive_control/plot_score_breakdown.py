@@ -30,7 +30,7 @@ GROUP_COLOURS = {          # outer level = hue family, inner = shades (feature o
 }
 LABELS = {
     "panel_privacy": "panel privacy (x callability)", "catalogue_frequency": "external catalogues",
-    "gene_dosage": "gene dosage (ClinGen HI/TS, LOEUF)", "exons": "exons disrupted", "gene_count": "gene count",
+    "gene_dosage": "gene dosage (ClinGen HI/TS, LOEUF)", "region_dosage": "ClinGen region dosage (above gene)", "exons": "exons disrupted", "gene_count": "gene count",
     "no_genes": "no gene affected", "complexity_class": "complexity class", "size": "size",
     "caller_agreement": "caller agreement", "read_support": "read support", "artefact_context": "repeat / segdup",
     "ct_interleaving": "1 interleaving", "ct_breakpoint_tier": "2 breakpoint tier",

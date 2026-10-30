@@ -56,6 +56,7 @@ patient_runs:
 scoring_resources:
   manifest:        null
   clingen_dosage:  "$D/resources/scoring/clingen_dosage.tsv"
+  clingen_regions: "$D/resources/scoring/clingen_region_dosage.tsv"
   constraint:      "$D/resources/scoring/gnomad_constraint.tsv"
   hpo_annotations: "$D/resources/scoring/hpo_genes_to_phenotype.txt"
   hpo_ontology:    "$D/resources/scoring/hp.obo"
