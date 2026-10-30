@@ -318,7 +318,7 @@ Alternatively, regenerate them yourself from the original sources:
 Scoring resources (roadmap item 5; free sources only, built by
 `python acquisition/resources/build_resources.py --download`, versions and
 checksums in `resources/resources_manifest.tsv`, details in
-[docs/SCORING.md](docs/SCORING.md)): `scoring/clingen_dosage.tsv` (ClinGen
+[docs/SCORING.md](docs/SCORING.md)): `scoring/clingen_region_dosage.tsv` (ClinGen curated regions lifted to hs1, item 9), `scoring/clingen_dosage.tsv` (ClinGen
 dosage HI/TS), `scoring/gnomad_constraint.tsv` (gnomAD v4.1 LOEUF),
 `scoring/hpo_genes_to_phenotype.txt` + `scoring/hp.obo` (HPO), `scoring/par.bed`
 (CHM13v2 PARs). OMIM is optional and needs the lab's licence (off by default).

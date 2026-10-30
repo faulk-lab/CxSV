@@ -13,7 +13,9 @@ privacy        panel carriers weighted by panel callability; external catalogues
                (max AF per catalogue, the most common one counts, never summed)
 genes          genes broken by a breakend or wholly lost / gained (copy number
                from read depth), weighted by ClinGen HI / TS scores, gnomAD
-               LOEUF as fallback; exons; gene count; no gene at all
+               LOEUF as fallback; ClinGen curated REGIONS lost / gained (item 9;
+               combined with the gene points as a maximum, never summed); exons;
+               gene count; no gene at all
 event          complexity class and size
 evidence       caller agreement (SUPP_VEC) and supporting reads; repeat /
                segmental-duplication context as an artefact penalty
@@ -42,7 +44,7 @@ from collections import namedtuple
 
 Feature = namedtuple("Feature", "name group value points rule")
 
-FEATURE_ORDER = ("panel_privacy", "catalogue_frequency", "gene_dosage", "exons", "gene_count", "no_genes",
+FEATURE_ORDER = ("panel_privacy", "catalogue_frequency", "gene_dosage", "region_dosage", "exons", "gene_count", "no_genes",
                  "complexity_class", "size", "caller_agreement", "read_support", "artefact_context",
                  "ct_interleaving", "ct_breakpoint_tier", "ct_cn_oscillation", "ct_clustering",
                  "ct_bfb_modifier", "hpo_match", "omim", "inheritance")
@@ -420,6 +422,94 @@ def gene_points(mode, hi, ts, loeuf, w):
             if loeuf < cut:
                 return pt, why + f"; LOEUF {loeuf:.3g} < {cut:g}"
     return pts, why
+
+
+# ─── ClinGen region-level dosage (roadmap item 9) ───────────────────────────
+def merge_runs(intervals, max_gap):
+    """Merge [(chrom, start, end)] on the same chromosome separated by <= max_gap
+    bp. Adjacent copy-number segments of a locus are split at a breakend and each
+    trimmed by margin_bp, so a run of gained (or lost) segments is one interval
+    with max_gap = 2 x margin_bp."""
+    out = []
+    for c, s, e in sorted(intervals):
+        if out and out[-1][0] == c and s - out[-1][2] <= max_gap:
+            out[-1] = (c, out[-1][1], max(out[-1][2], e))
+        else:
+            out.append((c, s, e))
+    return out
+
+
+def region_hits(index, regions, runs, mode, margin):
+    """Curated regions touched by copy-number runs.
+
+    index: IntervalIndex of the regions (label = position in `regions`);
+    regions: [{chrom, start, end, isca_id, name, hi, ts}] (0-based half-open, hs1);
+    runs: merged lost (mode 'lost') or gained ('gained') intervals; margin: the
+    segment trimming (bp) allowed at each end when testing containment.
+    Returns one dict per region: isca_id, name, mode, kind (HI for lost, TS for
+    gained), score, region_bp, overlap_bp (bp of the region inside the runs),
+    fraction, contained (the whole region inside one run)."""
+    touched = {}
+    for c, s, e in runs:
+        for _, _, i in index.overlapping(c, s, e):
+            touched.setdefault(i, []).append((c, s, e))
+    out = []
+    for i, ivs in sorted(touched.items()):
+        R = regions[i]
+        size = R["end"] - R["start"]
+        ov = IntervalIndex([(c, s, e, ".") for c, s, e in ivs]).covered_bp(R["chrom"], R["start"], R["end"])
+        contained = any(R["start"] >= s - margin and R["end"] <= e + margin for _, s, e in ivs)
+        out.append({"isca_id": R["isca_id"], "name": R.get("name", ""), "mode": mode,
+                    "kind": "HI" if mode == "lost" else "TS", "score": R["hi"] if mode == "lost" else R["ts"],
+                    "region_bp": size, "overlap_bp": size if contained else ov,
+                    "fraction": 1.0 if contained else (ov / size if size else 0.0), "contained": contained})
+    return out
+
+
+def region_points(hit, w):
+    """Points of one curated region hit, ACMG/ClinGen CNV section 2 style
+    (Riggs et al. 2020): the whole region inside a lost (HI score) or gained (TS
+    score) run earns the full points (2A); a partial overlap earns
+    full x partial factor x fraction of the region covered (2B gives 0 when the
+    causative gene / critical region is not included; the reduced credit stands
+    for the cases where it may be). HI/TS 0, 30, 40 or none: 0."""
+    lost = hit["mode"] == "lost"
+    table = w["hi_lost"] if lost else w["ts_gained"]
+    sc_ = hit["score"]
+    full = float(table.get(str(sc_), 0.0)) if sc_ not in (None, "", "NA") else 0.0
+    if full == 0.0:
+        return 0.0, f"{hit['kind']} {sc_ or 'NA'}: no points"
+    if hit["contained"]:
+        return full, f"{hit['kind']} {sc_}, whole region {'lost' if lost else 'gained'} (ClinGen 2A)"
+    factor = float(w["partial_lost"] if lost else w["partial_gained"])
+    return full * factor * hit["fraction"], (f"{hit['kind']} {sc_}, partial overlap ({hit['fraction']:.1%} of the region "
+                                             f"{'lost' if lost else 'gained'}): {full:g} x {factor:g} x "
+                                             f"{hit['fraction']:.3f}")
+
+
+def f_region_dosage(hits, gene_dosage_points, w, enabled=True):
+    """Curated ClinGen regions lost / gained. Points = max(0, best region points
+    - gene_dosage points): the locus's dosage evidence is max(gene, region),
+    so a region and the genes inside it are never counted twice."""
+    if not enabled:
+        return Feature("region_dosage", "genes", "off (no ClinGen region list configured)", 0.0, "optional")
+    best, best_why, shown, other = 0.0, "no curated HI/TS 1-3 region lost or gained", [], 0
+    for h in sorted(hits, key=lambda h: (h["mode"], h["isca_id"])):
+        pts, why = region_points(h, w)
+        if str(h["score"]) not in ("1", "2", "3"):
+            other += 1
+            continue
+        shown.append(f"{h['isca_id']} {h['mode']} {h['kind']} {h['score']}: {h['overlap_bp']:,}/{h['region_bp']:,} bp "
+                     f"({h['fraction']:.1%}, {'contained' if h['contained'] else 'partial'}) = {pts:.2f}")
+        if pts > best:
+            best, best_why = pts, f"{h['isca_id']} ({h['name']}): {why}"
+    if other:
+        shown.append(f"{other} more region(s) with HI/TS 0/30/40 or none")
+    best = r2(best)
+    add = r2(max(0.0, best - float(gene_dosage_points)))
+    rule = (f"{best_why}; region {best:.2f} vs gene_dosage {float(gene_dosage_points):.2f}: "
+            f"dosage = max(gene, region), never summed")
+    return Feature("region_dosage", "genes", "; ".join(shown) or "none", add, rule)
 
 
 # ─── feature functions (each returns a Feature) ──────────────────────────────

@@ -16,6 +16,8 @@
 scoring_resources:
   manifest:        "/mnt/sargasso1/CxSV/resources/resources_manifest.tsv"
   clingen_dosage:  "/mnt/sargasso1/CxSV/resources/scoring/clingen_dosage.tsv"
+  # ClinGen curated REGIONS (recurrent / critical regions), lifted to hs1 (item 9)
+  clingen_regions: "/mnt/sargasso1/CxSV/resources/scoring/clingen_region_dosage.tsv"
   constraint:      "/mnt/sargasso1/CxSV/resources/scoring/gnomad_constraint.tsv"
   hpo_annotations: "/mnt/sargasso1/CxSV/resources/scoring/hpo_genes_to_phenotype.txt"
   hpo_ontology:    "/mnt/sargasso1/CxSV/resources/scoring/hp.obo"
@@ -89,6 +91,12 @@ weights:
     hi_lost:   {"3": 1.00, "2": 0.45, "1": 0.15}
     ts_gained: {"3": 1.00, "2": 0.45, "1": 0.15}
     loeuf:     {"0.35": 0.30, "0.6": 0.15}    # only without curated HI evidence
+  region_dosage:              # ClinGen curated regions (item 9; ClinGen CNV 2A / 2B style). Max over
+                              # regions; combined with gene_dosage as max(gene, region), never summed
+    hi_lost:   {"3": 1.00, "2": 0.45, "1": 0.15}   # the whole region inside a lost run (2A)
+    ts_gained: {"3": 1.00, "2": 0.45, "1": 0.15}   # the whole region inside a gained run (2A)
+    partial_lost: 0.50        # partial overlap: full x 0.50 x fraction of the region lost
+    partial_gained: 0.25      # partial overlap: full x 0.25 x fraction gained (ClinGen 2B gives 0)
   exons: 0.15                 # >= 1 exon in the rearranged interval or hit by a breakend
   gene_count: {"25": 0.45, "35": 0.90}       # ClinGen section 3 (affected genes)
   no_genes: -0.60             # ClinGen 1B: no gene broken, lost or gained

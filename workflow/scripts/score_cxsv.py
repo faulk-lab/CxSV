@@ -103,6 +103,17 @@ def load_dosage(path):
     return {r["gene_symbol"]: {"hi": r["hi_score"] or None, "ts": r["ts_score"] or None} for r in read_tsv(path)}
 
 
+def load_regions(path):
+    """ClinGen curated regions lifted to hs1 (scoring/clingen_region_dosage.tsv,
+    acquisition/resources/build_resources.py): [{chrom, start, end, isca_id,
+    name, hi, ts}], 0-based half-open."""
+    if not path:
+        return []
+    return [{"chrom": r["chrom"], "start": int(r["start"]), "end": int(r["end"]), "isca_id": r["isca_id"],
+             "name": r["region_name"], "hi": r["hi_score"] or None, "ts": r["ts_score"] or None}
+            for r in read_tsv(path)]
+
+
 def load_constraint(path):
     if not path:
         return {}
@@ -199,6 +210,8 @@ def main():
     par = [(c, s, e) for c, s, e, _ in sc.read_bed(res["par_bed"])] if res.get("par_bed") else []
     dosage = load_dosage(res.get("clingen_dosage"))
     constraint = load_constraint(res.get("constraint"))
+    regions = load_regions(res.get("clingen_regions"))
+    region_index = sc.IntervalIndex([(r["chrom"], r["start"], r["end"], i) for i, r in enumerate(regions)])
     hpo_genes = load_hpo(res.get("hpo_annotations")) if P["patient"].get("hpo_terms") else {}
     hpo_parents = sc.read_obo_parents(res["hpo_ontology"]) if hpo_genes and res.get("hpo_ontology") else {}
     omim_genes = load_omim(res.get("omim_genemap2"))
@@ -276,6 +289,10 @@ def main():
         for c, p in bk:
             for gs, ge, g in genes.overlapping(c, p - 1, p):
                 affected.setdefault(g, "broken")
+        # curated ClinGen regions (item 9): runs of lost / gained segments, same depth calls
+        margin = int(P["copy_number"]["margin_bp"])
+        reg_hits = [h for mode, ivs in (("lost", losses), ("gained", gains))
+                    for h in sc.region_hits(region_index, regions, sc.merge_runs(ivs, 2 * margin), mode, margin)]
         # exons: in the rearranged interval of each chromosome, or hit by a breakend
         ex = set()
         per_chrom = defaultdict(list)
@@ -312,7 +329,8 @@ def main():
                                         float(P["panel_match"]["ins_len_ratio"]))
             par_res[role] = bool(n) and k / n >= mjf - 1e-9
         loci.append(dict(L=L, row=row, kept=kept, comp=comp, bk=bk, orients=orients, reads=reads, segs=segs,
-                         affected=affected, n_exons=len(ex), n_genes=n_genes, f_sd=f_sd, f_lc=f_lc, clus=clus,
+                         affected=affected, reg_hits=reg_hits, n_exons=len(ex), n_genes=n_genes, f_sd=f_sd,
+                         f_lc=f_lc, clus=clus,
                          counts=counts, p_bal=p_bal, fb=fb, n_inv=n_inv, subtel=subtel, par_res=par_res))
 
     qs = sc.bh_qvalues([x["clus"]["p_scan"] if x["clus"] else None for x in loci])
@@ -331,6 +349,7 @@ def main():
                          cr.get(f"{n}_Contains") == "yes"))
         feats.append(sc.f_catalogue_frequency(cats, pp.points, W["catalogue_frequency"]))
         feats.append(sc.f_gene_dosage(x["affected"], dosage, constraint, W["gene_dosage"]))
+        feats.append(sc.f_region_dosage(x["reg_hits"], feats[-1].points, W["region_dosage"], bool(regions)))
         feats.append(sc.f_exons(x["n_exons"], W["exons"]))
         feats.append(sc.f_gene_count(x["n_genes"], W["gene_count"]))
         feats.append(sc.f_no_genes(x["n_genes"], x["n_exons"], W["no_genes"]))

@@ -30,7 +30,8 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
    the PI's to create. *Recommendation:* a tag such as `panel-v1.0` on the
    commit the release was built from, then re-validate the offline bundle with
    that release.
-3. **ClinGen region-level dosage** (item 9). The gene list gives TS 0 for
+3. **ClinGen region-level dosage** (item 9). *Decided 2026-10-29: add the
+   region list; done, see item 9.* The gene list gives TS 0 for
    *MECP2*, *PMP22* and *SHANK3* because their duplication syndromes are curated
    as regions (e.g. Xq28 *MECP2* duplication, 17p12 CMT1A), so duplications
    there are under-scored today. *Recommendation:* add the region list.
@@ -72,7 +73,7 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
 | 6 | Tests (unit, synthetic CI, lab positive control, bundle validation) | done; repeat bundle validation with the first tagged release | `main`, docs/POSITIVE_CONTROL.md |
 | 7 | SLURM for the lab fleet | **on hold** | – |
 | 8 | Read-level mechanism axes (PI criteria 3, 4, 6) | queued | below |
-| 9 | ClinGen region-level dosage | queued, awaiting decision 3 | below |
+| 9 | ClinGen region-level dosage | done 2026-10-30 (branch `item9-clingen-regions`) | below, docs/SCORING.md |
 | 10 | Graded privacy penalty for partly matched loci | queued, awaiting decision 4 | below |
 | 11 | Curated literature set of pathogenic CxSVs | queued, awaiting decision 5 | below |
 | 12 | Full panel build and first real release | awaiting decisions 1–2 | below |
@@ -203,13 +204,40 @@ operational starting points.
 weight in config (0 until calibrated) and a positive-control check (E06 for
 criterion 6; E09 for 3 and 4).
 
-### 9. ClinGen region-level dosage
+### 9. ClinGen region-level dosage — done 2026-10-30 (branch `item9-clingen-regions`)
 
-Add `ClinGen_region_curation_list_GRCh38.tsv` (lifted to hs1) as a scoring
-resource, so recurrent-region HI/TS (e.g. *MECP2* duplication, CMT1A, 22q13
-deletion) is scored alongside the gene list. **Done when:** duplications of the
-*MECP2* and *PMP22* regions receive triplosensitivity points, and the
-resource is versioned in the bundle.
+`ClinGen_region_curation_list_GRCh38.tsv` (header date 2026-04-28, CC0) was
+lifted to hs1 with the catalogue chain `hg38ToHs1.over.chain.gz` (md5
+checked). 452 of 513 regions are kept, including 68 of the 69 with HI or TS
+1–3; the one lost has no coordinates in the source. The result,
+`scoring/clingen_region_dosage.tsv`, is in `resources_manifest.tsv`, so the
+bundle ships it and its site config points to it.
+
+New feature `region_dosage` (ClinGen 2A/2B style):
+- a lost run that contains an HI region, or a gained run that contains a TS
+  region, earns the full points (3: 1.00, 2: 0.45, 1: 0.15);
+- a partial overlap earns those points × 0.50 (loss) or × 0.25 (gain) × the
+  fraction covered;
+- combined with `gene_dosage` as a maximum, never summed.
+
+Done-when check:
+- The rule works: unit tests, the synthetic CI (PRIVATE's duplication contains
+  a stand-in TS-3 region, +0.10), and a whole-region gain of the real *MECP2*
+  or CMT1A region scores 1.00.
+- **The positive control's planted E01 (*MECP2*) and E03 (*PMP22*)
+  duplications do not meet the rule:** they gain 28.6 of 101.7 kb (28%) and
+  9.7 kb of 1.32 Mb (0.7%) of their regions. Partial credit (0.07, 0.00) is
+  below the 0.90 their broken HI-3 genes already earn, so they get no region
+  points and no total changes. 13/13 events PASS, `known_failures` stays empty,
+  and all 28 loci are unchanged (docs/SCORING.md section 6).
+- Kleefstra (9q34.3) and Phelan-McDermid (22q13.3) are not curated as regions.
+
+Open for the PI:
+- ClinGen 2A's "causative gene fully contained" path (not parseable from the
+  list);
+- 2F (a loss inside a benign HI-40 region);
+- whether to plant a whole-region CMT1A or *MECP2* duplication in the control
+  (item 11).
 
 ### 10. Graded privacy penalty for partly matched loci
 

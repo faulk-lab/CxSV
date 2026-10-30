@@ -180,6 +180,7 @@ panel_release: "/bundle/panel_release/$RELEASE_ID"
 scoring_resources:
   manifest:        "/bundle/resources/resources_manifest.tsv"
   clingen_dosage:  "/bundle/resources/scoring/clingen_dosage.tsv"
+  clingen_regions: "/bundle/resources/scoring/clingen_region_dosage.tsv"
   constraint:      "/bundle/resources/scoring/gnomad_constraint.tsv"
   hpo_annotations: "/bundle/resources/scoring/hpo_genes_to_phenotype.txt"
   hpo_ontology:    "/bundle/resources/scoring/hp.obo"
