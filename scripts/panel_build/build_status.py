@@ -35,6 +35,16 @@ def read_ledger(path):
         return list(csv.DictReader(fh, delimiter="\t"))
 
 
+def present_samples(results_root):
+    """(cohort, sample) directories that exist: one listing per cohort instead of a
+    stat per sample (a missing path costs 0.4-0.7 s on the CIFS NAS under build load)."""
+    out = set()
+    base = f"{results_root}/samples"
+    for c in (os.listdir(base) if os.path.isdir(base) else []):
+        out.update((c, s) for s in os.listdir(f"{base}/{c}"))
+    return out
+
+
 def sample_states(plan, ledgers, results_root):
     """state per (cohort, sample): done | running | staging | failed | pending (+ attempts, seconds)."""
     last = {}
@@ -51,9 +61,10 @@ def sample_states(plan, ledgers, results_root):
             if r["event"] == "done":
                 seconds[k] = r["seconds"]
     out = {}
+    present = present_samples(results_root)
     for p in plan:
         k = (p["cohort"], p["sample_id"])
-        done = os.path.exists(f"{results_root}/samples/{k[0]}/{k[1]}/panel_build/cost.tsv")
+        done = k in present and os.path.exists(f"{results_root}/samples/{k[0]}/{k[1]}/panel_build/cost.tsv")
         ev = last.get(k, {}).get("event", "")
         if done:
             st = "done"
@@ -72,9 +83,10 @@ def sample_states(plan, ledgers, results_root):
 
 def read_costs(plan, results_root):
     rows = []
+    present = present_samples(results_root)
     for p in plan:
         f = f"{results_root}/samples/{p['cohort']}/{p['sample_id']}/panel_build/cost.tsv"
-        if os.path.exists(f):
+        if (p["cohort"], p["sample_id"]) in present and os.path.exists(f):
             with open(f) as fh:
                 for r in csv.DictReader(fh, delimiter="\t"):
                     r["node"] = p["node"]

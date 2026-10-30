@@ -87,6 +87,7 @@ class Runner:
         self.staging = {}        # key -> {"proc", "t0"}
         self.staged = set()
         self.failed = set()
+        self.done = set()        # filled by scan_done() at start, then only by reap()
         self.stage_failures = {}
         self.paused = False
         self.disk_short = False
@@ -131,6 +132,25 @@ class Runner:
 
     def is_done(self, key):
         return os.path.exists(f"{self.sample_dir(key)}/panel_build/cost.tsv")
+
+    def scan_done(self):
+        """Done samples of this shard, found with one directory listing per cohort.
+
+        A stat of a missing path on the CIFS NAS takes 0.4-0.7 s while the build
+        reads it hard (measured 2026-10-30), so checking every sample's cost
+        record on each 20 s cycle made one cycle take minutes and left the NAS
+        idle between stagings. Only this runner writes its samples (the plan is
+        a partition), so after this scan `done` changes only in reap().
+        """
+        for cohort in sorted({r["cohort"] for r in self.plan}):
+            try:
+                present = set(os.listdir(f"{self.cfg['results_root']}/samples/{cohort}"))
+            except FileNotFoundError:
+                continue
+            for r in self.plan:
+                k = (r["cohort"], r["sample_id"])
+                if r["cohort"] == cohort and r["sample_id"] in present and k not in self.done and self.is_done(k):
+                    self.done.add(k)
 
     def tag(self, key):
         return f"{key[0]}__{key[1]}"
@@ -300,6 +320,7 @@ class Runner:
             row = self.row_of(key)
             took = time.time() - st["t0"]
             if self.is_done(key):
+                self.done.add(key)
                 self.log(key, "done", self.attempts.get(key, ""), took, "")
                 self.unstage(row)
             elif self.attempts.get(key, 0) < int(self.cfg.get("max_attempts", 2)):
@@ -327,7 +348,7 @@ class Runner:
     def pending(self):
         busy = set(self.running) | set(self.staging) | self.failed
         return [r for r in self.plan if (r["cohort"], r["sample_id"]) not in busy
-                and not self.is_done((r["cohort"], r["sample_id"]))]
+                and (r["cohort"], r["sample_id"]) not in self.done]
 
     def can_start(self, row):
         c = self.cfg
@@ -411,8 +432,10 @@ class Runner:
         except OSError:
             sys.exit(f"another run_node.py holds {lock_path} on {socket.gethostname()}")
         self.previous_attempts()
+        self.scan_done()
         self.log(None, "start_runner", detail=f"host {socket.gethostname()} pid {os.getpid()} "
-                                              f"plan {len(self.plan)} samples")
+                                              f"plan {len(self.plan)} samples, "
+                                              f"{len(self.done)} already done")
         self.adopt()
         # copies left by an earlier runner are reused if complete (cxsv_stage checks sizes)
         for row in self.plan:
@@ -420,11 +443,11 @@ class Runner:
             aln, idx = self.staged_paths(row)
             src = self.sheet_row(row)
             if key not in self.running and os.path.exists(aln) and os.path.exists(idx) \
-                    and os.path.getsize(aln) == os.path.getsize(src["alignment"]) and not self.is_done(key):
+                    and os.path.getsize(aln) == os.path.getsize(src["alignment"]) and key not in self.done:
                 self.staged.add(key)
         while self.cycle():
             time.sleep(POLL_S)
-        done = sum(self.is_done((r["cohort"], r["sample_id"])) for r in self.plan)
+        done = len(self.done)
         self.log(None, "exit_runner", detail=f"{done}/{len(self.plan)} done, {len(self.failed)} failed")
 
 

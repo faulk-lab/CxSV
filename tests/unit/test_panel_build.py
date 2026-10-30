@@ -149,3 +149,19 @@ def test_runner_memory_gate_counts_running_samples(monkeypatch):
     assert r.can_start(r.plan[2])            # (20 + 20 + 20) x 0.5 <= 55
     r.running, r.cfg["rss_commit_factor"] = {}, 1.0
     assert r.can_start(r.plan[3])            # alone on the node: only MemAvailable decides
+
+
+def test_runner_finds_done_samples_by_listing(tmp_path):
+    """scan_done() marks exactly the samples with a cost record, once; pending() then skips them."""
+    import run_node
+    res = tmp_path / "results"
+    (res / "samples" / "A" / "s1" / "panel_build").mkdir(parents=True)
+    (res / "samples" / "A" / "s1" / "panel_build" / "cost.tsv").write_text("x\n")
+    (res / "samples" / "A" / "s2").mkdir(parents=True)               # started, not done
+    r = run_node.Runner.__new__(run_node.Runner)
+    r.cfg = {"results_root": str(res)}
+    r.plan = [{"cohort": "A", "sample_id": s} for s in ("s1", "s2")] + [{"cohort": "B", "sample_id": "s3"}]
+    r.done, r.running, r.staging, r.failed = set(), {}, {}, set()
+    r.scan_done()
+    assert r.done == {("A", "s1")}
+    assert [p["sample_id"] for p in r.pending()] == ["s2", "s3"]

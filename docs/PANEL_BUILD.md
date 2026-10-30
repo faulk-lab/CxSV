@@ -430,6 +430,13 @@ The runners poll their control files every 20 s.
 
 This is how other lab work on a shared node, freya in particular, keeps its share.
 
+**Done samples are found by listing, not by stat.** A stat of a missing path on
+the CIFS NAS takes 0.4–0.7 s while the build reads it hard (measured
+2026-10-30). The runner therefore lists each cohort's sample directories once
+at start, and after that learns of done samples only from its own instances
+(the plan is a partition). `build_status.py` lists the directories too. Without
+this, one runner cycle over a 440-sample shard took minutes.
+
 ### Ledger and status
 
 **`nodes/<node>/ledger.tsv`** has these columns: time, epoch, node, cohort,
