@@ -22,10 +22,17 @@ in plan order (longest first). Per sample:
 
 Staging may be throttled per node with runner.json stage_bwlimit_mb_s (0 =
 unlimited; the NAS serves ~630 MB/s in total to all readers, lab work included).
-Concurrency: at most `slots` samples run; a new one starts only while the
-node's MemAvailable exceeds reserve_ram_gb + that sample's peak RSS, the 1-min
-load average is below threads - reserve_threads, and (if set) inside
-active_hours. That is how other lab work on a shared node keeps its share.
+Concurrency: at most `slots` samples run; a new one starts only while
+  - the node's MemAvailable exceeds reserve_ram_gb + that sample's peak RSS
+    estimate (other lab work on a shared node keeps its share);
+  - the peak RSS estimates of the samples already running plus this one, each
+    times runner.json rss_commit_factor (default 1.0), fit in MemTotal -
+    reserve_ram_gb. MemAvailable alone cannot see memory that a running sample
+    will still take before it reaches its peak, and the plan runs the deepest
+    (largest) samples first, all at once. A sample always starts on an
+    otherwise idle node if MemAvailable allows;
+  - the 1-min load average is below threads - reserve_threads;
+  - (if set) the time is inside active_hours.
 
 Control files in <BUILD>/nodes/<NODE>/ (scripts/panel_build/control.sh):
   RETRY   COHORT/SAMPLE per line: give gave_up samples another max_attempts
@@ -80,6 +87,7 @@ class Runner:
         self.staging = {}        # key -> {"proc", "t0"}
         self.staged = set()
         self.failed = set()
+        self.done = set()        # filled by scan_done() at start, then only by reap()
         self.stage_failures = {}
         self.paused = False
         self.disk_short = False
@@ -125,6 +133,25 @@ class Runner:
     def is_done(self, key):
         return os.path.exists(f"{self.sample_dir(key)}/panel_build/cost.tsv")
 
+    def scan_done(self):
+        """Done samples of this shard, found with one directory listing per cohort.
+
+        A stat of a missing path on the CIFS NAS takes 0.4-0.7 s while the build
+        reads it hard (measured 2026-10-30), so checking every sample's cost
+        record on each 20 s cycle made one cycle take minutes and left the NAS
+        idle between stagings. Only this runner writes its samples (the plan is
+        a partition), so after this scan `done` changes only in reap().
+        """
+        for cohort in sorted({r["cohort"] for r in self.plan}):
+            try:
+                present = set(os.listdir(f"{self.cfg['results_root']}/samples/{cohort}"))
+            except FileNotFoundError:
+                continue
+            for r in self.plan:
+                k = (r["cohort"], r["sample_id"])
+                if r["cohort"] == cohort and r["sample_id"] in present and k not in self.done and self.is_done(k):
+                    self.done.add(k)
+
     def tag(self, key):
         return f"{key[0]}__{key[1]}"
 
@@ -149,6 +176,19 @@ class Runner:
                 if ln.startswith("MemAvailable:"):
                     return int(ln.split()[1]) / 1048576
         return 0.0
+
+    @staticmethod
+    def mem_total_gb():
+        with open("/proc/meminfo") as fh:
+            for ln in fh:
+                if ln.startswith("MemTotal:"):
+                    return int(ln.split()[1]) / 1048576
+        return 0.0
+
+    def committed_gb(self):
+        """Peak RSS promised to the running samples (estimates x rss_commit_factor)."""
+        f = float(self.cfg.get("rss_commit_factor", 1.0))
+        return sum(float(self.row_of(k)["est_peak_rss_gb"]) * f for k in self.running)
 
     def in_active_hours(self):
         win = (self.cfg.get("active_hours") or "").strip()
@@ -280,6 +320,7 @@ class Runner:
             row = self.row_of(key)
             took = time.time() - st["t0"]
             if self.is_done(key):
+                self.done.add(key)
                 self.log(key, "done", self.attempts.get(key, ""), took, "")
                 self.unstage(row)
             elif self.attempts.get(key, 0) < int(self.cfg.get("max_attempts", 2)):
@@ -307,11 +348,15 @@ class Runner:
     def pending(self):
         busy = set(self.running) | set(self.staging) | self.failed
         return [r for r in self.plan if (r["cohort"], r["sample_id"]) not in busy
-                and not self.is_done((r["cohort"], r["sample_id"]))]
+                and (r["cohort"], r["sample_id"]) not in self.done]
 
     def can_start(self, row):
         c = self.cfg
-        if self.mem_available_gb() < float(c["reserve_ram_gb"]) + float(row["est_peak_rss_gb"]):
+        est = float(row["est_peak_rss_gb"])
+        if self.mem_available_gb() < float(c["reserve_ram_gb"]) + est:
+            return False
+        budget = self.mem_total_gb() - float(c["reserve_ram_gb"])
+        if self.running and self.committed_gb() + est * float(c.get("rss_commit_factor", 1.0)) > budget:
             return False
         if os.getloadavg()[0] > int(c["threads"]) - int(c["reserve_threads"]):
             return False
@@ -387,8 +432,10 @@ class Runner:
         except OSError:
             sys.exit(f"another run_node.py holds {lock_path} on {socket.gethostname()}")
         self.previous_attempts()
+        self.scan_done()
         self.log(None, "start_runner", detail=f"host {socket.gethostname()} pid {os.getpid()} "
-                                              f"plan {len(self.plan)} samples")
+                                              f"plan {len(self.plan)} samples, "
+                                              f"{len(self.done)} already done")
         self.adopt()
         # copies left by an earlier runner are reused if complete (cxsv_stage checks sizes)
         for row in self.plan:
@@ -396,11 +443,11 @@ class Runner:
             aln, idx = self.staged_paths(row)
             src = self.sheet_row(row)
             if key not in self.running and os.path.exists(aln) and os.path.exists(idx) \
-                    and os.path.getsize(aln) == os.path.getsize(src["alignment"]) and not self.is_done(key):
+                    and os.path.getsize(aln) == os.path.getsize(src["alignment"]) and key not in self.done:
                 self.staged.add(key)
         while self.cycle():
             time.sleep(POLL_S)
-        done = sum(self.is_done((r["cohort"], r["sample_id"])) for r in self.plan)
+        done = len(self.done)
         self.log(None, "exit_runner", detail=f"{done}/{len(self.plan)} done, {len(self.failed)} failed")
 
 
