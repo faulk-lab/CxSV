@@ -52,7 +52,8 @@ release:
 # when both breakpoints are. Not fingerprinted (it describes coverage, it does
 # not decide which loci exist); recorded in release.json.
 #   min_depth 10: a heterozygous junction then has ~5 supporting reads in
-#     expectation, above sv_params.min_support (3); at the 17x panel floor most
+#     expectation, above sv_params.min_support (3); at 17x (the former panel
+#     floor; the full panel has none, PI 2026-10-29) most
 #     unique sequence passes, collapsed repeats and low-MAPQ segdups do not.
 #   flank 100: about one read-anchor length for the callers' split-read
 #     signatures; short enough to stay off the other side of a small event.

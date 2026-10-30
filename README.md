@@ -115,6 +115,7 @@ docs/
   ROADMAP.md
   JUNCTIONS.md            junction model, shared junction-site schema, panel sites, patient matching
   RELEASE_AND_BUNDLE.md   panel release format, callability, container image, offline bundle, validation
+  PANEL_BUILD.md          full panel build on the lab fleet: measured cost, shards, runner, ledger, estimate
   POSITIVE_CONTROL.md     the planted-CxSV catalogue, how it is built, latest regression result
   EXTERNAL_CATALOGUES.md  CoLoRSdb, HGSVC3, HPRC r2, gnomAD-SV: licences, builds, fields, conversion counts,
                           catalogue hits per patient call

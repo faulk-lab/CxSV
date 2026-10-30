@@ -1,0 +1,7 @@
+node	cpu	threads	ram_gb	node_speed_s_idle	note
+freya	AMD Ryzen 9 9950X	32	123	0.56	
+shadowfax	AMD Ryzen 9 7950X	32	61	0.69	
+athena	AMD Ryzen 9 5950X	32	94	0.862	1 GbE NIC
+betsy	AMD Ryzen 9 5900XT	32	121	0.872	
+keurig	unknown (32 threads)	32	60	0.658	
+princess	AMD Ryzen 5 7600X	12	29		pinned SIF cannot run (apptainer 1.4.5, no squashfuse, sandbox extraction not permitted); MinKNOW/dorado sequencing host

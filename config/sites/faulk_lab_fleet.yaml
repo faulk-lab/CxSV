@@ -1,0 +1,156 @@
+# =============================================================================
+# Faulk lab fleet for the FULL PANEL BUILD (docs/PANEL_BUILD.md).
+#
+# Read by scripts/panel_build/make_shards.py (shard sizing and balancing) and
+# copied per node into <build>/nodes/<node>/runner.json for
+# scripts/panel_build/run_node.py. Each node runs Snakemake inside the pinned
+# image on its own shard, in its own working directory; per-sample outputs go
+# to disjoint sample directories of one shared results tree on the NAS.
+#
+# Per node:
+#   ssh            "local" for freya (where the launcher runs), else the LAN
+#                  alias in freya's ~/.ssh/config
+#   threads, ram_gb  hardware (lscpu / free, 2026-10-29)
+#   reserve_threads, reserve_ram_gb  left free for other lab work; the runner
+#                  never plans past (threads - reserve_threads) busy threads or
+#                  starts a sample with less than reserve_ram_gb + one
+#                  sample's peak RSS available
+#   slots          concurrent samples; "auto" = sized from the cost model
+#                  (busy threads and peak RSS per sample) by make_shards.py
+#   cores_per_sample  snakemake --cores of one sample instance
+#   sv_threads     threads.sv_callers (Sniffles2, cuteSV); SVIM is 1 thread
+#   speed          seconds of scripts/panel_build/node_speed.py in the image
+#                  (pure-Python, single thread, idle node, 2026-10-29; lower =
+#                  faster); a node's per-sample time = freya's measured time x
+#                  speed / freya's speed (cost model ref_speed 0.560)
+#   nic_mb_s       measured single-stream NAS read rate (nas_throughput.sh)
+#   stage_dir      node-local disk for alignment copies (NEVER a RAM tmpfs:
+#                  betsy, princess and keurig have /tmp on tmpfs)
+#   stage_max_gb   cap on alignment copies held at once
+#   stage_bwlimit_mb_s  throttle on this node's NAS copies (0 = none); e.g. 88
+#                  on each of 5 nodes keeps the build to ~70% of the NAS
+#   tmp_dir        node-local disk bound as /tmp in the container
+#   active_hours   "" = always; "18-08" = start new samples only 18:00-08:00
+#                  local time (running samples always finish)
+#   enabled        false = no shard for this node
+# =============================================================================
+
+build_root: "/mnt/sargasso1/CxSV/build/panel-v1.0"
+sif: "/mnt/sargasso1/CxSV/bundles/cxsv-bundle-20261029-1dcabd9770f7/container/cxsv-pipeline.sif"
+expected_fingerprint: "cd7e1d194cd4"
+# measured 2026-10-29 (nas_throughput.sh, 8 GiB per read): 6 nodes x 1 read
+# 633 MB/s in total, 5 nodes x 2 reads 620 MB/s: the NAS, not the nodes or
+# the number of streams, caps the build's reads at ~630 MB/s, so each node
+# stages one alignment at a time
+panel_individuals: "/mnt/sargasso1/CxSV/datasets/registry/individuals.tsv"
+nas_aggregate_mb_s: 630
+max_concurrent_stage: 1
+max_attempts: 2
+
+nodes:
+  freya:
+    ssh: local
+    threads: 32
+    ram_gb: 123
+    reserve_threads: 8
+    reserve_ram_gb: 32
+    slots: auto
+    cores_per_sample: 6
+    sv_threads: 4
+    speed: 0.560
+    nic_mb_s: 496
+    stage_dir: "/home/minknow/scratch/cxsv_panel_build/stage"
+    tmp_dir: "/home/minknow/scratch/cxsv_panel_build/tmp"
+    stage_max_gb: 1500
+    stage_bwlimit_mb_s: 0
+    active_hours: ""
+    enabled: true
+  shadowfax:
+    ssh: shadowfax
+    threads: 32
+    ram_gb: 61
+    reserve_threads: 2
+    reserve_ram_gb: 6
+    slots: auto
+    cores_per_sample: 6
+    sv_threads: 4
+    speed: 0.690
+    nic_mb_s: 567
+    stage_dir: "/home/minknow/cxsv_panel_build/stage"
+    tmp_dir: "/home/minknow/cxsv_panel_build/tmp"
+    stage_max_gb: 2000
+    stage_bwlimit_mb_s: 0
+    active_hours: ""
+    enabled: true
+  athena:
+    ssh: athena
+    threads: 32
+    ram_gb: 94
+    reserve_threads: 2
+    reserve_ram_gb: 8
+    slots: auto
+    cores_per_sample: 6
+    sv_threads: 4
+    speed: 0.862
+    nic_mb_s: 117
+    stage_dir: "/home/tia/cxsv_panel_build/stage"
+    tmp_dir: "/home/tia/cxsv_panel_build/tmp"
+    stage_max_gb: 500
+    stage_bwlimit_mb_s: 0
+    active_hours: ""
+    enabled: true
+  betsy:
+    ssh: betsy
+    threads: 32
+    ram_gb: 121
+    reserve_threads: 2
+    reserve_ram_gb: 8
+    slots: auto
+    cores_per_sample: 6
+    sv_threads: 4
+    speed: 0.872
+    nic_mb_s: 625
+    stage_dir: "/home/minknow/cxsv_panel_build/stage"
+    tmp_dir: "/home/minknow/cxsv_panel_build/tmp"
+    stage_max_gb: 2000
+    stage_bwlimit_mb_s: 0
+    active_hours: ""
+    enabled: true
+  # princess cannot run the pinned SIF as of 2026-10-29 (apptainer 1.4.5, no
+  # squashfuse, unprivileged sandbox extraction blocked: "Failed to create
+  # container process: Operation not permitted"), and it is the MinKNOW /
+  # dorado sequencing host. Disabled until both are resolved.
+  princess:
+    ssh: princess
+    threads: 12
+    ram_gb: 29
+    reserve_threads: 4
+    reserve_ram_gb: 12
+    slots: auto
+    cores_per_sample: 6
+    sv_threads: 4
+    speed: 0.80
+    nic_mb_s: 229
+    stage_dir: "/home/minknow/cxsv_panel_build/stage"
+    tmp_dir: "/home/minknow/cxsv_panel_build/tmp"
+    stage_max_gb: 500
+    stage_bwlimit_mb_s: 0
+    active_hours: ""
+    enabled: false
+  keurig:
+    ssh: keurig
+    threads: 32
+    ram_gb: 60
+    reserve_threads: 2
+    reserve_ram_gb: 6
+    slots: auto
+    cores_per_sample: 6
+    sv_threads: 4
+    speed: 0.658
+    nic_mb_s: 367
+    stage_dir: "/home/minknow/cxsv_panel_build/stage"
+    tmp_dir: "/home/minknow/cxsv_panel_build/tmp"
+    stage_max_gb: 2000
+    stage_bwlimit_mb_s: 0
+    active_hours: ""
+    enabled: true

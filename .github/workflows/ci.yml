@@ -31,6 +31,9 @@ jobs:
       - name: run panel + patient on the synthetic dataset and check results
         shell: bash -el {0}
         run: CORES=4 bash tests/synthetic/run_synthetic.sh "$RUNNER_TEMP/synth"
+      - name: sharded panel build (two local nodes) must reproduce the unsharded panel
+        shell: bash -el {0}
+        run: CORES=4 bash tests/synthetic/run_panel_build_synthetic.sh "$RUNNER_TEMP/synth"
       - name: keep logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -39,3 +42,6 @@ jobs:
           path: |
             ${{ runner.temp }}/synth/*.log
             ${{ runner.temp }}/synth/results/**/logs/**
+            ${{ runner.temp }}/synth/panel_build/*.log
+            ${{ runner.temp }}/synth/panel_build/nodes/*/ledger.tsv
+            ${{ runner.temp }}/synth/panel_build/nodes/*/logs/**
