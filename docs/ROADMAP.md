@@ -15,17 +15,14 @@ leave it. Workflow engine: Snakemake (decision 2026-10-28).
 
 Each item below has a recommendation; nothing in it starts until the PI says so.
 
-1. **Start the full panel build** (item 12). Every panel must be built with the
-   current calling fingerprint `cd7e1d194cd4` (item 5 changed it; the earlier
-   test panels used `ad454c604bdd`). To decide:
-   - which cohorts go in: all three (ONT R10, ONT R9, PacBio HiFi; frequencies
-     are already split by platform) or ONT only first;
-   - the coverage floor (17x raw yield, as decided 2026-10-22: 1,065 of 1,582
-     individuals pass in at least one file);
-   - how to dispatch it across the fleet while SLURM (item 7) is on hold.
-   *Recommendation:* all three cohorts at 17x, dispatched per node with the
-   existing claim files, after a cost estimate from one full-genome sample per
-   platform.
+1. **Start the full panel build** (item 12): **decided.** Scope (2026-10-29):
+   all three cohorts, every verified file, no coverage floor. Dispatch
+   (2026-10-30, after the measured estimate): all 5 usable nodes at once
+   (freya, shadowfax, athena, betsy, keurig; princess excluded, since it cannot
+   run the pinned SIF and is the sequencing host). Projected 37.5 h for the
+   per-sample step (36–56 h; the NAS's ~630 MB/s read rate sets the floor),
+   then the aggregate step on freya. Build preparation is on branch
+   `panel-build-config`: [docs/PANEL_BUILD.md](PANEL_BUILD.md).
 2. **Release tag for the first real panel release** (items 2, 6, 12). Tags are
    the PI's to create. *Recommendation:* a tag such as `panel-v1.0` on the
    commit the release was built from, then re-validate the offline bundle with
@@ -75,7 +72,7 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
 | 9 | ClinGen region-level dosage | queued, awaiting decision 3 | below |
 | 10 | Graded privacy penalty for partly matched loci | queued, awaiting decision 4 | below |
 | 11 | Curated literature set of pathogenic CxSVs | queued, awaiting decision 5 | below |
-| 12 | Full panel build and first real release | awaiting decisions 1–2 | below |
+| 12 | Full panel build and first real release | build prepared and estimated (branch `panel-build-config`); dispatch confirmed 2026-10-30; build not yet launched; tag awaits decision 2 | below, docs/PANEL_BUILD.md |
 
 ---
 
@@ -90,8 +87,8 @@ All data on `/mnt/sargasso1/CxSV/datasets`, aligned to T2T-CHM13v2 (UCSC `hs1`).
 | `1kGP_LRSC_ONT_CHM13` | 467 BAMs | ONT R9 + R10 | held 100 plus Tier A1/A2 |
 | `1kGP_PacBio_CHM13` | 135 BAMs | PacBio HiFi | Tier A3, all 270 files verified |
 
-1,619 verified files from 1,582 individuals; 1,065 individuals reach 17x in at
-least one file. Superpopulation labels (from the 1kGP-LRSC metadata and IGSR):
+1,619 verified files from 1,582 individuals (80.8 TB); 1,065 individuals reach
+17x in at least one file, but the panel has no coverage floor (PI, 2026-10-29). Superpopulation labels (from the 1kGP-LRSC metadata and IGSR):
 AFR 434, SAS 314, EAS 299, EUR 277, AMR 245, unlabelled 13.
 
 ---
@@ -231,6 +228,21 @@ versioned junction-level table of literature CxSVs in hs1 exists, each with
 its source and phenotype, and the scorer ranks them in the top tier.
 
 ### 12. Full panel build and first real release
+
+*Build preparation done (branch `panel-build-config`,
+[docs/PANEL_BUILD.md](PANEL_BUILD.md)).*
+- The coverage floor is removed.
+- The full DAG resolves for all 1,619 files (25,347 jobs).
+- Per-sample cost was measured on 5 full genomes in the pinned SIF: 0.7–1.9
+  CPU-h and 20–47 min each.
+- A fleet runner handles per-node shards, staging to local disk, ledgers and
+  pause/resume.
+- The estimate is 37.5 h on 5 nodes. The NAS sets the time: 80.8 TB at about
+  630 MB/s is a 35.6 h floor.
+- The PI confirmed "all 5 nodes now" on 2026-10-30.
+
+Next: merge, `prepare_build.sh` on the merged commit, launch, then the aggregate
+step.
 
 Build the panel over the registry with fingerprint `cd7e1d194cd4`, publish the
 first real release, tag it (PI), rebuild and re-validate the bundle with it,

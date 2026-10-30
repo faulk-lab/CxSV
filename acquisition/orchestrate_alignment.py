@@ -527,10 +527,12 @@ def main() -> None:
             t.start()
             threads.append(t)
     # Treat the machine we are running on as local regardless of how the table
-    # declares it. This lets a dispatcher run ON a node for itself, which is the
-    # only route to a node whose inbound ssh is gated behind an interactive
-    # check (keurig sits behind Tailscale SSH's re-auth prompt, so freya cannot
-    # reach it, but keurig can run its own dispatcher over the shared NAS).
+    # declares it. This lets a dispatcher run ON a node for itself. It was
+    # introduced for keurig, whose inbound ssh sat behind Tailscale SSH's
+    # interactive re-auth prompt; since 2026-10-29 freya reaches keurig over the
+    # LAN alias non-interactively, so the keurig-local dispatcher is no longer
+    # needed (acquisition/README.md). The behaviour is kept for any node that
+    # must run its own dispatcher.
     _here = socket.gethostname()
     for _n, _c in NODES.items():
         _c["local"] = (_n == _here)

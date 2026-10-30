@@ -12,6 +12,10 @@ network, from material whose origin can be checked. This document defines:
 
 ## 1. Panel release
 
+The full lab panel (all registry files, no coverage floor) is built across the
+fleet as described in [PANEL_BUILD.md](PANEL_BUILD.md). Its aggregate step is
+the ordinary `workflow/panel` run, so the release below is the same.
+
 A release is one directory. The patient workflow reads that directory and
 nothing else (no reads, no per-sample VCFs).
 

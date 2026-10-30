@@ -1,0 +1,122 @@
+"""
+CxSV PANEL BUILD — per-sample shard runner
+==========================================
+Runs the per-sample part of the panel builder (callers, merge, CxSV discovery
+and annotation, junction table, callability mask, sample report) for the
+samples of ONE shard, and records what every job cost. It is the
+workflow/panel/Snakefile plus two things:
+
+  1. a `benchmark:` file for every per-sample rule,
+     {S}/benchmarks/<rule>.tsv (wall s, max_rss MB, cpu_time s, ...), and
+  2. a per-sample completion record, {S}/panel_build/cost.tsv, written after
+     all of the sample's panel inputs exist: one row per rule with its
+     benchmark plus the bytes the sample keeps on disk.
+
+Nothing else changes: the rules, parameters and code are those of the panel
+Snakefile, so per-sample outputs are byte-for-byte what `workflow/panel`
+would make and the calling fingerprint is unchanged (benchmarks are not part
+of any fingerprinted file; workflow/lib/cxsv_fingerprint.py). The aggregate
+step (junction sites, carriers, callability, release) is NOT run here; it
+runs once over all shards with workflow/panel/Snakefile (docs/PANEL_BUILD.md).
+
+The shard is whatever the cohort sample sheets in the config list (the node
+overlay written by scripts/panel_build/make_shards.py points panel_cohorts at
+the node's shard sheets). Optional:
+    --config panel_build_only=COHORT/SAMPLE[,COHORT/SAMPLE...]
+restricts the default target to those samples (the node runner starts one
+instance per sample this way).
+
+    snakemake -s workflow/panel_build/Snakefile --directory <node workdir> \
+        --configfile <site>.yaml <node>.yaml --cores N [--config panel_build_only=...]
+"""
+
+include: "../panel/Snakefile"
+
+import glob as _glob
+import sys
+
+# Panel inputs that must exist per sample before the aggregate step can run
+# (what rule all and the aggregate rules of workflow/panel read per sample).
+SHARD_TARGETS = (
+    "sv_summary.txt",
+    "cxsv/cxsv_master_table.tsv",
+    "callers/sniffles.snf",
+    "junctions/junctions.tsv",
+    "callability/callable.bed.gz",
+)
+COST_RECORD = "panel_build/cost.tsv"
+
+# Attach a benchmark file to every rule whose outputs live in the per-sample
+# tree. Done after include so the shared rule files stay untouched.
+# (Output patterns already carry the global wildcard constraints, e.g.
+# "{sample,HG001|HG002}", so rules are recognised by prefix + wildcard names.)
+PER_SAMPLE_RULES = []
+for _r in workflow.rules:
+    _outs = [str(o) for o in _r.output]
+    if _outs and {"cohort", "sample"} <= set(_r.wildcard_names) \
+            and all(o.startswith(f"{SAMPLES_ROOT}/") for o in _outs):
+        _r.benchmark_modifier = workflow.modifier.path_modifier
+        _r.benchmark = f"{S}/benchmarks/{_r.name}.tsv"
+        PER_SAMPLE_RULES.append(_r.name)
+if not PER_SAMPLE_RULES:
+    raise ValueError("panel_build: no per-sample rules recognised; benchmarks would be missing")
+print(f"[panel_build] benchmarks on {len(PER_SAMPLE_RULES)} per-sample rules: "
+      f"{', '.join(sorted(PER_SAMPLE_RULES))}", file=sys.stderr)
+
+
+def _only_keys():
+    only = str(config.get("panel_build_only", "") or "").strip()
+    if not only:
+        return KEYS
+    want = [tuple(x.split("/", 1)) for x in only.split(",") if x.strip()]
+    unknown = [w for w in want if w not in SAMPLE_TABLE]
+    if unknown:
+        raise ValueError(f"panel_build_only names samples not in this shard: {unknown}")
+    return want
+
+
+rule shard_all:
+    default_target: True
+    input:
+        [f"{SAMPLES_ROOT}/{c}/{s}/{COST_RECORD}" for c, s in _only_keys()]
+
+
+rule sample_cost_record:
+    """All panel inputs of the sample exist: write its cost record (benchmarks + bytes kept)."""
+    input:
+        [f"{S}/{t}" for t in SHARD_TARGETS]
+    output:
+        f"{S}/{COST_RECORD}"
+    params:
+        sample_dir = S,
+        coverage   = lambda wc: record(wc).coverage_x,
+        platform   = lambda wc: record(wc).platform,
+        individual = lambda wc: record(wc).individual_id,
+    run:
+        import csv, os, socket
+        rows = []
+        for f in sorted(_glob.glob(f"{params.sample_dir}/benchmarks/*.tsv")):
+            with open(f) as fh:
+                recs = list(csv.DictReader(fh, delimiter="\t"))
+            if recs:
+                rows.append((os.path.basename(f)[:-4], recs[-1]))
+        if not rows:
+            raise ValueError(f"no benchmark files in {params.sample_dir}/benchmarks/")
+        kept = 0
+        for root, _dirs, files in os.walk(params.sample_dir):
+            for fn in files:
+                try:
+                    kept += os.path.getsize(os.path.join(root, fn))
+                except OSError:
+                    pass
+        cols = ["s", "max_rss", "max_uss", "io_in", "io_out", "mean_load", "cpu_time"]
+        os.makedirs(os.path.dirname(output[0]), exist_ok=True)
+        tmp = output[0] + ".tmp"
+        with open(tmp, "w") as fh:
+            fh.write("\t".join(["cohort", "sample_id", "individual_id", "platform", "coverage_x",
+                                "host", "rule"] + cols + ["sample_bytes_kept"]) + "\n")
+            for name, b in rows:
+                fh.write("\t".join([wildcards.cohort, wildcards.sample, params.individual,
+                                    params.platform, str(params.coverage), socket.gethostname(),
+                                    name] + [str(b.get(k, "")) for k in cols] + [str(kept)]) + "\n")
+        os.replace(tmp, output[0])

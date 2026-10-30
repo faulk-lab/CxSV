@@ -11,6 +11,16 @@ princess, keurig) appear in `orchestrate_alignment.py`. The design notes in each
 file's docstring say why each safeguard exists; most were added after a
 specific failure.
 
+**Fleet access (updated 2026-10-29).** Every node, keurig included, is reached
+from freya non-interactively over the LAN, through the aliases in freya's
+`~/.ssh/config` (key `~/.ssh/id_ed25519_lab`; keurig = `192.168.0.19`, user
+`minknow`). keurig used to be reachable only through Tailscale SSH, whose
+re-authentication prompt blocked batch ssh, so it ran its own dispatcher over
+the NAS (`orchestrate_alignment.py` treats the host it runs on as local). That
+workaround is no longer required: freya can dispatch to keurig like any other
+node (verified 2026-10-29 with `ssh -o BatchMode=yes keurig`). The full panel
+build uses the same LAN aliases (docs/PANEL_BUILD.md).
+
 External SV catalogues used as additional background (roadmap item 4) are in
 [`catalogues/`](catalogues/README.md).
 

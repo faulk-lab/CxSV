@@ -1,0 +1,13 @@
+node	phase	file	bytes	seconds	MB_per_s
+freya	alone	/mnt/sargasso1/CxSV/datasets/1kGP_LRSC_ONT_CHM13/HG00246_PMDV_FINAL.haplotagged.bam	8589934592	17.321	496
+shadowfax	alone	/mnt/sargasso1/CxSV/datasets/1kGP_LRSC_ONT_CHM13/HG00250_PMDV_FINAL.haplotagged.bam	8589934592	15.1519	567
+athena	alone	/mnt/sargasso1/CxSV/datasets/1kGP_LRSC_ONT_CHM13/HG00253_PMDV_FINAL.haplotagged.bam	8589934592	73.1406	117
+betsy	alone	/mnt/sargasso1/CxSV/datasets/1kGP_LRSC_ONT_CHM13/HG00256_PMDV_FINAL.haplotagged.bam	8589934592	13.746	625
+princess	alone	/mnt/sargasso1/CxSV/datasets/1kGP_LRSC_ONT_CHM13/HG00257-ONT-WGS_R9-LSK110.dorado050.sup.5mCG.33.phased.bam	8589934592	37.5368	229
+keurig	alone	/mnt/sargasso1/CxSV/datasets/1kGP_LRSC_ONT_CHM13/HG00259_PMDV_FINAL.haplotagged.bam	8589934592	23.4041	367
+freya	concurrent	/mnt/sargasso1/CxSV/datasets/1kGP_LRSC_ONT_CHM13/HG00262_PMDV_FINAL.haplotagged.bam	8589934592	95.6875	90
+shadowfax	concurrent	/mnt/sargasso1/CxSV/datasets/1kGP_LRSC_ONT_CHM13/HG00263_PMDV_FINAL.haplotagged.bam	8589934592	80.2286	107
+athena	concurrent	/mnt/sargasso1/CxSV/datasets/1kGP_LRSC_ONT_CHM13/HG00264_PMDV_FINAL.haplotagged.bam	8589934592	91.289	94
+betsy	concurrent	/mnt/sargasso1/CxSV/datasets/1kGP_LRSC_ONT_CHM13/HG00277_PMDV_FINAL.haplotagged.bam	8589934592	79.7797	108
+princess	concurrent	/mnt/sargasso1/CxSV/datasets/1kGP_LRSC_ONT_CHM13/HG00285_PMDV_FINAL.haplotagged.bam	8589934592	72.9777	118
+keurig	concurrent	/mnt/sargasso1/CxSV/datasets/1kGP_LRSC_ONT_CHM13/HG00304_PMDV_FINAL.haplotagged.bam	8589934592	73.7769	116
