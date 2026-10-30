@@ -412,11 +412,19 @@ The runners poll their control files every 20 s.
 | `launch.sh BUILD NODE` | start or continue a node; done samples are skipped, live instances are re-adopted, interrupted ones are redone (`--rerun-incomplete` in the node's own workdir) |
 | `control.sh BUILD slots NODE N` | change concurrency live |
 | `control.sh BUILD bwlimit NODE MB` | throttle the node's NAS copies, e.g. 88 on 5 nodes is about 70% of the NAS |
+| `control.sh BUILD rssfactor NODE F` | scale the peak RSS estimates the memory gate commits per running sample (default 1.0; lower it only after measured peaks show the estimates are high) |
 | `control.sh BUILD retry NODE COHORT/SAMPLE` | give a sample that exhausted `max_attempts` another round |
 | `active_hours: "18-08"` in the fleet config | a node starts samples only at night |
 
 **What the runner protects.** Before starting a sample it requires:
 - MemAvailable ≥ `reserve_ram_gb` + the sample's peak RSS estimate;
+- the peak RSS estimates of the running samples plus this one (each times
+  `rss_commit_factor`, default 1.0) ≤ MemTotal − `reserve_ram_gb`. A sample
+  that has just started uses little memory, so MemAvailable alone would let
+  the deepest samples, which the plan runs first, all start together: on the
+  confirmed plan the first `slots` samples of every node add up to 119–170 GB
+  of estimated peak RSS against 54–113 GB of budget. On an idle node one
+  sample always starts if MemAvailable allows;
 - the 1-min load average ≤ threads − `reserve_threads`;
 - enough free space on its stage disk.
 

@@ -22,10 +22,17 @@ in plan order (longest first). Per sample:
 
 Staging may be throttled per node with runner.json stage_bwlimit_mb_s (0 =
 unlimited; the NAS serves ~630 MB/s in total to all readers, lab work included).
-Concurrency: at most `slots` samples run; a new one starts only while the
-node's MemAvailable exceeds reserve_ram_gb + that sample's peak RSS, the 1-min
-load average is below threads - reserve_threads, and (if set) inside
-active_hours. That is how other lab work on a shared node keeps its share.
+Concurrency: at most `slots` samples run; a new one starts only while
+  - the node's MemAvailable exceeds reserve_ram_gb + that sample's peak RSS
+    estimate (other lab work on a shared node keeps its share);
+  - the peak RSS estimates of the samples already running plus this one, each
+    times runner.json rss_commit_factor (default 1.0), fit in MemTotal -
+    reserve_ram_gb. MemAvailable alone cannot see memory that a running sample
+    will still take before it reaches its peak, and the plan runs the deepest
+    (largest) samples first, all at once. A sample always starts on an
+    otherwise idle node if MemAvailable allows;
+  - the 1-min load average is below threads - reserve_threads;
+  - (if set) the time is inside active_hours.
 
 Control files in <BUILD>/nodes/<NODE>/ (scripts/panel_build/control.sh):
   RETRY   COHORT/SAMPLE per line: give gave_up samples another max_attempts
@@ -149,6 +156,19 @@ class Runner:
                 if ln.startswith("MemAvailable:"):
                     return int(ln.split()[1]) / 1048576
         return 0.0
+
+    @staticmethod
+    def mem_total_gb():
+        with open("/proc/meminfo") as fh:
+            for ln in fh:
+                if ln.startswith("MemTotal:"):
+                    return int(ln.split()[1]) / 1048576
+        return 0.0
+
+    def committed_gb(self):
+        """Peak RSS promised to the running samples (estimates x rss_commit_factor)."""
+        f = float(self.cfg.get("rss_commit_factor", 1.0))
+        return sum(float(self.row_of(k)["est_peak_rss_gb"]) * f for k in self.running)
 
     def in_active_hours(self):
         win = (self.cfg.get("active_hours") or "").strip()
@@ -311,7 +331,11 @@ class Runner:
 
     def can_start(self, row):
         c = self.cfg
-        if self.mem_available_gb() < float(c["reserve_ram_gb"]) + float(row["est_peak_rss_gb"]):
+        est = float(row["est_peak_rss_gb"])
+        if self.mem_available_gb() < float(c["reserve_ram_gb"]) + est:
+            return False
+        budget = self.mem_total_gb() - float(c["reserve_ram_gb"])
+        if self.running and self.committed_gb() + est * float(c.get("rss_commit_factor", 1.0)) > budget:
             return False
         if os.getloadavg()[0] > int(c["threads"]) - int(c["reserve_threads"]):
             return False

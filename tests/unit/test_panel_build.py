@@ -129,3 +129,23 @@ def test_fleet_config_nodes_and_local_disks():
     for n, nd in fleet["nodes"].items():
         # tmpfs /tmp on betsy, princess, keurig: staging and temp files must be on disk
         assert not nd["stage_dir"].startswith("/tmp") and not nd["tmp_dir"].startswith("/tmp"), n
+
+
+def test_runner_memory_gate_counts_running_samples(monkeypatch):
+    """MemAvailable cannot see memory a just-started sample will still take."""
+    import run_node
+    r = run_node.Runner.__new__(run_node.Runner)
+    r.cfg = {"reserve_ram_gb": 6, "threads": 32, "reserve_threads": 2}
+    r.plan = [{"cohort": "c", "sample_id": f"s{i}", "est_peak_rss_gb": "20"} for i in range(3)]
+    r.plan.append({"cohort": "c", "sample_id": "big", "est_peak_rss_gb": "50"})
+    r.running = {}
+    monkeypatch.setattr(run_node.Runner, "mem_available_gb", staticmethod(lambda: 58.0))
+    monkeypatch.setattr(run_node.Runner, "mem_total_gb", staticmethod(lambda: 61.0))
+    monkeypatch.setattr(run_node.os, "getloadavg", lambda: (1.0, 1.0, 1.0))
+    assert r.can_start(r.plan[0])
+    r.running = {("c", "s0"): {}, ("c", "s1"): {}}
+    assert not r.can_start(r.plan[2])        # 20 + 20 + 20 > 61 - 6, though MemAvailable looks fine
+    r.cfg["rss_commit_factor"] = 0.5
+    assert r.can_start(r.plan[2])            # (20 + 20 + 20) x 0.5 <= 55
+    r.running, r.cfg["rss_commit_factor"] = {}, 1.0
+    assert r.can_start(r.plan[3])            # alone on the node: only MemAvailable decides
