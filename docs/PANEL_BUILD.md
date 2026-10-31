@@ -430,6 +430,20 @@ The runners poll their control files every 20 s.
 
 This is how other lab work on a shared node, freya in particular, keeps its share.
 
+**CRAM 3.1 inputs are transcoded to CRAM 3.0 on the node.** The pinned
+mosdepth 0.3.10 is statically linked with an htslib that cannot decode CRAM 3.1:
+it logs "Slice decode failure" for every contig, exits 0 and leaves an empty
+callability mask. The callers (htslib 1.21) read 3.1 correctly. 208 of the 1,017
+ONT-1019 CRAMs are 3.1 (written by samtools 1.23); found 2026-10-30, 24 h into
+the build, when all 43 finished 3.1 samples had 0.00x mosdepth depth and all 143
+finished 3.0 samples had normal depth. After staging, `cxsv_cram30` (lib.sh)
+rewrites a 3.1 copy as 3.0 with the image's samtools (lossless; the record counts
+must match), writes a new index, gives both the source's mtime (so a repaired
+sample reruns only `callable_mask`) and leaves `<copy>.cram30.ok`. Staged copies
+also keep the source mtime. On HG00141 (12.9 GB) the transcode took 4.5 min at 6
+threads; mosdepth then gave 48.8x instead of 0. The patient workflow has the
+same mosdepth limitation for CRAM 3.1 input (not fixed here).
+
 **Done samples are found by listing, not by stat.** A stat of a missing path on
 the CIFS NAS takes 0.4–0.7 s while the build reads it hard (measured
 2026-10-30). The runner therefore lists each cohort's sample directories once

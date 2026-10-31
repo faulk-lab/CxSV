@@ -165,3 +165,18 @@ def test_runner_finds_done_samples_by_listing(tmp_path):
     r.scan_done()
     assert r.done == {("A", "s1")}
     assert [p["sample_id"] for p in r.pending()] == ["s2", "s3"]
+
+
+def test_staged_copy_ok_rejects_cram31_and_accepts_transcoded(tmp_path):
+    """A CRAM 3.1 local copy is never reused untranscoded; a transcoded copy is reused via its marker."""
+    import run_node
+    src = tmp_path / "src.cram"; src.write_bytes(b"CRAM\x03\x01" + b"x" * 100)
+    loc = tmp_path / "loc.cram"; loc.write_bytes(src.read_bytes())
+    assert not run_node.Runner.staged_copy_ok(str(loc), str(src))          # 3.1, same size
+    loc.write_bytes(b"CRAM\x03\x00" + b"y" * 120)                           # transcoded: other size
+    assert not run_node.Runner.staged_copy_ok(str(loc), str(src))          # no marker yet
+    (tmp_path / "loc.cram.cram30.ok").write_text(f"source_bytes\t{src.stat().st_size}\n")
+    assert run_node.Runner.staged_copy_ok(str(loc), str(src))
+    bam_src = tmp_path / "a.bam"; bam_src.write_bytes(b"BAM" * 10)
+    bam = tmp_path / "b.bam"; bam.write_bytes(b"BAM" * 10)
+    assert run_node.Runner.staged_copy_ok(str(bam), str(bam_src))
