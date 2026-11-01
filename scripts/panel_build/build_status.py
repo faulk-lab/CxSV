@@ -109,6 +109,10 @@ def main():
     ap.add_argument("--costs", action="store_true")
     a = ap.parse_args()
     _, plan = shardlib.read_sheet(f"{a.build}/plan/shard_plan.tsv")
+    rp = f"{a.build}/plan/reassign.tsv"                  # samples moved off a dropped node
+    if os.path.exists(rp):
+        moved = {(r["cohort"], r["sample_id"]): r["new_node"] for r in shardlib.read_sheet(rp)[1]}
+        plan = [dict(p, node=moved.get((p["cohort"], p["sample_id"]), p["node"])) for p in plan]
     results = f"{a.build}/results/panel"
     nodes = sorted({p["node"] for p in plan})
     ledgers = {n: read_ledger(f"{a.build}/nodes/{n}/ledger.tsv") for n in nodes}

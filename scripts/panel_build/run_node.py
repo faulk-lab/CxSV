@@ -81,6 +81,19 @@ class Runner:
         for d in ("logs", "run", "overlays", "work"):
             os.makedirs(f"{self.nd}/{d}", exist_ok=True)
         self.plan = [r for r in shardlib.read_sheet(f"{build}/plan/shard_plan.tsv")[1] if r["node"] == node]
+        # plan/reassign.tsv (written once when a node is dropped; shard_plan.tsv is never rewritten):
+        # rows move from their planned `node` to `new_node`, run after that node's own samples
+        # (`new_order`); the planned node's runner skips them, so each sample keeps one writer
+        self.foreign = {}        # key -> planned node, for samples reassigned to this node
+        rp = f"{build}/plan/reassign.tsv"
+        if os.path.exists(rp):
+            moved = shardlib.read_sheet(rp)[1]
+            away = {(r["cohort"], r["sample_id"]) for r in moved if r["node"] == node}
+            self.plan = [r for r in self.plan if (r["cohort"], r["sample_id"]) not in away]
+            for r in moved:
+                if r["new_node"] == node:
+                    self.foreign[(r["cohort"], r["sample_id"])] = r["node"]
+                    self.plan.append(dict(r, node=node, order=r["new_order"]))
         self.plan.sort(key=lambda r: int(r["order"]))
         self.attempts = {}       # key -> attempts used
         self.running = {}        # key -> {"pid", "t0", "proc" or None}
@@ -176,14 +189,20 @@ class Runner:
         st = shardlib.staged_row(self.sheet_row(row), self.cfg["stage_dir"], row["cohort"])
         return st["alignment"], st["index"]
 
-    def sheet_row(self, row):
+    def _sheet(self, row):
+        """(header, rows by sample) of the sheet holding this row: the planned node's for a reassigned sample."""
         if not hasattr(self, "_sheets"):
             self._sheets = {}
-        c = row["cohort"]
-        if c not in self._sheets:
-            hdr, rows = shardlib.read_sheet(f"{self.nd}/sheets/{c}.tsv")
-            self._sheets[c] = (hdr, {r["sample_id"]: r for r in rows})
-        return self._sheets[c][1][row["sample_id"]]
+        key = (row["cohort"], row["sample_id"])
+        nd = f"{self.build}/nodes/{self.foreign[key]}" if key in getattr(self, "foreign", {}) else self.nd
+        ck = (nd, row["cohort"])
+        if ck not in self._sheets:
+            hdr, rows = shardlib.read_sheet(f"{nd}/sheets/{row['cohort']}.tsv")
+            self._sheets[ck] = (hdr, {r["sample_id"]: r for r in rows})
+        return self._sheets[ck]
+
+    def sheet_row(self, row):
+        return self._sheet(row)[1][row["sample_id"]]
 
     # ── node state ─────────────────────────────────────────────────────────
     @staticmethod
@@ -252,7 +271,7 @@ class Runner:
     def write_overlay(self, row):
         key = (row["cohort"], row["sample_id"])
         st_row = shardlib.staged_row(self.sheet_row(row), self.cfg["stage_dir"], row["cohort"])
-        hdr, _ = self._sheets[row["cohort"]]
+        hdr, _ = self._sheet(row)
         sheet = f"{self.nd}/overlays/{self.tag(key)}.tsv"
         shardlib.write_sheet(sheet, hdr, [st_row])
         node_ov = json.load(open(f"{self.nd}/node.yaml"))

@@ -99,6 +99,23 @@ The per-sample tree is shared, rather than one results root per node, so the
 aggregate step reads every sample in place. Copying or symlinking about 1 TB of
 shard outputs over CIFS is never needed.
 
+**Dropping a dead node without a new build root** (`plan/reassign.tsv`; used
+for betsy on 2026-11-01, PI decision, after it became unreachable at 15:17 CDT
+Oct 31):
+1. `control.sh BUILD stop NODE`, so that if the node comes back its runner kills its
+   instances and exits instead of writing samples that now belong elsewhere.
+2. Move the partial sample directories of its unfinished samples out of the
+   results tree (`nodes/NODE/abandoned/`): their incomplete markers are in that
+   node's `.snakemake`.
+3. Write `plan/reassign.tsv` once: the plan columns of each unfinished sample plus
+   `new_node` and `new_order`. `shard_plan.tsv` stays as it was.
+4. Restart the receiving nodes' runners (`launch.sh`; live instances are
+   re-adopted). They append the reassigned samples after their own, read them from
+   the dead node's sheets, and the dead node's runner skips them if it ever starts
+   again. `build_status.py` attributes them to their new node.
+
+The general alternative, below, is a new plan in a new build root.
+
 **Re-sharding a running build** (for example, if a node dies):
 1. Stop the dead node's runner.
 2. For each of its unfinished samples, move the sample directory to `#recycle`
