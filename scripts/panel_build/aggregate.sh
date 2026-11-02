@@ -30,7 +30,9 @@ run() { cxsv_container "$BUILD/aggregate" "$TMP" snakemake -s "$BUILD/code/workf
 mkdir -p "$BUILD/aggregate"
 run -n > "$BUILD/aggregate/dryrun.txt" 2>&1
 per_sample=$(awk '/^Job stats/{f=1} f && $1 ~ /^(run_|filter_|merge_sv|sample_|callable_mask|check_cram)/ {s+=$2} END{print s+0}' "$BUILD/aggregate/dryrun.txt")
-grep -A40 '^Job stats' "$BUILD/aggregate/dryrun.txt" | sed '/^$/q'
+# print the first Job stats table without a pipe: under pipefail, grep | sed '/^$/q' dies of SIGPIPE
+# (rc 141) when Snakemake prints a second Job stats block after sed has quit
+awk '/^Job stats/{f=1} f{print} f && /^$/{exit}' "$BUILD/aggregate/dryrun.txt"
 [ "$per_sample" = 0 ] || { echo "dry run schedules $per_sample per-sample jobs: a shard is incomplete or stale; stop"; exit 1; }
 $DRY && exit 0
 run "${EXTRA[@]}" > "$BUILD/aggregate/aggregate.log" 2>&1
