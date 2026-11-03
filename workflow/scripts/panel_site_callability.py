@@ -52,7 +52,8 @@ def main():
     samples = cc.read_samples(a.callability_dir)
     platforms = sorted({s["platform"] for s in samples})
     n_inds = len(inds)
-    n_samples, callable_inds, by_platform = cc.callable_counts(a.callability_dir, sites, a.flank, inds)
+    # count arrays, not per-site sets: sets of individuals for ~1.3M sites took >100 GB
+    n_samples, n_callable, by_platform = cc.callable_count_arrays(a.callability_dir, sites, a.flank)
 
     cols = ["chrom1", "pos1", "chrom2", "pos2", "svtype", "svlen", "ac", "n_callable_samples", "n_callable",
             "n_individuals", "callable_fraction"] + [f"callable_{p}" for p in platforms]
@@ -60,13 +61,13 @@ def main():
     with open(a.out, "w") as fh:
         fh.write("\t".join(cols) + "\n")
         for k, s in enumerate(sites):
-            n = len(callable_inds[k])
+            n = int(n_callable[k])
             n_all += n == n_inds
             n_half += 2 * n >= n_inds
             n_none += n == 0
             row = [s["chrom1"], s["pos1"], s["chrom2"], s["pos2"], s["svtype"], s["svlen"], s["ac"],
                    int(n_samples[k]), n, n_inds, f"{n / n_inds:.6f}" if n_inds else "NA"]
-            row += [len(by_platform[k].get(p, ())) for p in platforms]
+            row += [int(by_platform[p][k]) if p in by_platform else 0 for p in platforms]
             fh.write("\t".join(map(str, row)) + "\n")
 
     with open(a.summary, "w") as fh:

@@ -134,3 +134,30 @@ def test_patient_loci_report_callability_next_to_carriers(tmp_path):
         [("3", "2", "1", "3"), ("2", "1", "1", "3"), ("2", "1", "1", "3")]
     summ = {(r["level"], r["name"]): r["value"] for r in read(tmp_path / "scs.tsv")}
     assert summ[("sites", "callable_in_all_individuals")] == "1"
+
+
+def test_callable_count_arrays_match_sets(tmp_path):
+    """callable_count_arrays (used by panel_site_callability.py) gives the same numbers as callable_counts."""
+    import numpy as np
+    masks = {"A__s1": [("chr1", 0, 1000), ("chr2", 0, 500)], "A__s2": [("chr1", 400, 2000)],
+             "B__s3": [("chr1", 0, 300), ("chr2", 100, 900)], "B__s4": []}
+    rows = [("A__s1", "A", "s1", "i1", "ONT"), ("A__s2", "A", "s2", "i2", "ONT"),
+            ("B__s3", "B", "s3", "i1", "PACBIO"), ("B__s4", "B", "s4", "i3", "PACBIO")]
+    with open(tmp_path / cc.SAMPLES_TSV, "w") as fh:
+        fh.write("\t".join(cc.SAMPLES_COLUMNS) + "\n")
+        for m, coh, sid, ind, plat in rows:
+            name = cc.mask_name(coh, sid)
+            with gzip.open(tmp_path / name, "wt") as g:
+                for c, s, e in masks[m]:
+                    g.write(f"{c}\t{s}\t{e}\n")
+            fh.write(f"{name}\t{coh}\t{sid}\t{ind}\t{plat}\t0\n")
+    junctions = [dict(chrom1="chr1", pos1=p1, chrom2=c2, pos2=p2)
+                 for p1, c2, p2 in [(150, "chr1", 250), (500, "chr1", 900), (950, "chr2", 400),
+                                    (1500, "chr1", 1800), (5, "chr2", 450), (290, "chr3", 10)]]
+    n_s, inds, byp = cc.callable_counts(tmp_path, junctions, 50, {})
+    n_s2, n_i2, byp2 = cc.callable_count_arrays(tmp_path, junctions, 50)
+    assert list(n_s2) == list(n_s)
+    assert list(n_i2) == [len(x) for x in inds]
+    for p in ("ONT", "PACBIO"):
+        assert list(byp2[p]) == [len(b.get(p, ())) for b in byp]
+    assert max(n_i2) > 1 and min(n_i2) == 0
