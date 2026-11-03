@@ -4,6 +4,7 @@ import json
 import subprocess
 import sys
 
+import pytest
 import yaml
 
 import cxsv_junctions as cj
@@ -23,6 +24,45 @@ def test_panel_privacy_is_weighted_by_callability():
     assert full.points == 0.30 and half.points == 0.15 and unknown.points == 0.15 and none.points == 0.0
     assert sc.f_panel_privacy("public", "3", "10", "10", W["panel_privacy"]).points == -1.0
     assert sc.f_panel_privacy("shared_junctions", "0", "10", "10", W["panel_privacy"]).points == 0.0
+
+
+def test_graded_privacy_ramp_and_power():
+    g = {"enabled": True, "shape": "ramp", "f_lo": 0.25, "f_hi": 0.75}
+    assert sc.graded_weight(0.0, g) == 0.0 and sc.graded_weight(0.25, g) == 0.0
+    assert abs(sc.graded_weight(0.5, g) - 0.5) < 1e-12 and sc.graded_weight(0.75, g) == 1.0
+    assert sc.graded_weight(1.0, g) == 1.0
+    p = {"enabled": True, "shape": "power", "k": 2}
+    assert abs(sc.graded_weight(0.5, p) - 0.25) < 1e-12
+    with pytest.raises(ValueError):
+        sc.graded_weight(0.5, {"shape": "cubic"})
+    for gg in (g, p, W["panel_privacy"]["graded"]):      # monotone non-decreasing in f
+        ws = [sc.graded_weight(x / 100, gg) for x in range(101)]
+        assert all(b >= a - 1e-12 for a, b in zip(ws, ws[1:]))
+
+
+def test_graded_privacy_scales_the_public_penalty_by_matched_fraction():
+    w = {"private_callable": 0.30, "shared_junctions": 0.0, "public": -1.0,
+         "graded": {"enabled": True, "shape": "ramp", "f_lo": 0.25, "f_hi": 0.75}}
+    pts = [sc.f_panel_privacy("shared_junctions", "0", "10", "10", w, seen=k, n_junctions=8).points
+           for k in range(9)]
+    assert pts[:3] == [0.0, 0.0, 0.0]                    # f <= 0.25: no penalty
+    assert pts[4] == -0.5 and pts[6] == -1.0 and pts[8] == -1.0
+    assert all(b <= a for a, b in zip(pts, pts[1:]))      # monotone
+    f = sc.f_panel_privacy("shared_junctions", "0", "10", "10", w, seen=5, n_junctions=7)
+    assert "5/7 junctions seen" in f.value and "graded" in f.rule
+    # private and public loci untouched; no junction counts or graded off: flat shared points
+    assert sc.f_panel_privacy("private", "0", "10", "10", w, seen=0, n_junctions=8).points == 0.30
+    assert sc.f_panel_privacy("public", "2", "10", "10", w, seen=8, n_junctions=8).points == -1.0
+    assert sc.f_panel_privacy("shared_junctions", "0", "10", "10", w).points == 0.0
+    off = dict(w, graded=dict(w["graded"], enabled=False))
+    assert sc.f_panel_privacy("shared_junctions", "0", "10", "10", off, seen=7, n_junctions=8).points == 0.0
+
+
+def test_graded_privacy_is_on_by_default_in_config():
+    g = W["panel_privacy"]["graded"]
+    assert g["enabled"] is True and g["shape"] in ("ramp", "power")
+    full = sc.f_panel_privacy("shared_junctions", "0", "10", "10", W["panel_privacy"], seen=10, n_junctions=10)
+    assert full.points == W["panel_privacy"]["public"]
 
 
 def test_catalogue_most_severe_counts_never_summed():

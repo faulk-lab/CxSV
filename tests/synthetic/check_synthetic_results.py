@@ -9,7 +9,9 @@ release must have verified against its manifest. PRIVATE must also
 show the HOTSPOT DECOY's region-overlap carriers (Panel_Region_Carriers,
 Panel_Hotspot) while staying private. The SIMPLE deletion's junction must be
 matched to its panel carriers (private/junction_panel_status.tsv). The private
-VCF must contain records only near the PRIVATE event. Prints one line per check
+VCF must contain records only near the non-public events (PRIVATE, PARTIAL). PARTIAL (junctions seen in
+the panel, rearrangement carried by nobody) must be shared_junctions and get
+exactly the graded privacy points of roadmap item 10 for its matched fraction. Prints one line per check
 and exits 1 on any failure.
 
 Usage: check_synthetic_results.py <expected.json> <patient_results_root> <run> <sample>
@@ -96,6 +98,24 @@ def main(expected_json, patient_root, run, sample):
                       f"(want rank {want['rank']}, {want['tier']}); top: {r['Top_Features']}")
             if want.get("hpo_match"):
                 check(float(r["hpo_match_points"]) > 0, f"{name}: HPO match {r['hpo_match_value']}")
+            if want.get("graded_privacy"):
+                P = json.loads((sdir / "scoring" / "scoring_params.json").read_text())
+                pw = P["weights"]["panel_privacy"]
+                g = pw.get("graded") or {}
+                st = next(x for x in rows if f"{x['Chr']}:{x['Start']}-{x['End']}" == r["Locus_ID"])
+                k, n = int(st["Panel_Junctions_Seen"]), int(st["Panel_Junctions"])
+                f = k / n
+                if g.get("shape", "ramp") == "ramp":
+                    lo, hi = float(g["f_lo"]), float(g["f_hi"])
+                    w = 0.0 if f <= lo + 1e-12 else 1.0 if f >= hi - 1e-12 else (f - lo) / (hi - lo)
+                else:
+                    w = f ** float(g["k"])
+                base, pub = float(pw["shared_junctions"]), float(pw["public"])
+                want_pts = round(base + (pub - base) * w, 4) if g.get("enabled") else base
+                check(0 < k < n and abs(float(r["panel_privacy_points"]) - want_pts) < 0.005 + 1e-9  # TSV: 2 dp
+                      and "junctions seen" in r["panel_privacy_value"],
+                      f"{name}: graded privacy {r['panel_privacy_points']} for {k}/{n} junctions seen "
+                      f"(want {want_pts:.4f}; {r['panel_privacy_value']})")
             if "catalogue" in want:
                 check(want["catalogue"] in r["Catalogues_Containing"].split(","),
                       f"{name}: contained in {r['Catalogues_Containing']} (want {want['catalogue']}; "
@@ -109,13 +129,15 @@ def main(expected_json, patient_root, run, sample):
     chk = (sdir / "private" / "catalogue_check.tsv").read_text()
     check("VERIFIED" in chk and "MISMATCH" not in chk, "catalogue table verified against its manifest")
 
-    pv = exp["events"]["PRIVATE"]
+    # the private VCF holds every non-public locus: PRIVATE, and PARTIAL (shared_junctions)
+    near = [exp["events"][e] for e in ("PRIVATE", "PARTIAL") if e in exp["events"]]
     recs = [l.split("\t") for l in (sdir / "private" / "private_cxsv.vcf").read_text().splitlines()
             if l and not l.startswith("#")]
     check(len(recs) > 0, f"private VCF has records ({len(recs)})")
     outside = [f"{r[0]}:{r[1]}" for r in recs
-               if not (r[0] == contig and pv["start"] - 60_000 <= int(r[1]) <= pv["end"] + 60_000)]
-    check(not outside, f"private VCF records all lie near the PRIVATE event (outside: {outside[:5]})")
+               if not (r[0] == contig and any(ev["start"] - 60_000 <= int(r[1]) <= ev["end"] + 60_000 for ev in near))]
+    check(not outside, f"private VCF records all lie near the non-public events PRIVATE / PARTIAL "
+                       f"(outside: {outside[:5]})")
 
     print(f"\n{len(failures)} failure(s)")
     return 1 if failures else 0

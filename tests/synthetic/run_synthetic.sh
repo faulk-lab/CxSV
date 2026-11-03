@@ -26,7 +26,7 @@ W="$(mkdir -p "${1:-$REPO/.synthetic_test}" && cd "${1:-$REPO/.synthetic_test}" 
 CORES="${CORES:-4}"
 cd "$REPO"
 
-if [ ! -f "$W/data/expected.json" ] || ! grep -q scoring_expectations "$W/data/expected.json"; then
+if [ ! -f "$W/data/expected.json" ] || ! grep -q '"PARTIAL"' "$W/data/expected.json"; then
     python tests/synthetic/make_synthetic_data.py "$W/data" --threads "$CORES"
 fi
 D="$W/data"

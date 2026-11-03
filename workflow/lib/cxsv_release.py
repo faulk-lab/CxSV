@@ -21,6 +21,7 @@ from workflow/COMMIT, which `git archive` fills in (export-subst in
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 import subprocess
@@ -134,3 +135,63 @@ def verify(release_dir) -> dict:
         problems.append(f"{METADATA} is not listed in the manifest")
     return {"ok": not problems, "problems": problems, "n_files": len(rows), "bytes": total,
             "manifest_sha256": sha256_file(mpath)}
+
+
+def tag_commit(project_dir, tag) -> dict:
+    """The commit and object id an annotated or lightweight git tag points at."""
+    def git(*args):
+        return subprocess.run(["git", "-C", str(project_dir), *args], capture_output=True, text=True,
+                              check=True).stdout.strip()
+    return {"tag": tag, "commit": git("rev-parse", f"{tag}^{{commit}}"), "object": git("rev-parse", tag),
+            "type": git("cat-file", "-t", tag)}
+
+
+def finalise_tag(release_dir, tag, project_dir, now_utc) -> dict:
+    """Record the release's git tag in release.json and nothing else (roadmap item 12).
+
+    The release must verify against its manifest first, and the tag must point at
+    the commit release.json already names as its source (source.commit; a short
+    prefix is accepted). release.json gains source.git_tag, source.git_tag_object,
+    source.git_tag_type and finalised_utc; the manifest's release.json row is
+    rewritten with the new size and sha256, and every other manifest row is kept
+    byte for byte (checked). Idempotent: re-running with the same tag changes
+    nothing. Returns {"changed", "before", "after"} (verify() results)."""
+    before = verify(release_dir)
+    if not before["ok"]:
+        raise ValueError("release does not verify; refusing to finalise:\n  " + "\n  ".join(before["problems"]))
+    mpath = os.path.join(release_dir, MANIFEST)
+    jpath = os.path.join(release_dir, METADATA)
+    with open(jpath) as fh:
+        meta = json.load(fh)
+    t = tag_commit(project_dir, tag)
+    src = meta.get("source") or {}
+    if not src.get("commit") or not t["commit"].startswith(src["commit"]) and not src["commit"].startswith(t["commit"]):
+        raise ValueError(f"tag {tag} points at {t['commit']}, but the release was built from {src.get('commit')}")
+    if src.get("git_tag") == tag and src.get("git_tag_object") == t["object"]:
+        return {"changed": False, "before": before, "after": before}
+    src.update({"git_tag": tag, "git_tag_object": t["object"], "git_tag_type": t["type"]})
+    meta["source"] = src
+    meta["finalised_utc"] = now_utc
+    tmp = jpath + ".tmp"
+    with open(tmp, "w") as fh:
+        json.dump(meta, fh, indent=2, sort_keys=False)
+        fh.write("\n")
+    os.replace(tmp, jpath)
+    with open(mpath) as fh:
+        lines = fh.readlines()
+    new = [lines[0]]
+    for line in lines[1:]:
+        f = line.rstrip("\n").split("\t")
+        if f[0] == METADATA:
+            line = f"{METADATA}\t{os.path.getsize(jpath)}\t{sha256_file(jpath)}\n"
+        new.append(line)
+    assert [l for l in new if not l.startswith(METADATA + "\t")] == \
+        [l for l in lines if not l.startswith(METADATA + "\t")], "manifest rows other than release.json changed"
+    tmp = mpath + ".tmp"
+    with open(tmp, "w") as fh:
+        fh.writelines(new)
+    os.replace(tmp, mpath)
+    after = verify(release_dir)
+    if not after["ok"]:
+        raise ValueError("release does not verify after finalising:\n  " + "\n  ".join(after["problems"]))
+    return {"changed": True, "before": before, "after": after}

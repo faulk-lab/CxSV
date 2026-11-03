@@ -161,3 +161,64 @@ def test_callable_count_arrays_match_sets(tmp_path):
     for p in ("ONT", "PACBIO"):
         assert list(byp2[p]) == [len(b.get(p, ())) for b in byp]
     assert max(n_i2) > 1 and min(n_i2) == 0
+
+
+# ─── finalising a built release with its git tag (roadmap item 12) ──────────
+import shutil  # noqa: E402
+
+needs_git = pytest.mark.skipif(shutil.which("git") is None, reason="git not on PATH (e.g. inside the pipeline image)")
+
+
+def _git(d, *args):
+    return subprocess.run(["git", "-C", str(d), *args], capture_output=True, text=True, check=True).stdout.strip()
+
+
+def _tagged_repo(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+    _git(repo, "-c", "user.name=t", "-c", "user.email=t@example.org", "commit", "-q", "--allow-empty", "-m", "a")
+    built = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "-c", "user.name=t", "-c", "user.email=t@example.org", "tag", "-a", "panel-v9", "-m", "release")
+    _git(repo, "-c", "user.name=t", "-c", "user.email=t@example.org", "commit", "-q", "--allow-empty", "-m", "b")
+    _git(repo, "-c", "user.name=t", "-c", "user.email=t@example.org", "tag", "-a", "later", "-m", "later")
+    return repo, built
+
+
+def _with_source(rel, commit):
+    import json
+    meta = json.loads((rel / cr.METADATA).read_text())
+    meta["source"] = {"commit": commit, "dirty": False, "method": "git"}
+    (rel / cr.METADATA).write_text(json.dumps(meta, indent=2) + "\n")
+    cr.write_manifest(rel)
+
+
+@needs_git
+def test_finalise_tag_changes_only_release_json(tmp_path):
+    import json
+    rel = make_release(tmp_path)
+    repo, built = _tagged_repo(tmp_path)
+    _with_source(rel, built)
+    rows_before = (rel / cr.MANIFEST).read_text().splitlines()
+    res = cr.finalise_tag(rel, "panel-v9", repo, "2026-11-03T00:00:00Z")
+    assert res["changed"] and res["after"]["ok"]
+    meta = json.loads((rel / cr.METADATA).read_text())
+    assert meta["source"]["git_tag"] == "panel-v9" and meta["source"]["git_tag_type"] == "tag"
+    assert meta["source"]["commit"] == built and meta["finalised_utc"] == "2026-11-03T00:00:00Z"
+    rows_after = (rel / cr.MANIFEST).read_text().splitlines()
+    changed = [a for a, b in zip(rows_before, rows_after) if a != b]
+    assert len(rows_before) == len(rows_after) and [r.split("\t")[0] for r in changed] == [cr.METADATA]
+    again = cr.finalise_tag(rel, "panel-v9", repo, "2026-11-04T00:00:00Z")      # idempotent
+    assert not again["changed"] and (rel / cr.MANIFEST).read_text().splitlines() == rows_after
+
+
+@needs_git
+def test_finalise_tag_refuses_other_commit_or_unverified_release(tmp_path):
+    rel = make_release(tmp_path)
+    repo, built = _tagged_repo(tmp_path)
+    _with_source(rel, built)
+    with pytest.raises(ValueError, match="points at"):
+        cr.finalise_tag(rel, "later", repo, "x")                   # tag on another commit
+    (rel / "panel_summary.tsv").write_text("tampered\n")
+    with pytest.raises(ValueError, match="does not verify"):
+        cr.finalise_tag(rel, "panel-v9", repo, "x")

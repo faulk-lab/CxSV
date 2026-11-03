@@ -513,15 +513,66 @@ def f_region_dosage(hits, gene_dosage_points, w, enabled=True):
 
 
 # ─── feature functions (each returns a Feature) ──────────────────────────────
-def f_panel_privacy(status, carriers, n_panel, n_callable, w):
+def graded_weight(f, g):
+    """Share of the public penalty a partly matched locus gets (roadmap item 10).
+
+    f is the locus's matched junction fraction (Panel_Junctions_Seen /
+    Panel_Junctions: junctions with at least one panel carrier, the item-3
+    matcher). `g` is weights.panel_privacy.graded:
+      shape ramp:  0 at f <= f_lo, 1 at f >= f_hi, linear in between
+      shape power: f ** k
+    Returns a number in [0, 1]."""
+    f = min(1.0, max(0.0, float(f)))
+    shape = g.get("shape", "ramp")
+    if shape == "ramp":
+        lo, hi = float(g["f_lo"]), float(g["f_hi"])
+        if f <= lo + 1e-12:
+            return 0.0
+        if f >= hi - 1e-12:
+            return 1.0
+        return (f - lo) / (hi - lo)
+    if shape == "power":
+        return f ** float(g["k"])
+    raise ValueError(f"weights.panel_privacy.graded.shape: unknown shape {shape!r} (ramp | power)")
+
+
+def graded_rule(g):
+    if g.get("shape", "ramp") == "ramp":
+        return f"ramp(f; f_lo {g['f_lo']}, f_hi {g['f_hi']})"
+    return f"f^{g['k']}"
+
+
+def f_panel_privacy(status, carriers, n_panel, n_callable, w, seen=None, n_junctions=None):
     """Panel status weighted by callability: a locus absent from the panel only
-    counts as private evidence where the panel could have seen it."""
+    counts as private evidence where the panel could have seen it.
+
+    shared_junctions loci (some junctions in the panel, no individual carrying
+    the rearrangement) get the graded penalty of roadmap item 10 when
+    weights.panel_privacy.graded is enabled and the matched fraction is known
+    (seen / n_junctions): shared_junctions + (public - shared_junctions) x
+    graded_weight(f). Without it (graded off, or no junction counts) they get
+    the flat shared_junctions points."""
     if status == "public":
         return Feature("panel_privacy", "privacy", f"public ({carriers}/{n_panel} carriers)",
                        float(w["public"]), "rearrangement carried by panel individuals")
     if status == "shared_junctions":
+        g = w.get("graded") or {}
+        base = float(w["shared_junctions"])
+        try:
+            k, n = int(seen), int(n_junctions)
+        except (TypeError, ValueError):
+            k = n = None
+        if g.get("enabled", False) and n:
+            f = k / n
+            r = graded_weight(f, g)
+            pts = r2(base + (float(w["public"]) - base) * r)
+            return Feature("panel_privacy", "privacy",
+                           f"shared_junctions ({k}/{n} junctions seen, matched fraction {f:.2f}; 0 carriers; "
+                           f"callable {n_callable}/{n_panel})", pts,
+                           f"graded (item 10): {base:g} + ({float(w['public']):g} - {base:g}) x "
+                           f"{graded_rule(g)} = {base:g} + {float(w['public']) - base:g} x {r:.3f}")
         return Feature("panel_privacy", "privacy", f"shared_junctions (0 carriers; callable {n_callable}/{n_panel})",
-                       float(w["shared_junctions"]), "some junctions in the panel, not the rearrangement")
+                       base, "some junctions in the panel, not the rearrangement")
     try:
         frac = int(n_callable) / int(n_panel) if int(n_panel) else 0.0
         why = f"private, callable in {n_callable}/{n_panel} panel individuals"

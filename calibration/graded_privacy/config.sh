@@ -1,0 +1,16 @@
+# Paths of the item-10 calibration (sourced by the shell drivers). Override any
+# of these in the environment.
+: "${CAL_ROOT:=/mnt/sargasso1/CxSV/calibration/item10}"
+: "${BUILD:=/mnt/sargasso1/CxSV/build/panel-v1.0}"
+: "${RELEASE:=$BUILD/results/panel/release}"
+: "${SAMPLES_ROOT:=$BUILD/results/panel/samples}"
+: "${SAMPLE_MANIFEST:=$BUILD/results/panel/panel/sample_manifest.tsv}"
+: "${SAMPLE_SHEETS:=/mnt/sargasso1/CxSV/datasets/registry/sample_sheets}"
+: "${REGISTRY_SOURCES:=/mnt/sargasso1/CxSV/datasets/registry/sources}"
+: "${REF:=/mnt/sargasso1/CxSV/refs/hs1.fa}"
+: "${RES:=/mnt/sargasso1/CxSV/resources}"
+: "${CATALOGUES:=/mnt/sargasso1/CxSV/datasets/external_catalogues}"
+: "${SIF:=/mnt/sargasso1/CxSV/bundles/cxsv-bundle-20261029-1dcabd9770f7/container/cxsv-pipeline.sif}"
+: "${CODE:=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+X="singularity exec -B /mnt/sargasso1 $SIF"
+CATALOGUE_SPECS="CoLoRSdb:v1.2.0 HGSVC3:HGSVC2024v1.0 HPRC:release2-mc-v2.1 gnomAD-SV:v4.1"

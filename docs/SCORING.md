@@ -57,7 +57,7 @@ Positive points weigh towards pathogenic. Totals are sums. Every weight is in
 
 | Group | Feature | Rule (defaults) | Modelled on |
 |---|---|---|---|
-| privacy | `panel_privacy` | private: **+0.30 × Panel_Callable / Panel_Individuals** (absent where the panel could not see it is no evidence; unknown callability × 0.5); shared_junctions 0; public **−1.00** | ClinGen 4O (common in the population) |
+| privacy | `panel_privacy` | private: **+0.30 × Panel_Callable / Panel_Individuals** (absent where the panel could not see it is no evidence; unknown callability × 0.5); public **−1.00**; shared_junctions: **graded** (item 10) **−1.00 × ramp(f)**, f = Panel_Junctions_Seen / Panel_Junctions, ramp 0 at f ≤ 0.55, 1 at f ≥ 0.70, linear between (section "Graded privacy") | ClinGen 4O (common in the population) |
 | privacy | `catalogue_frequency` | the most severe catalogue that *contains* the locus (≥ 0.75 of its junctions matched): max AF ≥ 0.01 −1.00, ≥ 0.001 −0.50, lower or not given −0.25. Combined privacy = min(panel, catalogue); catalogues are **never summed** (they overlap each other and the panel) | ClinGen 4O |
 | genes | `gene_dosage` | max over affected genes. A gene is **broken** (a breakend inside it), **lost** or **gained** (wholly inside a segment with a copy-number change from read depth). Broken: HI 3 +0.90, HI 2 +0.45, HI 1 +0.15. Lost: HI 3 +1.00 / 2 +0.45 / 1 +0.15. Gained: TS 3 +1.00 / 2 +0.45 / 1 +0.15. Without curated HI evidence (not curated, 0 or 30, never over a curated 40): gnomAD LOEUF < 0.35 +0.30, < 0.6 +0.15 | ClinGen section 2 (2A, 2E, 2H) |
 | genes | `region_dosage` | ClinGen **curated regions** (item 9), max over regions. A region is **contained** when it lies wholly inside one run of lost (HI score) or gained (TS score) segments: HI/TS 3 +1.00, 2 +0.45, 1 +0.15 (ClinGen 2A). **Partial** overlap: those points × 0.50 (loss) or × 0.25 (gain) × the fraction of the region covered. HI/TS 0, 30, 40: 0. Points = max(0, region − `gene_dosage`): the locus's dosage evidence is **max(gene, region)**, never summed | ClinGen section 2 (2A, 2B) |
@@ -384,6 +384,11 @@ What the features show on the control:
 
 ### Synthetic (CI)
 
+Since item 10 the synthetic patient also carries PARTIAL (chr20:1.100-1.126 Mb,
+COMMON's shape) whose deletion is in panel1 and whose duplication is in panel2
+as simple SVs: it must be `shared_junctions` with 0 carriers and get exactly
+the graded points for its matched fraction (2/3 junctions seen -> -0.78).
+
 `tests/synthetic/run_synthetic.sh` (stand-in scoring resources and a
 synthetic catalogue SYNCAT):
 
@@ -394,6 +399,92 @@ synthetic catalogue SYNCAT):
 - COMMON (public, contained in SYNCAT 3/4) scores −0.59 and RARE −0.85, both
   Benign_likely.
 - Feature points add up to every total, and the catalogue table verifies.
+
+## 6b. Graded privacy for partly matched loci (roadmap item 10)
+
+**Rule** (`weights.panel_privacy.graded`, on by default):
+
+    points = shared_junctions + (public - shared_junctions) x w(f)        (0 + (-1) x w(f))
+    f      = Panel_Junctions_Seen / Panel_Junctions
+    w(f)   = 0 for f <= 0.55, 1 for f >= 0.70, linear in between
+
+Only `shared_junctions` loci change: some of their junctions occur in the
+panel, but no panel individual carries >= 0.75 of them. `f` is the item-3
+matcher's own quantity (junctions with at least one panel carrier, same
+500 bp / INS 0.5 rules); private (f = 0) and public loci keep their points.
+`enabled: false` restores the flat 0. `shape: power` (w = f^k) is also
+implemented. The report shows `k/n junctions seen` and the ramp arithmetic.
+
+**Calibration (panel only; the positive control is a check, never an input).**
+Code and step order: `calibration/graded_privacy/README.md`. Every one of the
+1,619 panel genomes (1,582 individuals) had its own 1,586,131 CxSV loci scored
+by the unchanged `score_cxsv.py` against panel-v1.0 with its whole family
+removed (leave-one-family-out, LOFO; primary) and with only its own
+individual removed (LOIO). Families come from the 1kGP 3,202 pedigree and the
+phase-3 sample-info relatedness columns: 1,242 panel families, 621 individuals
+with at least one panel relative; 13 individuals appear in neither source
+(treated as unrelated). Leave-out subtracts the left-out carriers from the
+released carrier table at query time; callability counts drop them too.
+
+- Under LOFO, 108,606 loci (6.8%) are `shared_junctions` and 6,591 private.
+  Their matched fractions cluster near 1 (70% have f >= 0.70): mostly loci
+  made of common SVs that no single genome carries together.
+- Before item 10, a healthy genome had **0.84 Tier-1 calls** (panel privacy
+  only; 0.71 with the catalogue feature); 1,027 of the 1,364 Tier-1 calls
+  were `shared_junctions`. With the chosen rule: **0.47** (0.46 with the
+  catalogues); genomes with any Tier-1 call 36.6% -> 16.6%; Tier 2 7.0 -> 4.5.
+  LOIO gives the same picture (0.84 -> 0.47). These panel-only figures are
+  re-computed by the sweep from the scorer's 2-decimal output.
+- Re-scoring all 1,619 genomes with the item-10 scorer itself (as deployed,
+  catalogue feature included): Tier-1 calls 1,145 -> 740 (0.71 -> 0.46 per
+  genome, LOFO; LOIO 1,140 -> 735); genomes with any Tier-1 call 28.5% ->
+  15.4%; no locus moves up a tier, and only `shared_junctions` loci change
+  points.
+![Tier-1 calls per healthy genome and chance-demotion risk across the candidate rules](figures/item10_fig_tier1_vs_parameter.png)
+
+Results tables: `calibration/graded_privacy/results/` (chosen parameters,
+sweep curve, strata, stability, exact re-scoring, shortcut check,
+positive-control check).
+
+- Chance matches: moving every panel locus 1-5 Mb and matching it again,
+  28% of the shifted loci share junctions with panel sites. A penalty that
+  fires at low f therefore demotes real private events too. The guard: on the
+  327 private Tier-1 loci of healthy genomes, the chance that a shifted-locus
+  match pushes them below Tier 1 is 4.4% under the old rule (the private bonus
+  is lost) and **5.3%** under the chosen rule (limit: +1 point). The
+  unconstrained minimum (any shared junction = full public penalty) gives
+  0.22 Tier-1 calls per genome but 10.2% chance demotion.
+- Selection: the lowest Tier-1 rate within that limit, then the lowest
+  demotion risk among rules within 2% of it; 215 candidate rules (200 ramps, 10 f^k, 5 1-(1-f)^k; the grid of 216 also holds the current rule as baseline)
+  on two fraction definitions. The best-individual fraction gave 6% more
+  Tier-1 calls, so the scorer's matched fraction is used. Stable on held-out
+  halves of the families and leaving out each superpopulation (the rule chosen
+  on the training part is ramp 0.55-0.70 or 0.55-0.65 every time).
+- Residual Tier 1 after the rule: 327 private, 431 shared_junctions (95% with
+  f <= 0.55), 10 public loci; mostly BND_cluster, CN_plus_orientation_change,
+  Nested_SV and DEL+INV, driven by gene dosage. Tier-1 rates rise with
+  coverage (>= 30x: 1.50 -> 0.89) and are highest on 1kGP-LRSC R10 (2.41 ->
+  1.62); genomes below 5x (23) have 0.09 before and after.
+- Leave-out shortcut vs a true rebuild (`validate_rebuild.sh`):
+  `build_panel_sites.py` rerun without the family for 3 families (a trio, a
+  pair, a singleton; 6 genomes, ONT and PacBio, 5,957 loci). Status identical
+  for 5,954 loci; the 3 that differ (site envelopes shift when members leave)
+  are Benign_likely either way; carrier counts differ for 128 loci; no tier
+  differs.
+- Check on the positive control (never used for tuning). The *EHMT1* host
+  locus on the 10-background regression: 5/7 junctions seen (f = 0.71) ->
+  -1.00 -> total 1.00 -> 0.00, Tier 1 -> Tier 3. Against the full panel-v1.0
+  the same locus is public (14 carriers) under both scorers. E01-E13: no change
+  of class, privacy verdict, score or tier, on the fresh regression
+  (`RERUN=1`, 13/13 PASS, rerun byte-identical) or scored against the full
+  panel (`tests/lab/score_pos_control_full_panel.sh`; E01-E10 are private
+  there; E13 is private because its carriers exist only in the regression's
+  spliced backgrounds, so its "public" expectation cannot hold against the real
+  panel, under either scorer).
+- Caveat: read depth was measured only for loci that are not public under
+  leave-out (the loci a privacy rule can change). Public loci therefore lack
+  copy-number features in 1,515 genomes; on the 104 genomes measured in full,
+  public loci add 0.09 Tier-1 calls per genome under every rule.
 
 ## 7. Known limitations and open findings
 
@@ -413,13 +504,17 @@ synthetic catalogue SYNCAT):
   Neither is ClinGen 2F (a loss inside an established benign region,
   HI 40): population frequency is handled by the privacy features. Both are
   candidates for the PI.
-- **One host locus reaches Tier 1.** chr9:150,076,936–150,111,418 scores
-  exactly 1.00: an 11-breakend DEL/DUP cluster breaking *EHMT1*,
-  `shared_junctions` (5 of 7 junctions seen in the panel), and 4–5 of 7
-  junctions in CoLoRSdb/HPRC (below the 0.75 "contains" fraction). Partially
-  seen loci get no privacy penalty. A graded penalty by the fraction of
-  junctions seen in the panel or catalogues is a candidate refinement. It was
-  not tuned here, to avoid fitting the weights to the control.
+- **Resolved by item 10: one host locus reached Tier 1.** chr9:150,076,936–150,111,418
+  scored exactly 1.00 on the 10-background regression: an 11-breakend DEL/DUP
+  cluster breaking *EHMT1*, `shared_junctions` (5 of 7 junctions seen in the
+  panel). Partly matched loci now get the graded penalty, tuned on the panel
+  (section "Graded privacy"), and the locus falls below Tier 1.
+- **Partial catalogue matches are still not penalised.** The graded rule acts
+  on the panel's matched fraction only. Catalogue containment (≥ 0.75 of the
+  junctions) is unchanged: the catalogues share individuals with the panel
+  (HPRC, HGSVC3 and CoLoRSdb contain 1kGP genomes), so a partial-catalogue rule
+  cannot be calibrated by leave-out on the panel without leakage. Candidate for
+  the PI.
 - Criterion 7 is at its simulation floor for nearly every locus (see above).
   It is descriptive.
 - On the regression slices, the chromosome breakend sets cover only 34 Mb, so

@@ -24,9 +24,10 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
    then the aggregate step on freya. Build preparation is on branch
    `panel-build-config`: [docs/PANEL_BUILD.md](PANEL_BUILD.md).
 2. **Release tag for the first real panel release** (items 2, 6, 12). Tags are
-   the PI's to create. *Recommendation:* a tag such as `panel-v1.0` on the
-   commit the release was built from, then re-validate the offline bundle with
-   that release.
+   the PI's to create. *Decided 2026-10-29: `panel-v1.0`. Done 2026-11-03:*
+   annotated tag `panel-v1.0` on da6cb90 (the release's source commit);
+   `release.json` of `cxsv-panel-20261102-cd7e1d194cd4` records it
+   (`source.git_tag`), data files and their manifest rows unchanged.
 3. **ClinGen region-level dosage** (item 9). *Decided 2026-10-29: add the
    region list; done, see item 9.* The gene list gives TS 0 for
    *MECP2*, *PMP22* and *SHANK3* because their duplication syndromes are curated
@@ -37,7 +38,8 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
    below the 0.75 fraction) currently gets no privacy penalty; one real host
    locus near *EHMT1* (chr9:150,076,936–150,111,418) reaches Tier 1 this way.
    *Recommendation:* scale the privacy points by the matched fraction, tuned on
-   the panel rather than on the positive control.
+   the panel rather than on the positive control. *Decided 2026-10-29; done
+   2026-11-03 on branch `item10-graded-privacy`, see item 10.*
 5. **Curated literature set of pathogenic CxSVs** (item 11, the open part of
    item 5's "done when"). To decide: which sources, and whether selected
    literature structures should also be re-planted into the positive control
@@ -71,7 +73,7 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
 | 7 | SLURM for the lab fleet | **on hold** | – |
 | 8 | Read-level mechanism axes (PI criteria 3, 4, 6) | queued | below |
 | 9 | ClinGen region-level dosage | done 2026-10-30 (branch `item9-clingen-regions`) | below, docs/SCORING.md |
-| 10 | Graded privacy penalty for partly matched loci | queued, awaiting decision 4 | below |
+| 10 | Graded privacy penalty for partly matched loci | done 2026-11-03 (branch `item10-graded-privacy`) | below, docs/SCORING.md section 6b |
 | 11 | Curated literature set of pathogenic CxSVs | queued, awaiting decision 5 | below |
 | 12 | Full panel build and first real release | build prepared and estimated (branch `panel-build-config`); dispatch confirmed 2026-10-30; build not yet launched; tag awaits decision 2 | below, docs/PANEL_BUILD.md |
 
@@ -236,9 +238,21 @@ Open for the PI:
 - whether to plant a whole-region CMT1A or *MECP2* duplication in the control
   (item 11).
 
-### 10. Graded privacy penalty for partly matched loci
+### 10. Graded privacy penalty for partly matched loci — done 2026-11-03 (branch `item10-graded-privacy`)
 
-Scale the privacy points by the fraction of a locus's junctions found in the
+*Done:* partly matched (`shared_junctions`) loci get the public penalty
+scaled by a linear ramp of their matched junction fraction f (0 at f <= 0.55,
+full at f >= 0.70; `weights.panel_privacy.graded`, on by default). Tuned by
+leave-one-family-out over all 1,619 panel genomes
+(`calibration/graded_privacy/`): Tier-1 calls per healthy genome 0.84 -> 0.47,
+with at most +1 point chance-demotion risk for private Tier-1 events. On the
+10-background regression the EHMT1 host locus drops from Tier 1 (1.00) to
+Tier 3 (0.00); no planted event changes tier, score or privacy verdict, on the
+regression or scored against the full panel-v1.0. Partial catalogue matches
+are still not penalised (they cannot be calibrated on the panel without
+leakage). Details: docs/SCORING.md section 6b.
+
+Original plan: scale the privacy points by the fraction of a locus's junctions found in the
 panel or a catalogue, instead of the all-or-nothing 0.75 cut. Tune on the
 full panel (item 12), not on the positive control. **Done when:** the
 *EHMT1*-region host locus and similar shared_junctions loci fall below Tier 1,

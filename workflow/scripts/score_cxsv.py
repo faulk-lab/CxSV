@@ -338,7 +338,8 @@ def main():
         row = x["row"]
         feats = []
         pp = sc.f_panel_privacy(row["Panel_Status"], row["Panel_Carriers"], row["Panel_Individuals"],
-                                row.get("Panel_Callable", "NA"), W["panel_privacy"])
+                                row.get("Panel_Callable", "NA"), W["panel_privacy"],
+                                seen=row.get("Panel_Junctions_Seen"), n_junctions=row.get("Panel_Junctions"))
         feats.append(pp)
         cr = cat_rows.get(x["L"], {})
         x["cat"] = cr

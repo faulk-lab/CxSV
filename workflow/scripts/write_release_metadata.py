@@ -10,6 +10,13 @@ CXSV_IMAGE (tag) and CXSV_ENV_LOCK_SHA256 (sha256 of the explicit conda lock it
 was built from); the bundle's run script adds CXSV_IMAGE_ID (Docker image id)
 and CXSV_SIF_SHA256. Outside a container these are null and CONDA_PREFIX is
 recorded instead.
+
+Finalise mode (roadmap item 12): `--finalise RELEASE_DIR --git-tag TAG
+--project-dir CHECKOUT` records the git tag of an already built release in its
+release.json (source.git_tag, source.git_tag_object, source.git_tag_type,
+finalised_utc) after checking that the release verifies and that the tag points
+at the release's source commit; only the release.json row of the manifest
+changes (cxsv_release.finalise_tag).
 """
 import argparse
 import csv
@@ -42,7 +49,22 @@ def version_of(cmd):
         return None
 
 
+def finalise_main(argv):
+    ap = argparse.ArgumentParser(description="record the git tag of a built release in release.json")
+    ap.add_argument("--finalise", required=True, metavar="RELEASE_DIR")
+    ap.add_argument("--git-tag", required=True)
+    ap.add_argument("--project-dir", required=True, help="git checkout that has the tag")
+    a = ap.parse_args(argv)
+    now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    res = cr.finalise_tag(a.finalise, a.git_tag, a.project_dir, now)
+    b, f = res["before"], res["after"]
+    print(f"{'finalised' if res['changed'] else 'already finalised'}: {a.finalise} tag {a.git_tag}; "
+          f"{f['n_files']} files verify; manifest sha256 {b['manifest_sha256']} -> {f['manifest_sha256']}")
+
+
 def main():
+    if "--finalise" in sys.argv[1:]:
+        return finalise_main(sys.argv[1:])
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--release-id-file", required=True)
     ap.add_argument("--name", required=True)
