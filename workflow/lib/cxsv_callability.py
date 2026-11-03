@@ -154,3 +154,49 @@ def callable_counts(callability_dir, junctions, flank: int, individuals: dict):
             inds[k].add(s["individual_id"])
             by_platform[k][s["platform"]].add(s["individual_id"])
     return n_samples, inds, by_platform
+
+
+def callable_count_arrays(callability_dir, junctions, flank: int):
+    """Per junction: callable samples, callable individuals, callable individuals by platform.
+
+    The same rules and numbers as callable_counts(), as count arrays instead of
+    per-junction sets. Individuals are the columns of boolean junction x
+    individual matrices (one for any platform, one per platform), so memory is
+    about n_junctions x n_individuals bytes per matrix: ~2 GB each for 1.3M
+    sites x 1,582 individuals, where per-junction Python sets took >100 GB. The
+    per-contig junction positions are grouped once, not once per sample.
+
+    Returns (n_samples, n_individuals, {platform: n_individuals}), int64 arrays
+    in junction order; platforms are those of samples.tsv."""
+    samples = read_samples(callability_dir)
+    n = len(junctions)
+    ind_ids = list(dict.fromkeys(s["individual_id"] for s in samples))
+    col = {i: k for k, i in enumerate(ind_ids)}
+    platforms = sorted({s["platform"] for s in samples})
+    n_samples = np.zeros(n, dtype=np.int64)
+    any_hit = np.zeros((n, len(ind_ids)), dtype=bool, order="F")
+    plat_hit = {p: np.zeros((n, len(ind_ids)), dtype=bool, order="F") for p in platforms}
+    groups = []
+    for end in ("1", "2"):
+        by = defaultdict(list)
+        for k, j in enumerate(junctions):
+            by[j["chrom" + end]].append(k)
+        groups.append([(chrom, np.asarray(idx, dtype=np.int64),
+                        np.asarray([int(junctions[k]["pos" + end]) for k in idx], dtype=np.int64))
+                       for chrom, idx in by.items()])
+    for s in samples:
+        mask = Mask.from_bed(f"{callability_dir}/{s['mask']}")
+        end1 = np.zeros(n, dtype=bool)
+        end2 = np.zeros(n, dtype=bool)
+        for chrom, idx, pos in groups[0]:
+            end1[idx] = mask.breakpoints_callable(chrom, pos, flank)
+        for chrom, idx, pos in groups[1]:
+            end2[idx] = mask.breakpoints_callable(chrom, pos, flank)
+        hit = end1 & end2
+        n_samples += hit
+        k = col[s["individual_id"]]
+        any_hit[:, k] |= hit
+        plat_hit[s["platform"]][:, k] |= hit
+    n_inds = np.count_nonzero(any_hit, axis=1).astype(np.int64)
+    by_platform = {p: np.count_nonzero(m, axis=1).astype(np.int64) for p, m in plat_hit.items()}
+    return n_samples, n_inds, by_platform

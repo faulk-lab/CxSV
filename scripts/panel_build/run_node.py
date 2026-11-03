@@ -81,6 +81,19 @@ class Runner:
         for d in ("logs", "run", "overlays", "work"):
             os.makedirs(f"{self.nd}/{d}", exist_ok=True)
         self.plan = [r for r in shardlib.read_sheet(f"{build}/plan/shard_plan.tsv")[1] if r["node"] == node]
+        # plan/reassign.tsv (written once when a node is dropped; shard_plan.tsv is never rewritten):
+        # rows move from their planned `node` to `new_node`, run after that node's own samples
+        # (`new_order`); the planned node's runner skips them, so each sample keeps one writer
+        self.foreign = {}        # key -> planned node, for samples reassigned to this node
+        rp = f"{build}/plan/reassign.tsv"
+        if os.path.exists(rp):
+            moved = shardlib.read_sheet(rp)[1]
+            away = {(r["cohort"], r["sample_id"]) for r in moved if r["node"] == node}
+            self.plan = [r for r in self.plan if (r["cohort"], r["sample_id"]) not in away]
+            for r in moved:
+                if r["new_node"] == node:
+                    self.foreign[(r["cohort"], r["sample_id"])] = r["node"]
+                    self.plan.append(dict(r, node=node, order=r["new_order"]))
         self.plan.sort(key=lambda r: int(r["order"]))
         self.attempts = {}       # key -> attempts used
         self.running = {}        # key -> {"pid", "t0", "proc" or None}
@@ -152,6 +165,23 @@ class Runner:
                 if r["cohort"] == cohort and r["sample_id"] in present and k not in self.done and self.is_done(k):
                     self.done.add(k)
 
+    @staticmethod
+    def staged_copy_ok(aln, src_aln):
+        """A local copy left by an earlier runner is reusable: same size as the source, or a CRAM
+        transcoded from it (lib.sh cxsv_cram30 marker); never a CRAM 3.1 copy (it must be transcoded)."""
+        if not os.path.exists(aln):
+            return False
+        if aln.endswith(".cram"):
+            with open(aln, "rb") as fh:
+                head = fh.read(6)
+            if head[:4] == b"CRAM" and (head[4], head[5]) == (3, 1):
+                return False
+            ok = f"{aln}.cram30.ok"
+            if os.path.exists(ok):
+                meta = dict(ln.rstrip("\n").split("\t", 1) for ln in open(ok) if "\t" in ln)
+                return meta.get("source_bytes") == str(os.path.getsize(src_aln))
+        return os.path.getsize(aln) == os.path.getsize(src_aln)
+
     def tag(self, key):
         return f"{key[0]}__{key[1]}"
 
@@ -159,14 +189,20 @@ class Runner:
         st = shardlib.staged_row(self.sheet_row(row), self.cfg["stage_dir"], row["cohort"])
         return st["alignment"], st["index"]
 
-    def sheet_row(self, row):
+    def _sheet(self, row):
+        """(header, rows by sample) of the sheet holding this row: the planned node's for a reassigned sample."""
         if not hasattr(self, "_sheets"):
             self._sheets = {}
-        c = row["cohort"]
-        if c not in self._sheets:
-            hdr, rows = shardlib.read_sheet(f"{self.nd}/sheets/{c}.tsv")
-            self._sheets[c] = (hdr, {r["sample_id"]: r for r in rows})
-        return self._sheets[c][1][row["sample_id"]]
+        key = (row["cohort"], row["sample_id"])
+        nd = f"{self.build}/nodes/{self.foreign[key]}" if key in getattr(self, "foreign", {}) else self.nd
+        ck = (nd, row["cohort"])
+        if ck not in self._sheets:
+            hdr, rows = shardlib.read_sheet(f"{nd}/sheets/{row['cohort']}.tsv")
+            self._sheets[ck] = (hdr, {r["sample_id"]: r for r in rows})
+        return self._sheets[ck]
+
+    def sheet_row(self, row):
+        return self._sheet(row)[1][row["sample_id"]]
 
     # ── node state ─────────────────────────────────────────────────────────
     @staticmethod
@@ -219,17 +255,23 @@ class Runner:
         src_idx = src.get("index") or src["alignment"] + (".crai" if src["alignment"].endswith(".cram") else ".bai")
         cmd = (f"source '{HERE}/lib.sh' && cxsv_stage '{src['alignment']}' '{aln}' >/dev/null && "
                f"cxsv_stage '{src_idx}' '{idx}' >/dev/null")
+        if aln.endswith(".cram"):          # mosdepth 0.3.10 cannot decode CRAM 3.1 (lib.sh: cxsv_cram30)
+            cmd += f" && cxsv_cram30 '{src['alignment']}' '{aln}' '{idx}'"
         logf = open(f"{self.nd}/logs/{self.tag(key)}.stage.log", "a")
-        env = dict(os.environ, CXSV_STAGE_BWLIMIT_MB=str(int(self.cfg.get("stage_bwlimit_mb_s", 0) or 0)))
+        node_ov = json.load(open(f"{self.nd}/node.yaml"))
+        env = dict(os.environ, CXSV_STAGE_BWLIMIT_MB=str(int(self.cfg.get("stage_bwlimit_mb_s", 0) or 0)),
+                   CXSV_SIF=self.cfg["sif"], CXSV_EXTRA_BINDS=self.cfg["stage_dir"],
+                   CXSV_REF=node_ov["reference"], CXSV_REF_CACHE=node_ov["ref_cache"],
+                   CXSV_STAGE_TMP=f"{self.cfg['tmp_dir']}/stage", CXSV_TRANSCODE_THREADS="4")
         p = subprocess.Popen(["bash", "-c", cmd], stdout=logf, stderr=subprocess.STDOUT,
                              env=env, start_new_session=True)
-        self.staging[key] = {"proc": p, "t0": time.time()}
+        self.staging[key] = {"proc": p, "t0": time.time(), "log": logf.name}
         self.log(key, "staging", detail=f"{int(row['bytes']) / 1e9:.1f} GB")
 
     def write_overlay(self, row):
         key = (row["cohort"], row["sample_id"])
         st_row = shardlib.staged_row(self.sheet_row(row), self.cfg["stage_dir"], row["cohort"])
-        hdr, _ = self._sheets[row["cohort"]]
+        hdr, _ = self._sheet(row)
         sheet = f"{self.nd}/overlays/{self.tag(key)}.tsv"
         shardlib.write_sheet(sheet, hdr, [st_row])
         node_ov = json.load(open(f"{self.nd}/node.yaml"))
@@ -257,7 +299,7 @@ class Runner:
         self.log(key, "started", attempt, detail=f"pid {p.pid}")
 
     def unstage(self, row):
-        for f in self.staged_paths(row):
+        for f in list(self.staged_paths(row)) + [f"{self.staged_paths(row)[0]}.cram30.ok"]:
             try:
                 os.remove(f)
             except FileNotFoundError:
@@ -293,7 +335,12 @@ class Runner:
             del self.staging[key]
             if rc == 0:
                 self.staged.add(key)
-                self.log(key, "staged", seconds=time.time() - st["t0"])
+                note = ""
+                try:
+                    note = "; ".join(ln.strip() for ln in open(st["log"]) if ln.startswith("transcoded"))[-200:]
+                except (OSError, KeyError):
+                    pass
+                self.log(key, "staged", seconds=time.time() - st["t0"], detail=note)
             else:
                 self.stage_failures[key] = self.stage_failures.get(key, 0) + 1
                 if self.stage_failures[key] < int(self.cfg.get("max_attempts", 2)):
@@ -442,8 +489,8 @@ class Runner:
             key = (row["cohort"], row["sample_id"])
             aln, idx = self.staged_paths(row)
             src = self.sheet_row(row)
-            if key not in self.running and os.path.exists(aln) and os.path.exists(idx) \
-                    and os.path.getsize(aln) == os.path.getsize(src["alignment"]) and key not in self.done:
+            if key not in self.running and os.path.exists(idx) \
+                    and self.staged_copy_ok(aln, src["alignment"]) and key not in self.done:
                 self.staged.add(key)
         while self.cycle():
             time.sleep(POLL_S)

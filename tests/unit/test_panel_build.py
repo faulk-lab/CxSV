@@ -165,3 +165,41 @@ def test_runner_finds_done_samples_by_listing(tmp_path):
     r.scan_done()
     assert r.done == {("A", "s1")}
     assert [p["sample_id"] for p in r.pending()] == ["s2", "s3"]
+
+
+def test_staged_copy_ok_rejects_cram31_and_accepts_transcoded(tmp_path):
+    """A CRAM 3.1 local copy is never reused untranscoded; a transcoded copy is reused via its marker."""
+    import run_node
+    src = tmp_path / "src.cram"; src.write_bytes(b"CRAM\x03\x01" + b"x" * 100)
+    loc = tmp_path / "loc.cram"; loc.write_bytes(src.read_bytes())
+    assert not run_node.Runner.staged_copy_ok(str(loc), str(src))          # 3.1, same size
+    loc.write_bytes(b"CRAM\x03\x00" + b"y" * 120)                           # transcoded: other size
+    assert not run_node.Runner.staged_copy_ok(str(loc), str(src))          # no marker yet
+    (tmp_path / "loc.cram.cram30.ok").write_text(f"source_bytes\t{src.stat().st_size}\n")
+    assert run_node.Runner.staged_copy_ok(str(loc), str(src))
+    bam_src = tmp_path / "a.bam"; bam_src.write_bytes(b"BAM" * 10)
+    bam = tmp_path / "b.bam"; bam.write_bytes(b"BAM" * 10)
+    assert run_node.Runner.staged_copy_ok(str(bam), str(bam_src))
+
+
+def test_runner_honours_reassign_plan(tmp_path):
+    """A reassigned sample leaves the dead node's plan, joins the receiver's after its own, and reads the old node's sheet."""
+    import json
+    import run_node
+    b = tmp_path / "build"
+    cols = ["cohort", "sample_id", "bytes", "est_peak_rss_gb", "node", "order"]
+    rows = [["A", "s1", "1", "1", "dead", "1"], ["A", "s2", "1", "1", "dead", "2"], ["A", "s3", "1", "1", "live", "1"]]
+    (b / "plan").mkdir(parents=True)
+    (b / "plan" / "shard_plan.tsv").write_text("\t".join(cols) + "\n" + "".join("\t".join(r) + "\n" for r in rows))
+    (b / "plan" / "reassign.tsv").write_text("\t".join(cols + ["new_node", "new_order"]) + "\n"
+                                             + "\t".join(rows[1] + ["live", "100000"]) + "\n")
+    for n, ss in (("dead", ["s1", "s2"]), ("live", ["s3"])):
+        (b / "nodes" / n / "sheets").mkdir(parents=True)
+        (b / "nodes" / n / "sheets" / "A.tsv").write_text("sample_id\talignment\n" + "".join(f"{x}\t/{n}/{x}.bam\n" for x in ss))
+        (b / "nodes" / n / "runner.json").write_text(json.dumps({"results_root": str(b / "results")}))
+    live = run_node.Runner(str(b), "live")
+    assert [r["sample_id"] for r in live.plan] == ["s3", "s2"]
+    assert live.sheet_row(live.plan[1])["alignment"] == "/dead/s2.bam"
+    assert live.sheet_row(live.plan[0])["alignment"] == "/live/s3.bam"
+    dead = run_node.Runner(str(b), "dead")
+    assert [r["sample_id"] for r in dead.plan] == ["s1"]
