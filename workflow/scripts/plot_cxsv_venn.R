@@ -60,64 +60,89 @@ if (nrow(cxsv_df) == 0) {
 # For each call overlapping a CxSV locus, assign to caller sets by bit position.
 # Each call gets a unique ID = "sample::variantID" to avoid cross-sample collision.
 
-cutesv_ids   <- character(0)
-svim_ids     <- character(0)
-sniffles_ids <- character(0)
+# Vectorised per file: the earlier per-line loop compared every record with
+# every CxSV locus row and grew the id vectors with c(), which does not finish
+# on the full panel. Overlap is now a per-chromosome lookup over the loci
+# sorted by Start with a running maximum of End: a record [pos, end] overlaps
+# some locus iff the loci with Start <= end include one with End >= pos.
+loci <- cxsv_df[!is.na(cxsv_df$Start) & !is.na(cxsv_df$End), c("Chr", "Start", "End")]
+loci_index <- lapply(split(loci, loci$Chr), function(d) {
+  o <- order(d$Start)
+  list(start = d$Start[o], max_end = cummax(d$End[o]))
+})
+overlaps_cxsv <- function(chrom, pos, end) {
+  hit <- logical(length(chrom))
+  for (ch in intersect(unique(chrom), names(loci_index))) {
+    sel <- which(chrom == ch)
+    ix  <- loci_index[[ch]]
+    k   <- findInterval(end[sel], ix$start)   # number of loci with Start <= end
+    ok  <- k > 0L
+    hit[sel[ok]] <- ix$max_end[k[ok]] >= pos[sel[ok]]
+  }
+  hit
+}
+
+cutesv_list   <- vector("list", length(vcf_list))
+svim_list     <- vector("list", length(vcf_list))
+sniffles_list <- vector("list", length(vcf_list))
 
 n_vcfs_read  <- 0
 n_calls_seen <- 0
 n_cxsv_hits  <- 0
+n_end_na     <- 0
 
-for (vcf_path in vcf_list) {
-  vcf_path <- trimws(vcf_path)
+for (i in seq_along(vcf_list)) {
+  vcf_path <- trimws(vcf_list[i])
   if (!file.exists(vcf_path)) {
     message("WARN: VCF not found, skipping: ", vcf_path)
     next
   }
   n_vcfs_read <- n_vcfs_read + 1
+  # unchanged from the per-line version (see the follow-up note in the commit):
   sample_name <- sub("_merged_sv\\.vcf$", "", basename(vcf_path))
 
-  for (ln in read_vcf_lines(vcf_path)) {
-    parts <- strsplit(ln, "\t")[[1]]
-    if (length(parts) < 8) next
-    n_calls_seen <- n_calls_seen + 1
+  parts <- strsplit(read_vcf_lines(vcf_path), "\t", fixed = TRUE)
+  parts <- parts[lengths(parts) >= 8]
+  n_calls_seen <- n_calls_seen + length(parts)
+  if (length(parts) == 0) next
 
-    chrom <- parts[1]
-    pos   <- suppressWarnings(as.integer(parts[2]))
-    vid   <- parts[3]
-    info  <- parts[8]
-    if (is.na(pos)) next
+  chrom <- vapply(parts, `[`, character(1), 1L)
+  pos   <- suppressWarnings(as.integer(vapply(parts, `[`, character(1), 2L)))
+  vid   <- vapply(parts, `[`, character(1), 3L)
+  info  <- vapply(parts, `[`, character(1), 8L)
+  keep  <- !is.na(pos)
+  chrom <- chrom[keep]; pos <- pos[keep]; vid <- vid[keep]; info <- info[keep]
 
-    # Parse END for overlap check
-    end_field <- parse_info_field(info, "END")
-    end       <- if (!is.na(end_field)) as.integer(end_field) else pos
+  # END for the overlap check (first END= match, as parse_info_field), else POS
+  end <- pos
+  m   <- regexpr("(?<=END=)[^;]+", info, perl = TRUE)
+  end[m != -1L] <- suppressWarnings(as.integer(regmatches(info, m)))
+  n_end_na <- n_end_na + sum(is.na(end))
+  hit <- overlaps_cxsv(chrom, pos, end) & !is.na(end)
+  n_cxsv_hits <- n_cxsv_hits + sum(hit)
+  if (!any(hit)) next
 
-    # Check if this call overlaps any CxSV locus
-    is_cxsv_hit <- any(
-      cxsv_df$Chr   == chrom &
-        cxsv_df$Start <= end   &
-        cxsv_df$End   >= pos
-    )
-    if (!is_cxsv_hit) next
-    n_cxsv_hits <- n_cxsv_hits + 1
+  info <- info[hit]; vid <- vid[hit]
+  vec  <- rep(NA_character_, length(info))
+  m    <- regexpr("(?<=SUPP_VEC=)[^;]+", info, perl = TRUE)
+  vec[m != -1L] <- regmatches(info, m)
+  ok   <- !is.na(vec)
+  vec  <- vec[ok]
+  call_id <- paste0(sample_name, "::", vid[ok])
 
-    # Parse SUPP_VEC
-    vec <- parse_info_field(info, "SUPP_VEC")
-    if (is.na(vec)) next
-
-    call_id <- paste0(sample_name, "::", vid)
-    
-    # Bit 0 = CuteSV
-    if (nchar(vec) >= 1 && substr(vec, 1, 1) == "1")
-      cutesv_ids <- c(cutesv_ids, call_id)
-    # Bit 1 = SVIM
-    if (nchar(vec) >= 2 && substr(vec, 2, 2) == "1")
-      svim_ids   <- c(svim_ids,   call_id)
-    # Bit 2 = Sniffles2
-    if (nchar(vec) >= 3 && substr(vec, 3, 3) == "1")
-      sniffles_ids <- c(sniffles_ids, call_id)
-  }
+  # Bit 0 = CuteSV, bit 1 = SVIM, bit 2 = Sniffles2
+  cutesv_list[[i]]   <- call_id[nchar(vec) >= 1 & substr(vec, 1, 1) == "1"]
+  svim_list[[i]]     <- call_id[nchar(vec) >= 2 & substr(vec, 2, 2) == "1"]
+  sniffles_list[[i]] <- call_id[nchar(vec) >= 3 & substr(vec, 3, 3) == "1"]
 }
+if (n_end_na > 0) message("WARN: ", n_end_na, " records with a non-integer END were not counted as CxSV hits")
+
+cutesv_ids   <- unlist(cutesv_list,   use.names = FALSE)
+svim_ids     <- unlist(svim_list,     use.names = FALSE)
+sniffles_ids <- unlist(sniffles_list, use.names = FALSE)
+if (is.null(cutesv_ids))   cutesv_ids   <- character(0)
+if (is.null(svim_ids))     svim_ids     <- character(0)
+if (is.null(sniffles_ids)) sniffles_ids <- character(0)
 
 cutesv_ids   <- unique(cutesv_ids)
 svim_ids     <- unique(svim_ids)

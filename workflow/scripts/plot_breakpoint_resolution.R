@@ -27,27 +27,35 @@ svim_files     <- strsplit(args[3], ",")[[1]]
 outfile        <- args[4]
 
 # ── Helper: extract CI widths from a list of VCF files ───────────────────────
+# Vectorised per file (the earlier per-line loop grew `widths` with c() once per
+# record, which is quadratic: ~20M records for the 1,017-sample ONT cohort).
+# Same rule as before: a record with >= 8 tab-separated fields contributes
+# |lo| + |hi| from its first CIPOS=lo,hi match, or 1 when CIPOS is absent.
 ci_widths <- function(vcf_paths, caller_name) {
-  widths <- numeric(0)
-  for (path in vcf_paths) {
+  per_file <- vector("list", length(vcf_paths))
+  for (i in seq_along(vcf_paths)) {
+    path <- vcf_paths[i]
     if (!file.exists(path)) next
-    for (ln in read_vcf_lines(path)) {
-      parts <- strsplit(ln, "\t")[[1]]
-      if (length(parts) < 8) next
-      info <- parts[8]
-
-      # Parse CIPOS=lo,hi
-      cipos <- regmatches(info, regexpr("(?<=CIPOS=)-?[0-9]+,-?[0-9]+", info, perl=TRUE))
-      if (length(cipos) > 0) {
-        vals  <- as.integer(strsplit(cipos, ",")[[1]])
-        w     <- abs(vals[2]) + abs(vals[1])   # total CI width
-      } else {
-        w <- 1L   # no CI = exact
-      }
-      widths <- c(widths, w)
+    lines <- read_vcf_lines(path)
+    if (length(lines) == 0) next
+    parts <- strsplit(lines, "\t", fixed = TRUE)
+    parts <- parts[lengths(parts) >= 8]
+    if (length(parts) == 0) next
+    info <- vapply(parts, `[`, character(1), 8L)
+    w    <- rep(1, length(info))   # no CI = exact
+    m    <- regexpr("(?<=CIPOS=)-?[0-9]+,-?[0-9]+", info, perl = TRUE)
+    has  <- m != -1L
+    if (any(has)) {
+      lohi <- strsplit(regmatches(info, m), ",", fixed = TRUE)
+      lo   <- as.integer(vapply(lohi, `[`, character(1), 1L))
+      hi   <- as.integer(vapply(lohi, `[`, character(1), 2L))
+      w[has] <- abs(hi) + abs(lo)   # total CI width
     }
+    per_file[[i]] <- w
   }
+  widths <- as.numeric(unlist(per_file, use.names = FALSE))
   if (length(widths) == 0) return(NULL)
+  message(sprintf("%s: %d records from %d VCFs", caller_name, length(widths), length(vcf_paths)))
   data.frame(CI_Width = widths, Caller = caller_name, stringsAsFactors = FALSE)
 }
 
