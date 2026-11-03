@@ -16,12 +16,17 @@ Events (reference coordinates, 0-based half-open):
   DECOY   (panel1, panel3)                    a DIFFERENT CxSV at the PRIVATE locus (hotspot):
           DEL 802,000-804,000 + INV 812,000-818,000 + tandem DUP 821,000-824,000
   SIMPLE  (everyone)                          DEL 1,000,000-1,003,000 (not a CxSV)
+  PARTIAL (patient)                           CxSV at 1,100-1,126 kb, COMMON's shape, whose
+          DEL is also in panel1 (PART_A) and whose DUP is also in panel2 (PART_B), each
+          as a simple SV: junctions seen in the panel, rearrangement carried by nobody
 
 Expected (breakpoint-level matching, roadmap item 3): the patient's CxSV loci
 overlapping COMMON, RARE and PRIVATE have panel carriers 3, 1 and 0, so COMMON
 and RARE are public and PRIVATE is private, although DECOY gives PRIVATE 2
 region-overlap carriers (it would have been called public by region overlap).
-The SIMPLE deletion's junction has 3 panel carriers.
+The SIMPLE deletion's junction has 3 panel carriers. PARTIAL is shared_junctions
+(some junctions seen, 0 carriers) and gets the graded privacy penalty of roadmap
+item 10 for its matched junction fraction.
 
 Usage: make_synthetic_data.py <outdir> [--coverage 25] [--seed 7] [--threads 4]
 Needs minimap2 and samtools on PATH. Writes:
@@ -48,12 +53,15 @@ EVENTS = {
     "PRIVATE": [("INVDEL", 800_000, 820_000, 806_000, 809_000), ("DUP", 826_000, 829_000)],
     "DECOY":   [("DEL", 802_000, 804_000), ("INV", 812_000, 818_000), ("DUP", 821_000, 824_000)],
     "SIMPLE":  [("DEL", 1_000_000, 1_003_000)],
+    "PARTIAL": [("DEL", 1_100_000, 1_104_000), ("INV", 1_110_000, 1_118_000), ("DUP", 1_122_000, 1_126_000)],
+    "PART_A":  [("DEL", 1_100_000, 1_104_000)],
+    "PART_B":  [("DUP", 1_122_000, 1_126_000)],
 }
 SAMPLES = {
-    "panel1":  ["COMMON", "DECOY", "SIMPLE"],
-    "panel2":  ["COMMON", "RARE", "SIMPLE"],
+    "panel1":  ["COMMON", "DECOY", "SIMPLE", "PART_A"],
+    "panel2":  ["COMMON", "RARE", "SIMPLE", "PART_B"],
     "panel3":  ["COMMON", "DECOY", "SIMPLE"],
-    "patient": ["COMMON", "RARE", "PRIVATE", "SIMPLE"],
+    "patient": ["COMMON", "RARE", "PRIVATE", "SIMPLE", "PARTIAL"],
 }
 SPAN = {name: (min(e[1] for e in ev), max(e[2] for e in ev)) for name, ev in EVENTS.items()}
 
@@ -219,6 +227,7 @@ def main():
             "RARE":    {"cxsv": True, "panel_carriers": 1, "status": "public"},
             "PRIVATE": {"cxsv": True, "panel_carriers": 0, "status": "private",
                         "region_carriers": 2, "hotspot": "yes"},
+            "PARTIAL": {"cxsv": True, "panel_carriers": 0, "status": "shared_junctions"},
         },
         "scoring_expectations": {
             # PRIVATE breaks the curated HI gene SYNP and matches the patient's HPO term
@@ -226,6 +235,8 @@ def main():
             # COMMON is public in the panel and contained in the synthetic catalogue
             "COMMON": {"catalogue": "SYNCAT", "tier_below": "PRIVATE"},
             "RARE": {"tier_below": "PRIVATE"},
+            # PARTIAL: graded privacy penalty (item 10) for its matched junction fraction
+            "PARTIAL": {"graded_privacy": True, "tier_below": "PRIVATE"},
         },
         "junction_expectations": {
             "SIMPLE": {"svtype": "DEL", "pos1": 1_000_000, "pos2": 1_003_000, "panel_carriers": 3},

@@ -78,8 +78,18 @@ foldback:
 weights:
   panel_privacy:
     private_callable: 0.30    # x (Panel_Callable / Panel_Individuals); unknown callability x 0.5
-    shared_junctions: 0.0
+    shared_junctions: 0.0     # partly matched locus at matched fraction 0 (start of the graded ramp)
     public: -1.00             # ClinGen 4O-like: the rearrangement is in presumed-healthy genomes
+    # Graded penalty for partly matched (shared_junctions) loci, roadmap item 10:
+    #   points = shared_junctions + (public - shared_junctions) x w(f)
+    #   f = Panel_Junctions_Seen / Panel_Junctions (junctions with >= 1 panel carrier)
+    #   ramp: w = 0 at f <= f_lo, 1 at f >= f_hi, linear between   (power: w = f ** k)
+    # Tuned 2026-11-03 on the full panel-v1.0 by leave-one-family-out over the
+    # 1,619 panel genomes (calibration/graded_privacy, docs/SCORING.md): fewest
+    # Tier-1 calls per healthy genome (0.84 -> 0.47) with at most +1 percentage
+    # point chance-demotion risk for private Tier-1 events (4.4% -> 5.3%). Not
+    # tuned on the positive control. enabled: false restores the flat 0.0.
+    graded: {enabled: true, shape: ramp, f_lo: 0.55, f_hi: 0.70}
   catalogue_frequency:        # most severe containing catalogue only (never summed)
     common_af: 0.01
     common: -1.00
