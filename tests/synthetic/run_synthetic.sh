@@ -13,7 +13,8 @@
 #    match) and the catalogue SYNCAT contains COMMON; although a HOTSPOT DECOY (a different
 #    CxSV at the PRIVATE locus in panel1 and panel3) overlaps PRIVATE; the
 #    SIMPLE deletion's junction has 3 panel carriers; compatible fingerprint;
-#    private VCF confined to PRIVATE.
+#    private VCF confined to PRIVATE; a 600 kb inversion (LONGINV) spanning RARE
+#    and PRIVATE hides neither in an oversized cluster (roadmap item 13).
 # 4. negative tests: a patient overlay that changes a fingerprinted parameter
 #    must stop at check_panel_compatibility; a panel release with one byte
 #    changed must be refused at verify_panel_release (manifest check).
@@ -26,7 +27,7 @@ W="$(mkdir -p "${1:-$REPO/.synthetic_test}" && cd "${1:-$REPO/.synthetic_test}" 
 CORES="${CORES:-4}"
 cd "$REPO"
 
-if [ ! -f "$W/data/expected.json" ] || ! grep -q '"PARTIAL"' "$W/data/expected.json"; then
+if [ ! -f "$W/data/expected.json" ] || ! grep -q '"LONGINV"' "$W/data/expected.json"; then
     python tests/synthetic/make_synthetic_data.py "$W/data" --threads "$CORES"
 fi
 D="$W/data"

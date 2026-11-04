@@ -11,7 +11,9 @@ Panel_Hotspot) while staying private. The SIMPLE deletion's junction must be
 matched to its panel carriers (private/junction_panel_status.tsv). The private
 VCF must contain records only near the non-public events (PRIVATE, PARTIAL). PARTIAL (junctions seen in
 the panel, rearrangement carried by nobody) must be shared_junctions and get
-exactly the graded privacy points of roadmap item 10 for its matched fraction. Prints one line per check
+exactly the graded privacy points of roadmap item 10 for its matched fraction. LONGINV, a 600 kb
+inversion spanning RARE and PRIVATE, must not hide them in an oversized cluster, and its own
+breakends must not be CxSV loci (roadmap item 13). Prints one line per check
 and exits 1 on any failure.
 
 Usage: check_synthetic_results.py <expected.json> <patient_results_root> <run> <sample>
@@ -64,6 +66,25 @@ def main(expected_json, patient_root, run, sample):
                       f"{name}: hotspot decoy seen by region overlap: region carriers="
                       f"{r['Panel_Region_Carriers']} hotspot={r['Panel_Hotspot']} "
                       f"(want {want['region_carriers']}/{want['hotspot']}) yet status {r['Panel_Status']}")
+
+    # roadmap item 13: a long span record is clustered at its breakends, so nothing it
+    # spans is dropped as an oversized cluster and its breakends alone are not CxSVs
+    with open(sdir / "cxsv" / "cxsv_summary.tsv", newline="") as fh:
+        clusters = list(csv.DictReader(fh, delimiter="\t"))
+    over = [f"{r['Chr']}:{r['Start']}-{r['End']}" for r in clusters if r["CxSV_Criteria"] == "FILTERED_oversized_cluster"]
+    for name, want in exp.get("long_span_expectations", {}).items():
+        check(not over, f"{name}: no oversized cluster in the patient (found: {over[:3]})")
+        for b in want["breakends"]:
+            at = [r for r in rows if r["Chr"] == contig and int(r["Start"]) - want["window"] <= b <= int(r["End"]) + want["window"]]
+            check(bool(at) == want["cxsv_at_breakends"],
+                  f"{name}: breakend {b} {'is' if at else 'is not'} in a CxSV locus "
+                  f"(want {'yes' if want['cxsv_at_breakends'] else 'no'})")
+        for inner in want["inside"]:
+            ev = exp["events"][inner]
+            hits = [r for r in rows if r["Chr"] == contig and int(r["Start"]) <= ev["end"] and int(r["End"]) >= ev["start"]]
+            check(bool(hits) and all(int(r["End"]) - int(r["Start"]) < 100_000 for r in hits),
+                  f"{name}: {inner} inside it is found as its own locus "
+                  f"({[r['Chr'] + ':' + r['Start'] + '-' + r['End'] for r in hits]})")
 
     with open(sdir / "private" / "junction_panel_status.tsv", newline="") as fh:
         jrows = list(csv.DictReader(fh, delimiter="\t"))

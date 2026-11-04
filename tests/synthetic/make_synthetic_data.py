@@ -19,6 +19,11 @@ Events (reference coordinates, 0-based half-open):
   PARTIAL (patient)                           CxSV at 1,100-1,126 kb, COMMON's shape, whose
           DEL is also in panel1 (PART_A) and whose DUP is also in panel2 (PART_B), each
           as a simple SV: junctions seen in the panel, rearrangement carried by nobody
+  LONGINV (patient)                           600 kb inversion 300,000-900,000 spanning RARE
+          and PRIVATE (roadmap item 13): clustered as one interval it would chain both
+          into one oversized cluster that the classifier drops whole; clustered at its
+          breakends (cxsv_params.span_link_max) RARE and PRIVATE are found as before
+          and the inversion's own breakend clusters are not CxSVs
 
 Expected (breakpoint-level matching, roadmap item 3): the patient's CxSV loci
 overlapping COMMON, RARE and PRIVATE have panel carriers 3, 1 and 0, so COMMON
@@ -56,12 +61,13 @@ EVENTS = {
     "PARTIAL": [("DEL", 1_100_000, 1_104_000), ("INV", 1_110_000, 1_118_000), ("DUP", 1_122_000, 1_126_000)],
     "PART_A":  [("DEL", 1_100_000, 1_104_000)],
     "PART_B":  [("DUP", 1_122_000, 1_126_000)],
+    "LONGINV": [("INV", 300_000, 900_000)],
 }
 SAMPLES = {
     "panel1":  ["COMMON", "DECOY", "SIMPLE", "PART_A"],
     "panel2":  ["COMMON", "RARE", "SIMPLE", "PART_B"],
     "panel3":  ["COMMON", "DECOY", "SIMPLE"],
-    "patient": ["COMMON", "RARE", "PRIVATE", "SIMPLE", "PARTIAL"],
+    "patient": ["COMMON", "RARE", "PRIVATE", "SIMPLE", "PARTIAL", "LONGINV"],
 }
 SPAN = {name: (min(e[1] for e in ev), max(e[2] for e in ev)) for name, ev in EVENTS.items()}
 
@@ -72,20 +78,30 @@ def revcomp(s: bytes) -> bytes:
 
 def apply_events(ref: bytes, groups) -> bytes:
     """Apply event groups, and the events inside each group, right to left,
-    so every event's reference coordinates are still valid when it is applied."""
+    so every event's reference coordinates are still valid when it is applied.
+    An event spanning groups applied before it (LONGINV) has its end shifted by
+    their net length change, so it ends at the same reference base."""
     seq = bytearray(ref)
+    done = []                                    # (reference position, length change)
+
+    def at(x):
+        return x + sum(d for p, d in done if p < x)
+
     for name in sorted(groups, key=lambda g: -SPAN[g][0]):
         for ev in sorted(EVENTS[name], key=lambda ev: -ev[1]):
-            kind, s, e = ev[:3]
+            kind, s, e = ev[0], ev[1], at(ev[2])
             if kind == "DEL":
                 del seq[s:e]
+                done.append((ev[1], -(ev[2] - ev[1])))
             elif kind == "INV":
                 seq[s:e] = revcomp(bytes(seq[s:e]))
             elif kind == "DUP":                      # tandem: copy inserted right after
                 seq[e:e] = seq[s:e]
+                done.append((ev[2], ev[2] - ev[1]))
             elif kind == "INVDEL":
                 ds, de = ev[3], ev[4]
                 seq[s:e] = revcomp(bytes(seq[s:ds]) + bytes(seq[de:e]))
+                done.append((ds, -(de - ds)))
             else:
                 raise ValueError(kind)
     return bytes(seq)
@@ -237,6 +253,12 @@ def main():
             "RARE": {"tier_below": "PRIVATE"},
             # PARTIAL: graded privacy penalty (item 10) for its matched junction fraction
             "PARTIAL": {"graded_privacy": True, "tier_below": "PRIVATE"},
+        },
+        # roadmap item 13: no locus is lost to an oversized cluster, and the long
+        # inversion's breakends (each one junction) are not CxSV loci
+        "long_span_expectations": {
+            "LONGINV": {"breakends": [300_000, 900_000], "window": 5_000, "cxsv_at_breakends": False,
+                        "inside": ["RARE", "PRIVATE"]},
         },
         "junction_expectations": {
             "SIMPLE": {"svtype": "DEL", "pos1": 1_000_000, "pos2": 1_003_000, "panel_carriers": 3},
