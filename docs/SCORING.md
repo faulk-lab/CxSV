@@ -486,6 +486,26 @@ positive-control check).
   copy-number features in 1,515 genomes; on the 104 genomes measured in full,
   public loci add 0.09 Tier-1 calls per genome under every rule.
 
+## 6c. Literature match (roadmap item 11; annotation, no points)
+
+When `literature_set.root` in `config/scoring.yaml` points at a literature set
+(acquisition/literature, docs/LITERATURE_SET.md), rule `literature_hits`
+(`workflow/scripts/match_literature.py`) labels each locus:
+
+- `event`: at least 75% (`min_event_fraction`) of one published event's
+  junctions are matched.
+- `junction`: at least one junction is matched.
+- `region`: reciprocal overlap of at least `region_min_overlap` (0.5) with a
+  published hs1 region.
+- `none`.
+
+A junction matches when svtype and both contigs agree and each end is within
+500 bp, 10 kb or 50 kb for sequence-resolved, approximate or region-level
+literature junctions. The label and the matched events appear in
+`cxsv_scores.tsv` (`Literature_Match`, `Literature_Events`) and in the report.
+Score, tier and status do not change. Bundles built with
+`make_bundle.sh --literature` turn it on. The root is null otherwise.
+
 ## 7. Known limitations and open findings
 
 - **The ClinGen gene list underserves duplications here.** The 2026-10-28 file

@@ -47,7 +47,8 @@ external_catalogues:
 # (bundles built with it set literature_set.root to /bundle/resources/literature/<version>).
 literature_set:
   root: null
-  match: {tolerance_bp: 500, tolerance_approximate: 10000, tolerance_region: 50000, min_event_fraction: 0.75}
+  match: {tolerance_bp: 500, tolerance_approximate: 10000, tolerance_region: 50000, min_event_fraction: 0.75,
+          region_min_overlap: 0.5}
 
 # ─── Per-patient information (all optional). Keyed by sample_id. Sample-sheet
 # columns sex, hpo_terms (comma/semicolon list), mother, father are read too;

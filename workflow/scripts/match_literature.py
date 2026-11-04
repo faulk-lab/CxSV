@@ -17,13 +17,14 @@ Per locus (--out):
                                        event's junctions (the same rearrangement, as far as the
                                        published breakpoints resolve it)
                              junction  at least one locus junction matches a published junction
-                             region    no junction match, but the locus overlaps a published
-                                       event's hs1 region (e.g. a ClinVar region-level record)
+                             region    no junction match, but the locus and a published event's hs1
+                                       region (e.g. a ClinVar region-level record) overlap reciprocally
+                                       by >= --region-min-overlap (default 0.5) of each one's length
                              none
   Literature_Events          matched events as <event_id>(<junctions matched>/<event junctions>),
                              best first (at most 5)
   Literature_Junctions_Matched   locus junctions matching any literature junction / locus junctions
-  Literature_Region_Events   number of events whose region overlaps the locus
+  Literature_Region_Events   number of events whose region overlaps the locus reciprocally
   Literature_Phenotypes      phenotype labels of the matched events (at most 3)
 """
 import argparse
@@ -73,7 +74,15 @@ def parse_regions(s):
     return out
 
 
-def annotate(loci, junctions, lit_junctions, lit_events, tol, min_fraction):
+def reciprocal(s, e, a, b, f):
+    """[s, e] and [a, b] overlap by >= f of each one's length (f = 0: any overlap)."""
+    ov = min(e, b) - max(s, a)
+    if ov < 0 or (ov == 0 and f > 0):
+        return False
+    return ov >= f * max(e - s, 1) and ov >= f * max(b - a, 1)
+
+
+def annotate(loci, junctions, lit_junctions, lit_events, tol, min_fraction, region_min_overlap=0.5):
     by_locus = defaultdict(list)
     for j in junctions:
         for L in j["loci"]:
@@ -97,7 +106,8 @@ def annotate(loci, junctions, lit_junctions, lit_events, tol, min_fraction):
             for L in m:
                 hit_lit[L["event_id"]].add(L["junction_id"])
         frac = {x: len(v) / n_event[x] for x, v in hit_lit.items()}
-        reg = [x for x, ivs in regions.items() if any(c == r["Chr"] and a <= e and b >= s for c, a, b in ivs)]
+        reg = [x for x, ivs in regions.items()
+               if any(c == r["Chr"] and reciprocal(s, e, a, b, region_min_overlap) for c, a, b in ivs)]
         if any(f >= min_fraction - 1e-9 for f in frac.values()):
             status = "event"
         elif hit_lit:
@@ -127,12 +137,15 @@ def main():
     ap.add_argument("--tolerance-approximate", type=int, default=10000)
     ap.add_argument("--tolerance-region", type=int, default=50000)
     ap.add_argument("--min-event-fraction", type=float, default=0.75)
+    ap.add_argument("--region-min-overlap", type=float, default=0.5,
+                    help="reciprocal overlap needed for a region-level match (0 = any overlap)")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
     tol = {"bp": a.tolerance_bp, "approximate": a.tolerance_approximate, "region": a.tolerance_region,
            "mixed": a.tolerance_approximate}
     rows = annotate(read_tsv(a.loci), cj.read_table(a.junctions), read_tsv(f"{a.literature}/literature_junctions.tsv"),
-                    read_tsv(f"{a.literature}/literature_events.tsv"), tol, a.min_event_fraction)
+                    read_tsv(f"{a.literature}/literature_events.tsv"), tol, a.min_event_fraction,
+                    a.region_min_overlap)
     with open(a.out, "w", newline="") as fh:
         w = csv.DictWriter(fh, COLUMNS, delimiter="\t", lineterminator="\n")
         w.writeheader()

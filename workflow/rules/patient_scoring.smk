@@ -129,12 +129,13 @@ if LIT.get("root"):
             tol  = LIT_MATCH.get("tolerance_bp", 500),
             tola = LIT_MATCH.get("tolerance_approximate", 10000),
             tolr = LIT_MATCH.get("tolerance_region", 50000),
-            frac = LIT_MATCH.get("min_event_fraction", 0.75)
+            frac = LIT_MATCH.get("min_event_fraction", 0.75),
+            rmin = LIT_MATCH.get("region_min_overlap", 0.5)
         log: f"{S}/logs/literature_hits.log"
         shell:
             "python {input.script} --junctions {input.junctions} --loci {input.loci} --literature {params.root} "
             "--tolerance-bp {params.tol} --tolerance-approximate {params.tola} --tolerance-region {params.tolr} "
-            "--min-event-fraction {params.frac} --out {output} 2> {log}"
+            "--min-event-fraction {params.frac} --region-min-overlap {params.rmin} --out {output} 2> {log}"
 
 
 rule locus_depth:

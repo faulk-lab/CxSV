@@ -167,7 +167,8 @@ def test_match_literature_levels():
              dict(event_id="E1", junction_id="E1.J2", svtype="INV", chrom1="chr1", pos1="5000", chrom2="chr1",
                   pos2="20000", precision="bp", lift_status="lifted")]
     lit_e = [dict(event_id="E1", phenotype="test phenotype", region_hs1="chr1:1000-20000"),
-             dict(event_id="CV1", phenotype="clinvar region", region_hs1="chr2:100-50000")]
+             dict(event_id="CV1", phenotype="clinvar region", region_hs1="chr2:800-2500"),
+             dict(event_id="BIG", phenotype="large region", region_hs1="chr3:1-5000000")]
     loci = [dict(Chr="chr1", Start="900", End="20100"), dict(Chr="chr1", Start="900", End="9100"),
             dict(Chr="chr2", Start="1000", End="2000"), dict(Chr="chr3", Start="1", End="5")]
     js = [dict(svtype="INV", chrom1="chr1", pos1=1200, chrom2="chr1", pos2=8800, loci={"chr1:900-20100", "chr1:900-9100"}),
@@ -182,7 +183,18 @@ def test_match_literature_levels():
     assert rows["chr3:1-5"]["Literature_Match"] == "none"
     # a junction 600 bp off misses at 500 bp tolerance
     far = [dict(js[0], pos1=1600, loci={"chr1:900-9100"})]
-    assert M.annotate([loci[1]], far, lit_j, lit_e, tol, 0.75)[0]["Literature_Match"] == "region"
+    # ... and the locus covers only 43% of E1's region: no region match at the default 0.5
+    assert M.annotate([loci[1]], far, lit_j, lit_e, tol, 0.75)[0]["Literature_Match"] == "none"
+    assert M.annotate([loci[1]], far, lit_j, lit_e, tol, 0.75, region_min_overlap=0)[0]["Literature_Match"] == "region"
+    # a 4 bp locus inside a 5 Mb published region is not a region match (reciprocal overlap)
+    assert rows["chr3:1-5"]["Literature_Region_Events"] == 0
+
+
+def test_reciprocal_overlap():
+    assert M.reciprocal(0, 100, 50, 150, 0.5)
+    assert not M.reciprocal(0, 100, 60, 1000, 0.5)
+    assert M.reciprocal(0, 100, 60, 1000, 0)
+    assert not M.reciprocal(0, 100, 200, 300, 0)
 
 
 # ─── add-on builder: windowed cutting ────────────────────────────────────────

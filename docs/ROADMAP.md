@@ -43,10 +43,12 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
    *Recommendation:* scale the privacy points by the matched fraction, tuned on
    the panel rather than on the positive control. *Decided 2026-10-29; done
    2026-11-03 and merged (PR #17), see item 10.*
-5. **ON HOLD.** **Curated literature set of pathogenic CxSVs** (item 11, the open part of
+5. **Curated literature set of pathogenic CxSVs** (item 11, the open part of
    item 5's "done when"). To decide: which sources, and whether selected
    literature structures should also be re-planted into the positive control
-   so detection, not only scoring, is tested.
+   so detection, not only scoring, is tested. *Decided 2026-11-04: approved,
+   both. Done: resource `lit-v1.0`, scoring test (A) and four re-planted
+   structures L01-L04 (B); docs/LITERATURE_SET.md, item 11 below.*
 6. **ON HOLD.** **When to start item 8** (read-level mechanism axes, PI criteria 3, 4, 6), and
    whether phasing runs on patients only or on the whole panel.
 7. **ON HOLD.** **For the restricted environment's IT** (item 2): which workflow engine and
@@ -112,7 +114,7 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
 | 8 | Read-level mechanism axes (PI criteria 3, 4, 6) | **on hold** (decision 6) | below |
 | 9 | ClinGen region-level dosage | done 2026-10-30; merged | `main`, docs/SCORING.md |
 | 10 | Graded privacy penalty for partly matched loci | done 2026-11-03; merged (PR #17) | `main`, docs/SCORING.md section 6b |
-| 11 | Curated literature set of pathogenic CxSVs | **on hold** (decision 5) | below |
+| 11 | Curated literature set of pathogenic CxSVs | **done 2026-11-04**: `lit-v1.0` (154 events, 315 junctions on hs1), tests A and B; "top tier" not met on main (7/63 Tier 1), proposals for item 13 | PR #19, `item11-literature-set-2`, docs/LITERATURE_SET.md |
 | 12 | Full panel build and first real release | **done 2026-11-03**: release `cxsv-panel-20261102-cd7e1d194cd4`, tag `panel-v1.0`; bundle validated offline (check 7: one locale-dependent plot, data identical); positive control run against it | `main` (tag), `validation-panel-v1.0`, below |
 | 13 | Oversized-cluster blind spot | **done 2026-11-04** (fix + panel evaluation); panel rebuild awaits decision 14 | `main` (`de23a0e`), `item13-oversized-clusters-2`, docs/OVERSIZED_CLUSTERS.md |
 | – | Small fixes 2026-11 (8 fixes from the panel-v1.0 validation) | done 2026-11-04; awaiting merge | `small-fixes-2026-11`, below |
@@ -264,7 +266,8 @@ Open for the PI:
   list);
 - 2F (a loss inside a benign HI-40 region);
 - whether to plant a whole-region CMT1A or *MECP2* duplication in the control
-  (item 11).
+  (item 11: not planted; *MECP2* overlaps E01 and no sequence-resolved CMT1A
+  complex duplication was obtained; L01-L04 were planted instead).
 
 ### 10. Graded privacy penalty for partly matched loci — done 2026-11-03, merged (PR #17)
 
@@ -423,16 +426,44 @@ operational starting points.
 weight in config (0 until calibrated) and a positive-control check (E06 for
 criterion 6; E09 for 3 and 4).
 
-### 11. Curated literature set of pathogenic CxSVs — on hold (decision 5)
+### 11. Curated literature set of pathogenic CxSVs — done 2026-11-04
 
-No single public, breakpoint-resolved set of pathogenic germline CxSVs is
-known to exist; one has to be assembled (sources and approach in the item's
-design note, to be written once decision 5 is made). Candidate sources:
-ClinVar via dbVar nstd102 (pathogenic translocations, inversions and complex
-records; mostly imprecise coordinates), and published sequence-resolved case
-series and reviews of germline complex rearrangements. **Done when:** a
-versioned junction-level table of literature CxSVs in hs1 exists, each with
-its source and phenotype, and the scorer ranks them in the top tier.
+Details are in docs/LITERATURE_SET.md.
+
+- **Resource:** `lit-v1.0` (`/mnt/sargasso1/CxSV/resources/literature/lit-v1.0`,
+  built by `acquisition/literature/`). It holds 154 published germline events:
+  63 at junction level from Nazaryan-Petersen 2018, Grochowski 2024,
+  Bahrambeigi 2019, Eisfeldt 2024 and Collins 2017, and 91 ClinVar (nstd102)
+  region records. Each event carries its source, DOI/PMID, phenotype label and
+  the authors' classification. All 315 junctions lifted to hs1. The resource
+  is checksummed and shipped by `make_bundle.sh --literature`.
+- **Annotation:** `literature_match` (event / junction / region / none), off by
+  default; it adds no points.
+- **Test A (scoring):**
+
+  | Discovery rule | Events called (of 63) | Tier 1 |
+  |---|---|---|
+  | v1.0 | 8 | 6 |
+  | breakends (de23a0e) | 24 | 18 |
+  | main 65ef970 (exclude) | 8 | 7 |
+  | interval rule, no size filter | 37 | 32 |
+
+  39 of the 63 events contain junctions longer than 500 kb; exclusion loses
+  28 events that another rule calls. 26 events (22 of them DUP-TRP/INV-DUP)
+  are not called under any rule, because clustering at 50 kb splits them.
+- **Test B (whole-genome positive control, add-ons L01-L04):**
+  - 46/46 L-series junctions (48/48 with E02) are called exactly, by bundle
+    33c075a and by main 65ef970.
+  - L02 (1.04), L03 (1.04) and L04 (1.74) are Tier 1 under both codes.
+  - L01 (*PLP1* DUP-TRP/INV-DUP) is not called by either code.
+  - On main, L03 is split into 13 fragments because 20 of its 40 junctions
+    are excluded.
+  - E02 is rescued on main.
+- **Done when — not fully met:** the scorer does not rank the literature events
+  in the top tier, because of discovery, not weights. The proposals (paired-
+  breakend linkage of long records, interleaved inversion pairs, locus
+  footprint, biallelic loss) are in docs/LITERATURE_SET.md section 7; the
+  first two belong to item 13.
 
 ---
 

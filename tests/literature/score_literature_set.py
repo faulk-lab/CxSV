@@ -9,8 +9,10 @@ scripts are run on it, rule by rule, with the same parameters:
                        ALT in breakend notation carrying the junction's sides, GT 0/1
                        (1/1 when the carrier is homozygous or hemizygous)
   vcf_to_bed.py -> bedtools sort/cluster -d cluster_distance -> classify_cxsv.py
-                       (twice: --max-cluster-size as on main, and 0 = filter off, so an event
-                       the oversized-cluster filter drops is still scored; item-13 dependency)
+                       in four discovery modes (MODES): v1.0 (span_link_max 0, as in panel-v1.0),
+                       breakends (item 13 first rule, de23a0e), main (item 13 follow-up:
+                       records > span_link_max excluded from discovery) and filter_off (main
+                       with --max-cluster-size 0)
   extract_cxsv_vcf.py -> annotate_cxsv.py -> extract_junctions.py
   classify_patient_cxsv.py   against the panel-v1.0 release (verified separately);
                        Panel_Callable is filled from the release's callability masks,
@@ -32,7 +34,8 @@ Outputs in --work:
   events/<event>/<mode>/...           all intermediate files
   literature_scores.tsv               one row per (event, mode, locus): class, status, axis
                                       points (privacy, genes, event, evidence, chromothripsis), total, tier
-  literature_event_summary.tsv        one row per event: discovery (main), best tier main / filter-off
+  literature_event_summary.tsv        one row per event: per mode, CxSV loci, oversized clusters,
+                                      long-span records, best score/tier
   junction_privacy.tsv                per junction: panel sites / carriers, catalogue hits + max AF
 
 Usage (freya, env cxsv-pipeline):
@@ -50,9 +53,25 @@ from collections import defaultdict
 
 import yaml
 
-MODES = {"main": None, "filter_off": 0}       # None = calling.yaml max_cluster_size
+# mode -> (max_cluster_size, span_link_max, long_span_rule); None = the value in config/calling.yaml.
+#   v1.0        discovery as in panel-v1.0 and bundle 33c075a: every record clustered as its interval
+#   breakends   item 13 first rule (de23a0e, superseded): records > span_link_max clustered at
+#               their two breakends
+#   main        discovery on main (item 13 follow-up a1515bd): records > span_link_max left out of
+#               discovery (long_span_rule exclude), listed in cxsv/long_span_records.tsv
+#   filter_off  main without the oversized-cluster filter (--max-cluster-size 0)
+MODES = {"v1.0": (None, 0, "breakends"), "breakends": (None, None, "breakends"),
+         "main": (None, None, None), "filter_off": (0, None, None)}
 GROUPS = ("privacy", "genes", "event", "evidence", "chromothripsis", "phenotype", "inheritance")
 ALT_FMT = {("+", "-"): "N[{c}:{p}[", ("+", "+"): "N]{c}:{p}]", ("-", "-"): "[{c}:{p}[N", ("-", "+"): "]{c}:{p}]N"}
+
+
+def count_long(path):
+    """Records vcf_to_bed.py listed as longer than span_link_max (0 if none / no file)."""
+    if not os.path.exists(path):
+        return 0
+    with open(path) as fh:
+        return sum(1 for ln in fh if ln.strip() and not ln.startswith(("#", "ID\t")))
 
 
 def read_tsv(path):
@@ -150,8 +169,12 @@ def run_event(task):
     gt = "1/1" if ev["zygosity"] in ("homozygous", "hemizygous") else "0/1"
     contigs = {ln.split("\t")[0]: int(ln.split("\t")[1]) for ln in open(a.fai)}
     write_vcf(f"{S}/merged_sv.vcf", junctions, contigs, gt)
-    max_cluster = cp["max_cluster_size"] if MODES[mode] is None else MODES[mode]
-    sh(f"python {W}/vcf_to_bed.py --vcf {S}/merged_sv.vcf --out {S}/cxsv/merged_sv.bed --window {cp['bnd_window']}", log)
+    mcs, slm, rule = MODES[mode]
+    max_cluster = cp["max_cluster_size"] if mcs is None else mcs
+    link_max = cp.get("span_link_max", 0) if slm is None else slm
+    rule = cp.get("long_span_rule", "breakends") if rule is None else rule
+    sh(f"python {W}/vcf_to_bed.py --vcf {S}/merged_sv.vcf --out {S}/cxsv/merged_sv.bed --window {cp['bnd_window']} "
+       f"--span-link-max {link_max} --long-span-rule {rule} --long-out {S}/cxsv/long_span_records.tsv", log)
     sh(f"bedtools sort -i {S}/cxsv/merged_sv.bed > {S}/cxsv/merged_sv_sorted.bed && "
        f"bedtools cluster -d {cp['cluster_distance']} -i {S}/cxsv/merged_sv_sorted.bed > {S}/cxsv/clusters.bed", log)
     sh(f"python {W}/classify_cxsv.py --bed {S}/cxsv/clusters.bed --vcf {S}/merged_sv.vcf --fai {a.fai} "
@@ -163,7 +186,7 @@ def run_event(task):
        f"--min-interleaved {cp['min_interleaved']} --interleave-alt-min-intra {cp['interleave_alt_min_intra']} "
        f"--interleave-alt-min-inter {cp['interleave_alt_min_inter']} --max-cluster-size {max_cluster}", log)
     sh(f"python {W}/extract_cxsv_vcf.py --vcf {S}/merged_sv.vcf --summary {S}/cxsv/cxsv_summary.tsv "
-       f"--output {S}/cxsv/cxsv_only.vcf", log)
+       f"--span-link-max {link_max} --long-span-rule {rule} --output {S}/cxsv/cxsv_only.vcf", log)
     sh(f"python {W}/annotate_cxsv.py --summary {S}/cxsv/cxsv_summary.tsv --vcf {S}/cxsv/cxsv_only.vcf "
        f"--genes {ann['genes_bed']} --exons {ann['exons_bed']} --repeats {ann['repeats_bed']} "
        f"--segdups {ann['segdup_bed']} --out-table {S}/cxsv/cxsv_master_table.tsv --out-bed {S}/cxsv/cxsv_loci.bed", log)
@@ -174,7 +197,8 @@ def run_event(task):
     out = {"event_id": ev["event_id"], "mode": mode, "clusters": len(summary),
            "oversized": sum(r["CxSV_Criteria"] == "FILTERED_oversized_cluster" for r in summary),
            "cxsv_loci": sum(r["IsCxSV"] == "YES" for r in summary),
-           "max_cluster_bp": max((int(r["Size"]) for r in summary), default=0), "loci": []}
+           "max_cluster_bp": max((int(r["Size"]) for r in summary), default=0), "loci": [],
+           "long_span_records": count_long(f"{S}/cxsv/long_span_records.tsv")}
     if not out["cxsv_loci"]:
         return out
     R = a.release
@@ -357,11 +381,12 @@ def main():
     for res in results:
         for L in res["loci"] or [{}]:
             rows.append(dict({k: res[k] for k in ("event_id", "mode", "clusters", "oversized", "cxsv_loci",
-                                                 "max_cluster_bp")}, **L))
+                                                 "max_cluster_bp", "long_span_records")}, **L))
         s = summ.setdefault(res["event_id"], {"event_id": res["event_id"]})
         best = max(res["loci"], key=lambda L: float(L["Total_Score"]), default=None)
         s[f"{res['mode']}_cxsv_loci"] = res["cxsv_loci"]
         s[f"{res['mode']}_oversized_clusters"] = res["oversized"]
+        s[f"{res['mode']}_long_span_records"] = res["long_span_records"]
         s[f"{res['mode']}_best_score"] = best["Total_Score"] if best else "NA"
         s[f"{res['mode']}_best_tier"] = best["Tier"] if best else "not_called"
         s[f"{res['mode']}_best_class"] = best["Cmplx_Class"] if best else "NA"

@@ -169,7 +169,9 @@ This driver builds no panel and slices nothing:
 
 - It checks the control's MD5 and CRAM version. A CRAM 3.1 input is transcoded
   to 3.0 as the panel build did, because mosdepth 0.3.10 cannot decode 3.1.
-- It splices the E13 add-on over the whole genome.
+- It splices the E13 add-on over the whole genome; `ADDONS="dir ..."` splices
+  others too, such as the literature add-ons L01-L04, and `EVENTS` names the
+  event list to score (section "Literature add-ons" below).
 - It runs `run_cxsv.sh patient` (network off) against the bundle's own release
   and scores with `score_pos_control.py`. All of it runs inside the bundle's SIF.
 - Verdicts are reported, not enforced: against a real panel E13 is expected to
@@ -355,6 +357,53 @@ of a > 500 kb record whose whole interval was counted for genes; it was
 replaced by excluding such records.
 
 ![Positive control before/after item 13](figures/item13/fig_pos_control.png)
+
+## Literature add-ons L01-L04 (roadmap item 11, 2026-11-04, whole genome against panel-v1.0)
+
+Four published structures from the literature set (docs/LITERATURE_SET.md) are
+planted as add-ons on host 3559, by the same mechanism as E13
+(`tests/positive_control/literature_addons.py`). They live in
+`/mnt/sargasso1/CxSV/datasets/pos_control/addons/L01..L04`, each with `addon.yaml`,
+`reads/`, `truth/` and `MD5SUMS`. The combined event list is
+`addons/events_E01-E13+L01-L04.yaml`. The release CRAM and the E01-E13 truth
+are unchanged. Reads: badread 0.4.2, heterozygous.
+
+| Add-on | Published event | hs1 | Mode |
+|---|---|---|---|
+| L01 | *PLP1* DUP-TRP/INV-DUP (Bahrambeigi 2019, BAB8964) | chrX:101,752,401-102,492,226 | full haplotype |
+| L02 | 17p13.3 DEL-INV-DEL (Nazaryan-Petersen 2018, P2109_123) | chr17:2,154,467-2,685,421 | full haplotype |
+| L03 | balanced germline chromothripsis, 40 junctions (Collins 2017, UTR22) | 28 windows on chr2/7/8/9, 7.0 Mb | windowed (100 kb per junction side) |
+| L04 | Xq28 deletion + inverted 9q22.33 insertion (Eisfeldt 2024, P6) | chrX:151,998,369-152,053,304; chr9:109,768,705-109,770,177 | full haplotype |
+
+```bash
+A=/mnt/sargasso1/CxSV/datasets/pos_control/addons
+B=/mnt/sargasso1/CxSV/bundles/cxsv-bundle-20261103-33c075a22071
+ADDONS="$A/E13 $A/L01 $A/L02 $A/L03 $A/L04" EVENTS=$A/events_E01-E13+L01-L04.yaml SKIP_MD5=1 \
+  bash tests/lab/pos_control_full_genome.sh $B W 12                      # bundle code
+ADDONS=... EVENTS=... LITERATURE=/mnt/sargasso1/CxSV/resources/literature/lit-v1.0 \
+  bash tests/lab/pos_control_rerun_downstream.sh $B W W_main CODE 12     # CODE's discovery, same calls
+```
+
+`pos_control_rerun_downstream.sh` copies the finished run and re-makes only the
+downstream rules with another checkout, inside the bundle's SIF. Its dry run
+must plan no caller, filter or merge rule, and the caller VCFs are checksummed
+before and after. The fingerprint is recomputed and a mismatch is allowed.
+
+| Event | Junctions | Bundle 33c075a | Main 65ef970 (long spans excluded) |
+|---|---|---|---|
+| L01 | 2/2 exact | not called (20.2 Mb oversized chrX cluster) | not called (its 532.8 kb INV excluded; the 81.7 kb INV alone) |
+| L02 | 2/2 exact | Complex_inversion, private, 1.04 Tier 1 | same |
+| L03 | 40/40 exact | 5 loci, 11/40 junctions; best 1.04 Tier 1 | 20 junctions excluded; 13 loci, 23/40 junctions; best 1.04 Tier 1 |
+| L04 | 2/2 exact | 2 BND_cluster loci, private, 1.74 Tier 1 | same |
+| E02 | 2/2 exact | not called | 1.95 Tier 1 |
+
+Junctions: 86 exact, 1 partial, 0 missed of 87 in both runs. E01 and E03-E13
+are unchanged. On main, the scorer marks L03 FAIL only because its status
+check counts host loci inside the 7 Mb of L03 windows (now classified;
+`public`). Every locus with an L03 breakend is private (12) or
+shared_junctions (1).
+
+![L01-L04 detection](figures/item11/detection_L01_L04.png)
 
 ## Latest 10-slice regression result (2026-10-29, roadmap item 5: classifier on distinct junctions + scoring)
 
