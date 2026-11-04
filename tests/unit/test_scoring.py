@@ -413,3 +413,26 @@ def test_match_catalogues_and_score_cli(tmp_path):
     assert len(feats) == 1 + len(sc.FEATURE_ORDER)
     md = open(res["md"]).read()
     assert "not a validated cutoff" in md and "| gene_dosage |" in md and L in md
+
+
+# ─── locus depth intervals ───────────────────────────────────────────────────
+def test_locus_segments_skip_contigs_absent_from_reference(tmp_path):
+    """A BND mate on a contig outside the reference (Sniffles2 2.8.1 wrote 'chrN' for a
+    PAR1 BND on the positive control) must not reach samtools bedcov (exit 2)."""
+    (tmp_path / "ref.fa.fai").write_text("chrX\t300000\t6\t60\t61\nchrY\t300000\t305000\t60\t61\n")
+    hdr = "chrom1\tpos1\tchrom2\tpos2\tsvtype\tsvlen\tlocus_id\tsupp_vec\tdosage\tn_records\trecord_ids\n"
+    rows = ["chrX\t120000\tchrX\t160000\tDEL\t-40000\tchrX:100000-200000\t111\t-1\t1\tS.DEL.1",
+            "chrX\t142943\tchrN\t917523\tBND\t0\tchrX:100000-200000\t001\t1\t1\tSniffles2.BND.90AS7"]
+    (tmp_path / "junctions.tsv").write_text(hdr + "\n".join(rows) + "\n")
+    (tmp_path / "loci.tsv").write_text("Chr\tStart\tEnd\nchrX\t100000\t200000\n")
+    out = tmp_path / "segments.bed"
+    res = subprocess.run([sys.executable, str(REPO / "workflow/scripts/locus_segments.py"),
+                          "--junctions", str(tmp_path / "junctions.tsv"), "--loci", str(tmp_path / "loci.tsv"),
+                          "--fai", str(tmp_path / "ref.fa.fai"), "--out", str(out)],
+                         capture_output=True, text=True, check=True)
+    bed = [l.split("\t") for l in out.read_text().splitlines()]
+    assert bed and {r[0] for r in bed} == {"chrX"}
+    assert all(0 <= int(r[1]) < int(r[2]) <= 300000 for r in bed)
+    kinds = [r[4] for r in bed]
+    assert kinds[0] == "flank_left" and kinds[-1] == "flank_right" and "segment" in kinds
+    assert "skipped breakends on contigs absent from the reference: chrN 1" in res.stderr

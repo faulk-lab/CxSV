@@ -23,6 +23,7 @@
 #   7. records identical: 4 vs 6 and 5 vs 6 (compare_patient_runs.py; files that
 #      differ only by the run's absolute paths are reported as such)
 #   8. tampered release refused: one byte changed / one unlisted file added
+# Env: CORES (default 16), STANDIN_RUN (run label, default standin_HG00130).
 # Writes WORKDIR/validation.log and WORKDIR/compare_*.tsv. Exit 0 = all passed.
 # =============================================================================
 set -uo pipefail
@@ -31,6 +32,7 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$BUNDLE/bundle.env"
 NORMAL_RELEASE="${4:-$BUNDLE/panel_release/$CXSV_RELEASE_ID}"
 CORES="${CORES:-16}"
+STANDIN_RUN="${STANDIN_RUN:-standin_HG00130}"   # patient_runs key (run label) of the stand-in
 RUN="$BUNDLE/run_cxsv.sh"
 FAILS=0
 exec > >(tee "$W/validation.log") 2>&1
@@ -85,7 +87,7 @@ done
 
 cat > "$W/standin_run.yaml" <<YAML
 patient_runs:
-  standin_HG00130: {samples: "$STANDIN/standin.tsv"}
+  $STANDIN_RUN: {samples: "$STANDIN/standin.tsv"}
 threads: {samtools: 4, sv_callers: $CORES}
 YAML
 
