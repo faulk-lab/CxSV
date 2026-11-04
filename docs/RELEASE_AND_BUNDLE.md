@@ -65,9 +65,19 @@ release:
   carriers and frequencies;
 - `callability`: the definition, its parameters and the site and per-sample summary;
 - `tools`: fingerprinted tools plus mosdepth, snakemake and python;
-- `runtime`: the container image tag, **image id**, **SIF sha256** and
-  environment-lock sha256 when built in the container; otherwise
-  `CONDA_PREFIX`;
+- `runtime`: the container image tag, **image id**, **SIF sha256**, where
+  those two came from (`ids_source`) and the environment-lock sha256 when
+  built in the container; otherwise `CONDA_PREFIX`. The launchers pass the
+  ids: the bundle's `run_cxsv.sh` from its `bundle.env`, the panel build's
+  `scripts/panel_build/lib.sh` (`cxsv_container`) from the `bundle.env` next
+  to the pinned SIF, or the SIF's own sha256 when it is not in a bundle (no
+  image id then). A non-test release built in the container without either id
+  is refused (`CXSV_ALLOW_MISSING_RUNTIME_IDS=1` overrides). panel-v1.0 was
+  built before this (small fixes 2026-11): its `runtime.image_id` and
+  `sif_sha256` are null, and its `release.json` stays as released. Its image
+  is the SIF of `cxsv-bundle-20261029-1dcabd9770f7` (build `plan.json`; SIF
+  sha256 `9f4e049fe5c5…`, image id `sha256:b6c1bded8b3a…` in that bundle's
+  `bundle.env`, which is what `cxsv_container` now records for it);
 - `files`: the file list.
 
 Release tags are **not** created by the workflow. The commit hash is recorded
@@ -105,6 +115,21 @@ Definitions are in `workflow/lib/cxsv_callability.py`; the rules are in
   This counts reads with MAPQ ≥ 20, the reads the SV callers use, and keeps
   the CALLABLE intervals (depth ≥ `min_depth`) as a gzipped BED. `gzip -n`
   makes the mask byte-reproducible.
+- **CRAM 3.1** (`workflow/scripts/callable_mask.sh`): the pinned mosdepth
+  0.3.10 cannot decode CRAM 3.1. It logs "Slice decode failure", exits 0 and
+  leaves an empty mask. `panel_callability.cram31` chooses what happens:
+  `transcode` (default) writes a temporary, record-count-checked CRAM 3.0 copy
+  in the sample's `callability/` directory, uses it and deletes it (the input
+  is never touched; this needs disk for one copy of the CRAM); `fail` stops
+  with an error. In either case, decode errors in mosdepth's output or a mask
+  with 0 callable bp fail the step. The panel-v1.0 build transcoded CRAM 3.1 at
+  staging instead (`lib.sh cxsv_cram30`; 208 of 1,017 1kGP ONT CRAMs). The
+  patient workflow has no mosdepth step: its CRAM readers (samtools 1.21,
+  pysam 0.22.1 in the callers) decode CRAM 3.1. The synthetic patient run
+  from a CRAM 3.1 copy gives the same CxSV loci, junctions, panel status and
+  scores as from the BAM, and caller VCFs identical to a CRAM 3.0 copy (small
+  fixes 2026-11). Between BAM and either CRAM, cuteSV's read support differs
+  at 3 of 22 calls (e.g. RE 29 vs 28), reproducibly; the call set is the same.
 - **Breakpoint callable:** a window of `flank` bp on at least **one** side of
   the breakpoint, `[pos-flank, pos)` or `[pos, pos+flank)`, lies inside one
   CALLABLE interval. One side is enough because the reads anchoring a junction
@@ -286,6 +311,32 @@ read-only and isolates the container:
 `--no-netns` exists only for sites whose runtime forbids unprivileged network
 namespaces. The bundle needs no network either way.
 
+Inside the container, for every process (small fixes 2026-11):
+
+- **Temporary files:** `TMPDIR`, `TMP` and `TEMP` are `/work/.tmp` (the run
+  directory's `.tmp/`), and the same directory is mounted as `/tmp`. Python's
+  `tempfile` and R's `tempdir()` follow `TMPDIR`. Without this, Singularity's
+  `--containall` `/tmp` is a 64 MB tmpfs.
+- **CRAM references:** `REF_PATH` and `REF_CACHE` are
+  `/bundle/reference/ref_cache/%2s/%2s/%s`. htslib then finds every CRAM
+  reference sequence by its `@SQ M5` in the bundle's MD5 cache, never through
+  a header `UR` path or a download. SVIM 2.0.0 opens CRAMs without
+  `--reference` and depends on this. The caller rules export the same values
+  (`HTS_ENV`, from `ref_cache`); the panel build's `cxsv_container` sets them
+  from `CXSV_REF_CACHE`.
+- **SVIM output check** (`workflow/rules/caller_checks.smk`,
+  `scripts/check_svim_output.py`): after the callers, `qc/svim_check.tsv`
+  fails the sample when the SVIM log has a CRAM decode / truncation / reference
+  error or lacks SVIM's closing `Done.`, or when SVIM has no calls on a contig
+  where Sniffles2 has at least 20 (`svim_check.min_reference_calls`). This is
+  the failure of the panel-v1.0 build when a chr7 cache file went missing
+  (~269 samples; all re-called before the release). The check is a target of
+  the panel, panel_build and patient workflows, and `score_cxsv` waits for it.
+  It is outside the calling fingerprint, and no caller rule or output changed.
+
+`tests/lab/check_container_env.sh BUNDLE WORKDIR` checks both settings under
+Singularity and Docker.
+
 **Open question for the restricted environment's IT** (unchanged): which
 workflow engine and container runtime are allowed. The bundle assumes
 Snakemake (inside the image) plus Singularity/Apptainer, and also ships a
@@ -320,9 +371,20 @@ NAS. Records: `validation.log`, `compare_*.tsv`
 | 4. patient run, Singularity, bundle only | PASS (2,894 s, 12 cores) |
 | 5. patient run, Docker, image loaded from the bundle archive | PASS (2,907 s) |
 | 6. patient run outside the bundle (clean worktree at the commit, conda env, NAS release, resources and catalogues) | PASS (2,652 s) |
-| 7. records, 4 vs 6 and 5 vs 6 | **FAIL as scripted; explained, no data difference.** Of 57 files: 51 identical; 3 identical after path normalisation; 2 expected run-record differences; **1 differs: `plots/complexity_class_heatmap.pdf`**. Its panel B rows are ordered by base R `sort()`, which depends on the locale: the image sets `LC_ALL=C.UTF-8`; the host job had no `LANG` (POSIX). `CN_plus_orientation_change` and `Chromothripsis_like` swap places (the slice stand-ins had no `CN_plus…` locus). Re-rendering only that plot in run 6 with `LC_ALL=C.UTF-8` gives 52 identical, 3 path-normalised, 2 expected, **0 unexpected**, for both 4 vs 6 and 5 vs 6. Runs 4 and 5 are identical to each other |
+| 7. records, 4 vs 6 and 5 vs 6 | **FAIL as scripted; explained, no data difference.** Of 57 files: 51 identical; 3 identical after path normalisation; 2 expected run-record differences; **1 differs: `plots/complexity_class_heatmap.pdf`**. Its panel B rows are ordered by base R `sort()`, which depends on the locale: the image sets `LC_ALL=C.UTF-8`; the host job had no `LANG` (POSIX). `CN_plus_orientation_change` and `Chromothripsis_like` swap places (the slice stand-ins had no `CN_plus…` locus). Re-rendering only that plot in run 6 with `LC_ALL=C.UTF-8` gives 52 identical, 3 path-normalised, 2 expected, **0 unexpected**, for both 4 vs 6 and 5 vs 6. Runs 4 and 5 are identical to each other. *Rerun 2026-11-04 with the fixed script (small fixes 2026-11): PASS, see below* |
 | 8a/8b. tampered release (one digit / one extra file) | PASS: refused before any job ran |
 | total | 8,897 s (2 h 28 min) |
+
+**Check 7 rerun, 2026-11-04 (branch `small-fixes-2026-11`, fix 1).** From
+hardlinked copies of the three result trees above (originals untouched), only
+`complexity_class_heatmap.pdf` was re-rendered with the fixed
+`plot_complexity_class.R`, each in the environment of its run: Singularity
+(the bundle SIF), Docker (the bundle image), and the host conda env (POSIX
+locale). Comparing them with the same `compare_patient_runs.py` call as check
+7 gives, for 4 vs 6 and 5 vs 6 alike, 57 files: 52 identical, 3 identical
+after path normalisation, 2 expected run-record differences, **0 unexpected:
+PASS**. The rest of the bundle validation was not re-run; the bundle itself
+still carries the old script until it is rebuilt from a commit with the fix.
 
 Stand-in result (identical in runs 4, 5 and 6):
 
@@ -345,7 +407,7 @@ on the stand-in, but the whole-genome positive control failed at rule
 - leaves the fingerprint unchanged (`locus_segments.py` is not calling code).
 
 The dc7f582 bundle's validation was stopped after check 5 and the bundle renamed
-`*.SUPERSEDED` (deletable). The same commit adds
+`*.SUPERSEDED`; it was deleted on 2026-11-04 (PI-approved). The same commit adds
 `tests/lab/pos_control_full_genome.sh` and the `STANDIN_RUN` label to
 `validate_bundle.sh`. Positive control against this bundle:
 docs/POSITIVE_CONTROL.md, "Full-panel result".
@@ -356,7 +418,7 @@ Findings, not fixed (outside this validation):
   levels in `plot_complexity_class.R`, or `LC_ALL=C.UTF-8` for check 6.
 - `run_cxsv.sh` gives the container a 64 MB tmpfs `/tmp` (`--containall`,
   `TMPDIR` unset). Whole-genome runs did not need more; the panel build binds a
-  disk `/tmp`.
+  disk `/tmp`. *Fixed in small fixes 2026-11 (section 5).*
 - Whole-genome CxSV detection loses events inside oversized clusters
   (docs/ROADMAP.md item 13).
 

@@ -40,8 +40,14 @@ Control files in <BUILD>/nodes/<NODE>/ (scripts/panel_build/control.sh):
   STOP    terminate running samples now (Snakemake marks their outputs
           incomplete; the next run redoes them) and exit.
 Resumable: re-running the runner skips done samples, re-adopts instances that
-are still alive (pid files in run/), and redoes the rest; Snakemake's
+are still alive (pid files in run/, or found by their overlay path in /proc
+when the pid file is missing), and redoes the rest; Snakemake's
 --rerun-incomplete in the same node working directory cleans partial outputs.
+At start, every sample the ledger leaves open (last event started/adopted)
+that is not adopted gets an event (reconcile_at_start): `done` when it
+finished while no runner was running (an instance outlives its runner:
+start_new_session), else `retry` ("re-queued"), so the ledger accounts for
+every sample.
 
 Ledger: <BUILD>/nodes/<NODE>/ledger.tsv, append-only, written only by this
 runner (one file per node, never shared): time, epoch, node, cohort,
@@ -68,6 +74,8 @@ sys.path.insert(0, HERE)
 import shardlib  # noqa: E402
 
 POLL_S = 20
+# events that open or close a sample's run (reconcile_at_start); staging events are not
+LIFECYCLE = ("started", "adopted", "done", "retry", "gave_up", "stopped")
 LEDGER_COLUMNS = ["time", "epoch", "node", "cohort", "sample_id", "event", "attempt", "seconds", "detail"]
 
 
@@ -101,7 +109,9 @@ class Runner:
         self.staged = set()
         self.failed = set()
         self.done = set()        # filled by scan_done() at start, then only by reap()
+        self.last_event = {}     # key -> (event, epoch, attempt): last lifecycle event in the ledger
         self.stage_failures = {}
+        self.dead_at_start = {}  # key -> (pid, attempt) of pid files whose instance had exited
         self.paused = False
         self.disk_short = False
 
@@ -127,8 +137,12 @@ class Runner:
     def previous_attempts(self):
         if not os.path.exists(self.ledger_path):
             return
-        with open(self.ledger_path) as fh:
-            for r in csv.DictReader(fh, delimiter="\t"):
+        with open(self.ledger_path, errors="replace") as fh:
+            for r in csv.DictReader((ln for ln in fh if "\0" not in ln), delimiter="\t"):
+                if not r.get("sample_id") or not r.get("event"):
+                    continue
+                if r["event"] in LIFECYCLE:
+                    self.last_event[(r["cohort"], r["sample_id"])] = (r["event"], r["epoch"], r["attempt"])
                 if r["event"] == "started" and r["sample_id"]:
                     k = (r["cohort"], r["sample_id"])
                     self.attempts[k] = max(self.attempts.get(k, 0), int(r["attempt"] or 1))
@@ -287,7 +301,9 @@ class Runner:
         self.attempts[key] = attempt
         ov = self.write_overlay(row)
         tmp = f"{self.cfg['tmp_dir']}/{self.tag(key)}"
-        env = dict(os.environ, CXSV_SIF=self.cfg["sif"], CXSV_EXTRA_BINDS=self.cfg["stage_dir"])
+        node_ov = json.load(open(f"{self.nd}/node.yaml"))
+        env = dict(os.environ, CXSV_SIF=self.cfg["sif"], CXSV_EXTRA_BINDS=self.cfg["stage_dir"],
+                   CXSV_REF_CACHE=node_ov.get("ref_cache", ""))  # REF_PATH/REF_CACHE in the container (lib.sh)
         cmd = (f"source '{HERE}/lib.sh' && cxsv_snakemake '{self.nd}/work' '{tmp}' '{self.cfg['code']}' "
                f"{int(self.cfg['cores_per_sample'])} '{ov}'")
         logf = open(f"{self.nd}/logs/{self.tag(key)}.attempt{attempt}.log", "w")
@@ -305,6 +321,25 @@ class Runner:
             except FileNotFoundError:
                 pass
         self.staged.discard((row["cohort"], row["sample_id"]))
+
+    def orphan_instances(self):
+        """Live instances of this node without a pid file: overlay path -> pid of the session leader
+        (start_sample runs `bash -c ... cxsv_snakemake ... <overlay>` in its own session)."""
+        found = {}
+        tag = f"{self.nd}/overlays/"
+        try:
+            pids = [int(p) for p in os.listdir("/proc") if p.isdigit()]
+        except OSError:
+            return found
+        for pid in pids:
+            try:
+                cmd = open(f"/proc/{pid}/cmdline", "rb").read().replace(b"\0", b" ").decode(errors="replace")
+                if tag in cmd and "cxsv_snakemake" in cmd and os.getsid(pid) == pid:
+                    ov = cmd[cmd.index(tag):].split("'")[0].split()[0]
+                    found[ov] = pid
+            except (OSError, ValueError):
+                continue
+        return found
 
     def adopt(self):
         """Re-attach to instances a previous runner started that are still alive."""
@@ -326,6 +361,51 @@ class Runner:
                 self.log(key, "adopted", attempt, detail=f"pid {pid}")
             else:
                 os.remove(f"{self.nd}/run/{fn}")
+                self.dead_at_start[key] = (int(pid), attempt)
+        orphans = self.orphan_instances()
+        for row in self.plan:
+            key = (row["cohort"], row["sample_id"])
+            pid = orphans.get(f"{self.nd}/overlays/{self.tag(key)}.yaml")
+            if pid and key not in self.running and key not in self.done:
+                attempt = str(self.attempts.get(key, "") or "")
+                self.running[key] = {"pid": pid, "t0": time.time(), "proc": None}
+                self.staged.add(key)
+                with open(f"{self.nd}/run/{self.tag(key)}.pid", "w") as fh:
+                    fh.write(f"{pid}\t{time.time():.0f}\t{attempt or 1}\n")
+                self.dead_at_start.pop(key, None)
+                self.log(key, "adopted", attempt, detail=f"pid {pid} (no pid file; found by its overlay)")
+
+    def reconcile_at_start(self):
+        """Close the ledger entries an earlier runner left open (last event started/adopted).
+
+        Adopted instances are still running and stay open. A sample that finished
+        while no runner was running (its instance outlived the runner) gets its
+        `done` event now; it would otherwise have none (5 samples of the
+        panel-v1.0 build). Any other open sample is re-queued with a `retry`
+        event: it is pending again (its instance is gone; Snakemake's
+        --rerun-incomplete redoes the partial outputs).
+        """
+        for key, (ev, epoch, attempt) in sorted(self.last_event.items()):
+            if ev not in ("started", "adopted") or key in self.running:
+                continue
+            if not any((r["cohort"], r["sample_id"]) == key for r in self.plan):
+                continue
+            pid = self.dead_at_start.get(key, (None, None))[0]
+            if key in self.done:
+                try:
+                    took = os.path.getmtime(f"{self.sample_dir(key)}/panel_build/cost.tsv") - float(epoch)
+                except (OSError, ValueError):
+                    took = ""
+                self.log(key, "done", attempt, took,
+                         "finished while no runner was running; found at runner start")
+                try:
+                    self.unstage(self.row_of(key))      # a local copy left behind is no longer needed
+                except (KeyError, OSError):
+                    pass
+            else:
+                self.failed.discard(key)
+                self.log(key, "retry", attempt, detail="instance not running at runner start"
+                         + (f" (pid {pid})" if pid else "") + "; re-queued")
 
     def reap(self):
         for key, st in list(self.staging.items()):
@@ -484,6 +564,7 @@ class Runner:
                                               f"plan {len(self.plan)} samples, "
                                               f"{len(self.done)} already done")
         self.adopt()
+        self.reconcile_at_start()
         # copies left by an earlier runner are reused if complete (cxsv_stage checks sizes)
         for row in self.plan:
             key = (row["cohort"], row["sample_id"])

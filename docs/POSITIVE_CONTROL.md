@@ -321,7 +321,8 @@ item 10 on the regression, is public against panel-v1.0 (14 carriers):
 0.00, Tier 3.
 
 **Defect found and fixed on the way (PI-approved, commit `33c075a`).** The
-first run, from bundle `cxsv-bundle-20261103-dc7f582c01cc` (now `*.SUPERSEDED`),
+first run, from bundle `cxsv-bundle-20261103-dc7f582c01cc` (superseded; deleted
+2026-11-04, PI-approved),
 failed at rule `locus_depth`. Sniffles2 2.8.1 wrote a PAR1 BND
 (`Sniffles2.BND.90AS7`, chrX:142,943) whose ALT mate contig is `chrN`
 (`CHR2=chrY`). `locus_segments.py` made depth intervals on `chrN`, and

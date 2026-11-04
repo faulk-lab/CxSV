@@ -222,3 +222,21 @@ def test_finalise_tag_refuses_other_commit_or_unverified_release(tmp_path):
     (rel / "panel_summary.tsv").write_text("tampered\n")
     with pytest.raises(ValueError, match="does not verify"):
         cr.finalise_tag(rel, "panel-v9", repo, "x")
+
+
+def test_release_runtime_records_image_ids_and_refuses_a_container_build_without_them():
+    """release.json runtime: SIF sha256 + image id + their source; a non-test container build
+    without either is refused (panel-v1.0 has both null), unless explicitly allowed."""
+    import write_release_metadata as wrm
+    env = {"CXSV_IMAGE": "cxsv-pipeline:x", "CXSV_SIF_SHA256": "ab" * 32, "CXSV_IMAGE_ID": "sha256:" + "cd" * 32,
+           "CXSV_RUNTIME_IDS_SOURCE": "bundle.env of b", "CXSV_ENV_LOCK_SHA256": "ef" * 32, "CONDA_PREFIX": "/opt/conda"}
+    rt = wrm.runtime_info(False, env)
+    assert rt == {"container_image": "cxsv-pipeline:x", "image_id": "sha256:" + "cd" * 32, "sif_sha256": "ab" * 32,
+                  "ids_source": "bundle.env of b", "env_lock_sha256": "ef" * 32, "conda_prefix": None}
+    bare = {"CXSV_IMAGE": "cxsv-pipeline:x", "CXSV_SIF_SHA256": "", "CXSV_ENV_LOCK_SHA256": "ef" * 32}
+    with pytest.raises(SystemExit, match="neither CXSV_SIF_SHA256 nor CXSV_IMAGE_ID"):
+        wrm.runtime_info(False, bare)
+    assert wrm.runtime_info(True, bare)["sif_sha256"] is None                   # test release: allowed
+    assert wrm.runtime_info(False, dict(bare, CXSV_ALLOW_MISSING_RUNTIME_IDS="1"))["image_id"] is None
+    outside = wrm.runtime_info(False, {"CONDA_PREFIX": "/envs/cxsv"})           # no container: conda env recorded
+    assert outside["conda_prefix"] == "/envs/cxsv" and outside["container_image"] is None

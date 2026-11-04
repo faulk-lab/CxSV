@@ -53,9 +53,23 @@ class_pal <- c(
 )
 
 # ── PANEL A: complexity class bar ─────────────────────────────────────────────
+# Every axis order below is explicit and independent of the locale. ggplot2
+# orders a character axis with sort(), whose collation follows LC_COLLATE: the
+# host (POSIX) and the container (C.UTF-8) put "CN_plus_orientation_change" and
+# "Chromothripsis_like" in different orders, so the same table gave two
+# different PDFs (bundle validation check 7, 2026-11-03). c_sort() is sort()
+# with method = "radix", which always uses C (byte) collation.
+c_sort <- function(x) sort(unique(x), method = "radix")
+# Classes in the palette's order, then any class the palette does not name
+class_levels <- function(x) {
+  x <- unique(x)
+  c(intersect(names(class_pal), x), c_sort(setdiff(x, names(class_pal))))
+}
+
 class_counts <- df %>%
   count(Cmplx_Class) %>%
-  arrange(desc(n)) %>%
+  # by frequency; ties by class name in C collation
+  arrange(desc(n), match(Cmplx_Class, c_sort(Cmplx_Class))) %>%
   mutate(Cmplx_Class = factor(Cmplx_Class, levels = Cmplx_Class))
 
 pA <- ggplot(class_counts, aes(x = Cmplx_Class, y = n, fill = Cmplx_Class)) +
@@ -86,7 +100,10 @@ heat_df <- sv_types_exp %>%
   count(Cmplx_Class, SV_Types) %>%
   group_by(Cmplx_Class) %>%
   mutate(Prop = n / sum(n)) %>%
-  ungroup()
+  ungroup() %>%
+  # rows: palette order (top to bottom); columns: CANONICAL_SV_TYPES order
+  mutate(Cmplx_Class = factor(Cmplx_Class, levels = rev(class_levels(Cmplx_Class))),
+         SV_Types    = factor(SV_Types, levels = intersect(CANONICAL_SV_TYPES, SV_Types)))
 
 pB <- ggplot(heat_df, aes(x = SV_Types, y = Cmplx_Class, fill = Prop)) +
   geom_tile(color = "white", linewidth = 0.5) +

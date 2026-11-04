@@ -41,3 +41,12 @@ loci that are not public in either leave-out mode, the only loci whose points a
 privacy rule can change; public loci then score without copy-number features.
 Measuring every locus reads nearly every CRAM container of a long-read
 alignment (~80 TB over the panel).
+
+## Where the results are
+
+The summary tables of the item-10 calibration (`results/`: chosen_parameters.json,
+strata_before_after.tsv, sweep_curve.tsv.gz, stability.tsv, …) are ignored by
+git (`.gitignore`: `results/`). A copy with SHA256SUMS is on the NAS at
+`/mnt/sargasso1/CxSV/calibration/item10/graded_privacy_results/` (copied
+2026-11-04 from the item-10 worktree); the bulk data are in
+`/mnt/sargasso1/CxSV/calibration/item10/`.

@@ -203,3 +203,118 @@ def test_runner_honours_reassign_plan(tmp_path):
     assert live.sheet_row(live.plan[0])["alignment"] == "/live/s3.bam"
     dead = run_node.Runner(str(b), "dead")
     assert [r["sample_id"] for r in dead.plan] == ["s1"]
+
+
+def _image_ids(sif, extra_env=None, cache=None):
+    import os
+    import subprocess
+    lib = REPO / "scripts" / "panel_build" / "lib.sh"
+    env = {"PATH": os.environ["PATH"], "HOME": str(cache), "CXSV_SIF": str(sif), **(extra_env or {})}
+    out = subprocess.run(["bash", "-c", f"source '{lib}' && cxsv_image_ids && "
+                          "printf '%s\\n%s\\n%s\\n' \"$CXSV_SIF_SHA256\" \"$CXSV_IMAGE_ID\" \"$CXSV_RUNTIME_IDS_SOURCE\""],
+                         capture_output=True, text=True, env=env, check=True)
+    return out.stdout.split("\n")[:3]
+
+
+def test_lib_image_ids_from_bundle_env_or_sif_sha256(tmp_path):
+    """cxsv_container passes the image's ids into release.json: a bundle SIF's from its bundle.env,
+    any other SIF's sha256 computed (and cached), never a stale value from another SIF."""
+    import hashlib
+    b = tmp_path / "bundle"
+    (b / "container").mkdir(parents=True)
+    (b / "container" / "cxsv-pipeline.sif").write_bytes(b"sif")
+    (b / "bundle.env").write_text("CXSV_BUNDLE_ID=x\nCXSV_IMAGE_ID=sha256:feed\nCXSV_SIF_SHA256=" + "a" * 64 + "\n")
+    sha, iid, src = _image_ids(b / "container" / "cxsv-pipeline.sif", cache=tmp_path)
+    assert (sha, iid) == ("a" * 64, "sha256:feed") and src.startswith("bundle.env of")
+    loose = tmp_path / "other.sif"
+    loose.write_bytes(b"another image")
+    want = hashlib.sha256(b"another image").hexdigest()
+    sha, iid, src = _image_ids(loose, cache=tmp_path)
+    assert (sha, iid) == (want, "") and src == f"sha256 of {loose}"
+    assert list((tmp_path / ".cache" / "cxsv").glob("sif_sha256.*"))       # cached for the next call
+    # ids exported for one SIF are recomputed when CXSV_SIF changes
+    sha, _, _ = _image_ids(loose, {"CXSV_SIF_SHA256": "b" * 64, "CXSV_IDS_FOR": "/elsewhere.sif"}, cache=tmp_path)
+    assert sha == want
+    sha, _, _ = _image_ids(loose, {"CXSV_SIF_SHA256": "b" * 64}, cache=tmp_path)   # set by the caller: kept
+    assert sha == "b" * 64
+
+
+def _restart_build(tmp_path):
+    """A node directory as an earlier runner left it: three samples open in the ledger."""
+    import json
+    import run_node
+    b = tmp_path / "build"
+    nd = b / "nodes" / "n1"
+    for d in ("run", "logs", "overlays", "work", "sheets"):
+        (nd / d).mkdir(parents=True)
+    cols = ["cohort", "sample_id", "bytes", "est_peak_rss_gb", "node", "order"]
+    (b / "plan").mkdir(parents=True)
+    (b / "plan" / "shard_plan.tsv").write_text("\t".join(cols) + "\n" + "".join(
+        f"A\t{s}\t1\t1\tn1\t{i}\n" for i, s in enumerate(("s1", "s2", "s3", "s4"), 1)))
+    (nd / "sheets" / "A.tsv").write_text("sample_id\talignment\n" + "".join(f"{s}\t/src/{s}.bam\n" for s in ("s1", "s2", "s3", "s4")))
+    res = b / "results"
+    (nd / "runner.json").write_text(json.dumps({"results_root": str(res), "stage_dir": str(tmp_path / "stage"),
+                                                "max_attempts": 2}))
+    ledger = ["\t".join(run_node.LEDGER_COLUMNS)]
+    for s, ev in (("s1", "started"), ("s2", "started"), ("s3", "adopted"), ("s4", "started")):
+        ledger.append(f"t\t1000\tn1\tA\t{s}\t{ev}\t1\t\tpid 1")
+    ledger.append("t\t1001\tn1\tA\ts4\tdone\t1\t50\t")                 # s4 closed normally
+    (nd / "ledger.tsv").write_text("\n".join(ledger) + "\n")
+    # s1 finished while the runner was down; s2 died unfinished; s3's instance is gone, no pid file
+    (res / "samples" / "A" / "s1" / "panel_build").mkdir(parents=True)
+    (res / "samples" / "A" / "s1" / "panel_build" / "cost.tsv").write_text("x\n")
+    (res / "samples" / "A" / "s4" / "panel_build").mkdir(parents=True)
+    (res / "samples" / "A" / "s4" / "panel_build" / "cost.tsv").write_text("x\n")
+    for s in ("s1", "s2"):
+        (nd / "run" / f"A__{s}.pid").write_text("999999999\t1000\t1\n")   # no such process
+    return b, run_node
+
+
+def _events(b):
+    import csv
+    with open(b / "nodes" / "n1" / "ledger.tsv") as fh:
+        rows = list(csv.DictReader(fh, delimiter="\t"))
+    return [(r["sample_id"], r["event"], r["detail"]) for r in rows[5:]]     # after the 5 pre-existing rows
+
+
+def test_runner_start_closes_open_ledger_entries(tmp_path):
+    """(b) a sample that finished during a runner restart gets a 'done' event; (a) a sample whose
+    instance is gone and that is not done is re-queued with a 'retry' event and is pending again."""
+    b, run_node = _restart_build(tmp_path)
+    r = run_node.Runner(str(b), "n1")
+    r.previous_attempts()
+    r.scan_done()
+    r.adopt()
+    r.reconcile_at_start()
+    ev = _events(b)
+    assert ("s1", "done", "finished while no runner was running; found at runner start") in ev
+    assert any(s == "s2" and e == "retry" and "re-queued" in d and "pid 999999999" in d for s, e, d in ev)
+    assert any(s == "s3" and e == "retry" and "re-queued" in d for s, e, d in ev)
+    assert not any(s == "s4" for s, _, _ in ev)                         # already closed: untouched
+    assert [p["sample_id"] for p in r.pending()] == ["s2", "s3"]
+    assert not list((b / "nodes" / "n1" / "run").iterdir())             # stale pid files removed
+    # a second start finds nothing left to reconcile
+    r2 = run_node.Runner(str(b), "n1")
+    r2.previous_attempts(); r2.scan_done(); r2.adopt(); r2.reconcile_at_start()
+    assert len(_events(b)) == len(ev)
+
+
+@pytest.mark.skipif(not Path("/proc/self/cmdline").exists(), reason="needs /proc (Linux)")
+def test_runner_adopts_live_instance_without_pid_file(tmp_path):
+    """An instance still running without a pid file is adopted (found by its overlay path), not
+    started a second time next to itself."""
+    import subprocess
+    b, run_node = _restart_build(tmp_path)
+    ov = b / "nodes" / "n1" / "overlays" / "A__s2.yaml"
+    (b / "nodes" / "n1" / "run" / "A__s2.pid").unlink()
+    p = subprocess.Popen(["bash", "-c", f"sleep 30; : cxsv_snakemake '{ov}'"], start_new_session=True)
+    try:
+        r = run_node.Runner(str(b), "n1")
+        r.previous_attempts(); r.scan_done(); r.adopt(); r.reconcile_at_start()
+        assert r.running[("A", "s2")]["pid"] == p.pid
+        ev = _events(b)
+        assert any(s == "s2" and e == "adopted" and "found by its overlay" in d for s, e, d in ev)
+        assert not any(s == "s2" and e == "retry" for s, e, _ in ev)
+        assert "s2" not in [x["sample_id"] for x in r.pending()]
+    finally:
+        p.kill()

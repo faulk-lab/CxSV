@@ -26,34 +26,36 @@ CALLABILITY = config.get("panel_callability", {}) or {}
 CALL_MIN_DEPTH = int(CALLABILITY.get("min_depth", 10))
 CALL_FLANK     = int(CALLABILITY.get("flank", 100))
 CALL_THREADS   = int(CALLABILITY.get("threads", 4))
+CALL_CRAM31    = str(CALLABILITY.get("cram31", "transcode"))      # transcode | fail
+if CALL_CRAM31 not in ("transcode", "fail"):
+    raise ValueError(f"panel_callability.cram31 must be transcode or fail, not {CALL_CRAM31!r}")
 CALL_MAPQ      = int(config["sv_params"]["min_mapq"])
 CALL_DIR       = f"{RESULTS_ROOT}/panel/callability"
 CALL_MASKS     = {k: cxsv_callability.mask_name(*k) for k in KEYS}
 
 
 rule callable_mask:
-    """mosdepth quantized depth -> CALLABLE intervals of one panel sample."""
+    """mosdepth quantized depth -> CALLABLE intervals of one panel sample
+    (scripts/callable_mask.sh: CRAM 3.1 transcoded for mosdepth or refused, per
+    panel_callability.cram31; decode errors or a 0-bp mask fail the step)."""
     input:
         unpack(caller_inputs),
-        ref = REFERENCE
+        ref    = REFERENCE,
+        script = f"{SCRIPTS}/callable_mask.sh"
     output:
         mask    = f"{S}/callability/callable.bed.gz",
         summary = f"{S}/callability/mosdepth.mosdepth.summary.txt"
     params:
         prefix    = f"{S}/callability/mosdepth",
         min_depth = CALL_MIN_DEPTH,
-        mapq      = CALL_MAPQ
+        mapq      = CALL_MAPQ,
+        cram31    = CALL_CRAM31
     threads: CALL_THREADS
     log: f"{S}/logs/callable_mask.log"
     shell:
         HTS_ENV + """
-        MOSDEPTH_Q0=LOW MOSDEPTH_Q1=CALLABLE mosdepth -t {threads} -n -x --mapq {params.mapq} \
-            --quantize 0:{params.min_depth}: -f {input.ref} {params.prefix} {input.aln} > {log} 2>&1
-        zcat {params.prefix}.quantized.bed.gz \
-            | awk -F'\\t' -v OFS='\\t' '$4 == "CALLABLE" {{print $1, $2, $3}}' \
-            | gzip -n > {output.mask}.tmp
-        mv {output.mask}.tmp {output.mask}
-        rm -f {params.prefix}.quantized.bed.gz {params.prefix}.quantized.bed.gz.csi
+        bash {input.script} {input.aln} {input.ref} {params.prefix} {output.mask} \
+            {params.min_depth} {params.mapq} {threads} {params.cram31} > {log} 2>&1
         """
 
 

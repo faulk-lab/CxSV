@@ -481,6 +481,16 @@ The events are:
 - `paused`, `resumed`
 - `stopped`
 
+At start, the runner closes what an earlier runner left open (small fixes
+2026-11). A sample whose last event is `started`/`adopted` and whose instance
+is not adopted gets `done` ("finished while no runner was running"; the
+seconds run to its cost record's mtime) or `retry` ("instance not running at
+runner start; re-queued"). An instance alive without a pid file is found by
+its overlay path in `/proc` and adopted. In the panel-v1.0 ledgers, 5 samples
+had finished during restarts without a `done` event (HG01849, HG00247,
+HG03868 on freya; HG02155 on shadowfax; HG03045 on keurig); `build_status.py`
+counted them done from their cost records all along.
+
 **`build_status.py BUILD`** prints, per node:
 - planned / done / running / staging / failed / pending samples;
 - CPU-h spent (from the cost records);

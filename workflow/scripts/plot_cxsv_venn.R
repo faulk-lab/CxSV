@@ -82,6 +82,29 @@ overlaps_cxsv <- function(chrom, pos, end) {
   hit
 }
 
+# Sample name of each input, used in the call ids. The rule passes per-sample
+# {SAMPLES_ROOT}/<cohort>/<sample>/cxsv/cxsv_only.vcf files, which all share one
+# basename: the id is "<cohort>/<sample>" taken from the path. (Before
+# 2026-11-04 the name came from sub("_merged_sv.vcf", ...) on the basename, so
+# every sample was "cxsv_only.vcf" and identical record ids from different
+# samples collapsed into one call.) <name>_merged_sv.vcf inputs keep <name>.
+vcf_sample_name <- function(path) {
+  b <- basename(path)
+  if (grepl("_merged_sv\\.vcf$", b)) return(sub("_merged_sv\\.vcf$", "", b))
+  parts <- strsplit(normalizePath(path, mustWork = FALSE), "/", fixed = TRUE)[[1]]
+  n <- length(parts)
+  if (b == "cxsv_only.vcf" && n >= 4 && parts[n - 1] == "cxsv") {
+    return(paste(parts[n - 3], parts[n - 2], sep = "/"))     # <cohort>/<sample>
+  }
+  normalizePath(path, mustWork = FALSE)                        # unique by construction
+}
+sample_names <- vapply(trimws(vcf_list), vcf_sample_name, character(1), USE.NAMES = FALSE)
+dups <- unique(sample_names[duplicated(sample_names)])
+if (length(dups) > 0) {
+  stop("plot_cxsv_venn.R: inputs map to the same sample name (call ids would collide): ",
+       paste(head(dups, 5), collapse = ", "))
+}
+
 cutesv_list   <- vector("list", length(vcf_list))
 svim_list     <- vector("list", length(vcf_list))
 sniffles_list <- vector("list", length(vcf_list))
@@ -98,8 +121,7 @@ for (i in seq_along(vcf_list)) {
     next
   }
   n_vcfs_read <- n_vcfs_read + 1
-  # unchanged from the per-line version (see the follow-up note in the commit):
-  sample_name <- sub("_merged_sv\\.vcf$", "", basename(vcf_path))
+  sample_name <- sample_names[i]
 
   parts <- strsplit(read_vcf_lines(vcf_path), "\t", fixed = TRUE)
   parts <- parts[lengths(parts) >= 8]

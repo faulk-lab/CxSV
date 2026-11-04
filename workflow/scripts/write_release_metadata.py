@@ -7,9 +7,14 @@ calling fingerprint, the panel config and the runtime; nothing is typed in.
 
 Runtime: when the workflow runs inside the CxSV container, the image sets
 CXSV_IMAGE (tag) and CXSV_ENV_LOCK_SHA256 (sha256 of the explicit conda lock it
-was built from); the bundle's run script adds CXSV_IMAGE_ID (Docker image id)
-and CXSV_SIF_SHA256. Outside a container these are null and CONDA_PREFIX is
-recorded instead.
+was built from); the launcher adds CXSV_SIF_SHA256, CXSV_IMAGE_ID (Docker image
+id) and CXSV_RUNTIME_IDS_SOURCE (where they came from): the bundle's
+run_cxsv.sh from its bundle.env, the panel build's lib.sh cxsv_container from
+the bundle.env next to the pinned SIF (or the SIF's own sha256; no image id
+then). Outside a container these are null and CONDA_PREFIX is recorded instead.
+A non-test release built inside the container without either id is refused
+(panel-v1.0 was built that way, with both null; set
+CXSV_ALLOW_MISSING_RUNTIME_IDS=1 to accept it knowingly).
 
 Finalise mode (roadmap item 12): `--finalise RELEASE_DIR --git-tag TAG
 --project-dir CHECKOUT` records the git tag of an already built release in its
@@ -47,6 +52,28 @@ def version_of(cmd):
         return text[0] if text else None
     except (OSError, subprocess.SubprocessError):
         return None
+
+
+def runtime_info(test_release, env=None):
+    """release.json runtime block; refuses a non-test container build without image ids."""
+    env = os.environ if env is None else env
+    get = lambda k: env.get(k) or None   # noqa: E731  (empty string -> null)
+    rt = {
+        "container_image": get("CXSV_IMAGE"),
+        "image_id": get("CXSV_IMAGE_ID"),
+        "sif_sha256": get("CXSV_SIF_SHA256"),
+        "ids_source": get("CXSV_RUNTIME_IDS_SOURCE"),
+        "env_lock_sha256": get("CXSV_ENV_LOCK_SHA256"),
+        "conda_prefix": None if get("CXSV_IMAGE") else get("CONDA_PREFIX"),
+    }
+    if rt["container_image"] and not (rt["image_id"] or rt["sif_sha256"]) and not test_release \
+            and env.get("CXSV_ALLOW_MISSING_RUNTIME_IDS") != "1":
+        raise SystemExit("write_release_metadata: running in the CxSV container but neither "
+                         "CXSV_SIF_SHA256 nor CXSV_IMAGE_ID is set, so release.json could not say "
+                         "which image built it; run through container/run_cxsv.sh or "
+                         "scripts/panel_build/lib.sh (cxsv_container), or set "
+                         "CXSV_ALLOW_MISSING_RUNTIME_IDS=1")
+    return rt
 
 
 def finalise_main(argv):
@@ -145,13 +172,7 @@ def main():
                   "mosdepth": version_of(["mosdepth", "--version"]),
                   "snakemake": version_of(["snakemake", "--version"]),
                   "python": pyplatform.python_version()},
-        "runtime": {
-            "container_image": os.environ.get("CXSV_IMAGE"),
-            "image_id": os.environ.get("CXSV_IMAGE_ID"),
-            "sif_sha256": os.environ.get("CXSV_SIF_SHA256"),
-            "env_lock_sha256": os.environ.get("CXSV_ENV_LOCK_SHA256"),
-            "conda_prefix": None if os.environ.get("CXSV_IMAGE") else os.environ.get("CONDA_PREFIX"),
-        },
+        "runtime": runtime_info(a.test_release),
         "files": sorted(set(a.files) | {cr.METADATA}),
         "integrity": f"{cr.MANIFEST}: file, bytes, sha256 of every file above",
     }

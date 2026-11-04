@@ -24,6 +24,10 @@
 #                     site's runtime forbids it; the bundle needs no network)
 #   -- ARGS           passed to snakemake
 #
+# Temporary files: TMPDIR (TMP, TEMP; R and Python read TMPDIR) is
+# /work/.tmp, and the same directory is mounted as /tmp, so nothing lands in
+# Singularity's 64 MB /tmp tmpfs (--containall) or the Docker container layer.
+#
 # Inside the container: bundle -> /bundle (read-only), workdir -> /work, the
 # --bind paths, nothing else (Singularity/Apptainer --containall: no $HOME, no
 # host environment; Docker: no host mounts besides these). Network: Singularity /
@@ -34,7 +38,7 @@ BUNDLE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "$BUNDLE/bundle.env"          # CXSV_BUNDLE_ID CXSV_COMMIT CXSV_RELEASE_ID CXSV_IMAGE ...
 
-usage() { sed -n '4,30p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { awk 'NR >= 4 && /^# =====/ {exit} NR >= 4' "$0" | sed 's/^# \{0,1\}//'; }
 [ $# -ge 1 ] || { usage; exit 1; }
 CMD="$1"; shift
 WORKDIR=""; CONFIGS=(); BINDS=(); CORES=16; RUNTIME="${CXSV_RUNTIME:-}"; DRY=false; NETNS=true; EXTRA=()
@@ -67,8 +71,8 @@ fi
 case "$CMD" in
     patient|panel|shell)
         [ -n "$WORKDIR" ] || { echo "--workdir is required"; exit 1; }
-        mkdir -p "$WORKDIR/config"; WORKDIR="$(cd "$WORKDIR" && pwd)" ;;
-    verify-release|netcheck) WORKDIR="$(mktemp -d)"; trap 'rm -rf "$WORKDIR"' EXIT ;;
+        mkdir -p "$WORKDIR/config" "$WORKDIR/.tmp"; WORKDIR="$(cd "$WORKDIR" && pwd)" ;;
+    verify-release|netcheck) WORKDIR="$(mktemp -d)"; mkdir -p "$WORKDIR/.tmp"; trap 'rm -rf "$WORKDIR"' EXIT ;;
     *) echo "unknown command: $CMD"; usage; exit 1 ;;
 esac
 
@@ -78,9 +82,19 @@ for f in "${CONFIGS[@]}"; do
     cp "$f" "$WORKDIR/config/$(basename "$f")"; CFG_IN+=("/work/config/$(basename "$f")")
 done
 
-# XDG_CACHE_HOME: snakemake's source cache in the writable run directory
+# XDG_CACHE_HOME: snakemake's source cache in the writable run directory;
+# TMPDIR/TMP/TEMP: temporary files in the run directory (/work/.tmp, also /tmp)
+# REF_PATH/REF_CACHE: htslib finds CRAM reference sequences by @SQ M5 in the
+#   bundle's MD5 cache only (never a header UR path, never a download), for
+#   every process in the container; tools that open CRAMs without --reference
+#   (SVIM 2.0.0) depend on it. The caller rules export the same values
+#   (HTS_ENV, from ref_cache in config/bundle_site.yaml).
+REF_CACHE_DIR=/bundle/reference/ref_cache
 ENVS=(CXSV_BUNDLE_ID="$CXSV_BUNDLE_ID" CXSV_COMMIT="$CXSV_COMMIT" CXSV_IMAGE_ID="$CXSV_IMAGE_ID"
-      CXSV_SIF_SHA256="$CXSV_SIF_SHA256" CXSV_RUNTIME="$RUNTIME" XDG_CACHE_HOME=/work/.cache)
+      CXSV_SIF_SHA256="$CXSV_SIF_SHA256" CXSV_RUNTIME="$RUNTIME" CXSV_RUNTIME_IDS_SOURCE="bundle.env of $CXSV_BUNDLE_ID"
+      XDG_CACHE_HOME=/work/.cache
+      TMPDIR=/work/.tmp TMP=/work/.tmp TEMP=/work/.tmp
+      REF_PATH="$REF_CACHE_DIR/%2s/%2s/%s" REF_CACHE="$REF_CACHE_DIR/%2s/%2s/%s")
 
 case "$CMD" in
     patient|panel)
@@ -107,14 +121,15 @@ if [ "$RUNTIME" = docker ]; then
     [ "$got" = "$CXSV_IMAGE_ID" ] || { echo "image $CXSV_IMAGE is $got, bundle expects $CXSV_IMAGE_ID"; exit 1; }
     # the calling uid has no passwd entry in the image: USER/LOGNAME satisfy getpass (snakemake)
     D=(docker run --rm -i --user "$(id -u):$(id -g)" -e HOME=/tmp -e USER=cxsv -e LOGNAME=cxsv -w /work
-       -v "$BUNDLE:/bundle:ro" -v "$WORKDIR:/work")
+       -v "$BUNDLE:/bundle:ro" -v "$WORKDIR:/work" -v "$WORKDIR/.tmp:/tmp")
     $NETNS && D+=(--network none)
     [ "$CMD" = shell ] && [ -t 0 ] && D+=(-t)
     for b in "${BINDS[@]}"; do D+=(-v "$b:$b:ro"); done
     for e in "${ENVS[@]}"; do D+=(-e "$e"); done
     exec "${D[@]}" "$CXSV_IMAGE" "${INNER[@]}"
 else
-    S=("$RUNTIME" exec --containall --pwd /work --bind "$BUNDLE:/bundle:ro" --bind "$WORKDIR:/work")
+    S=("$RUNTIME" exec --containall --pwd /work --bind "$BUNDLE:/bundle:ro" --bind "$WORKDIR:/work"
+       --bind "$WORKDIR/.tmp:/tmp")
     $NETNS && S+=(--net --network none)
     for b in "${BINDS[@]}"; do S+=(--bind "$b:$b:ro"); done
     for e in "${ENVS[@]}"; do S+=(--env "$e"); done

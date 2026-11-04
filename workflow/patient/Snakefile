@@ -48,6 +48,7 @@ include: "../rules/per_sample.smk"
 include: "../rules/junctions.smk"
 include: "../rules/sample_report.smk"
 include: "../rules/fingerprint.smk"
+include: "../rules/caller_checks.smk"
 include: "../rules/patient_private.smk"
 include: "../rules/patient_scoring.smk"
 
@@ -57,6 +58,7 @@ rule all:
         f"{RESULTS_ROOT}/panel_release_check.txt",
         f"{RESULTS_ROOT}/panel_compatibility.txt",
         per_sample(f"{S}/sv_summary.txt"),
+        per_sample(f"{S}/qc/svim_check.tsv"),
         per_sample(f"{S}/private/cxsv_panel_status.tsv"),
         per_sample(f"{S}/private/private_cxsv_master_table.tsv"),
         per_sample(f"{S}/private/private_cxsv.vcf"),

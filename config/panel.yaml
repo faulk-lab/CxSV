@@ -57,10 +57,16 @@ release:
 #     unique sequence passes, collapsed repeats and low-MAPQ segdups do not.
 #   flank 100: about one read-anchor length for the callers' split-read
 #     signatures; short enough to stay off the other side of a small event.
+#   cram31: what to do with a CRAM 3.1 alignment, which the pinned mosdepth
+#     0.3.10 cannot decode (it would write an empty mask and exit 0):
+#     transcode (default) = lossless temporary CRAM 3.0 copy in the sample's
+#     callability/ directory (needs disk for one copy of the CRAM; removed
+#     afterwards), fail = stop. Either way a 0-bp mask fails the sample.
 panel_callability:
   min_depth: 10
   flank: 100
   threads: 4
+  cram31: transcode
 
 # Junction sites (scripts/build_panel_sites.py): junctions of different
 # individuals are one site when svtype and contigs agree and both ends lie
