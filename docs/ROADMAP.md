@@ -452,7 +452,8 @@ Details are in docs/LITERATURE_SET.md.
   28 events that another rule calls. 26 events (22 of them DUP-TRP/INV-DUP)
   are not called under any rule, because clustering at 50 kb splits them.
 - **Test B (whole-genome positive control, add-ons L01-L04):**
-  - 48/48 junctions are called exactly, by bundle 33c075a and by main 65ef970.
+  - 46/46 L-series junctions (48/48 with E02) are called exactly, by bundle
+    33c075a and by main 65ef970.
   - L02 (1.04), L03 (1.04) and L04 (1.74) are Tier 1 under both codes.
   - L01 (*PLP1* DUP-TRP/INV-DUP) is not called by either code.
   - On main, L03 is split into 13 fragments because 20 of its 40 junctions

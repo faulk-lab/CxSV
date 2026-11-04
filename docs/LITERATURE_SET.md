@@ -21,7 +21,7 @@ excluded from discovery (`long_span_rule: exclude`). The rule rescues the
 positive control's E02 in the whole genome. It does not, however, call any
 literature event that the panel-v1.0 rule missed: 8 of 63 events are called,
 the same 8 as in v1.0. The superseded breakends rule (de23a0e) called 24. In the
-whole-genome detection test, 48 of 48 L-series junctions are called exactly
+whole-genome detection test, all 46 L-series junctions are called exactly
 under both codes. L02 and L04 are Tier 1 in both. L03 stays Tier 1 but is
 reported as 13 fragments, because 20 of its 40 junctions are excluded. L01 is
 called by neither code; its 533 kb junction is excluded on main.
