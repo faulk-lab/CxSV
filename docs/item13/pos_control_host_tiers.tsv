@@ -1,0 +1,4 @@
+rule	tier1	tier2
+panel-v1.0 rule	0	4
+breakends (not adopted)	3	5
+item 13 (exclude)	0	4

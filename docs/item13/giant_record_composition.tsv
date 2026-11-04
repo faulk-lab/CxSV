@@ -1,0 +1,6 @@
+origin	SVIM only	SVIM+Sniffles2	Sniffles2 only	All
+DEL	0	21	3781	3802
+DUP	0	541	2670	3211
+INV	0	360	2747	3107
+breakend pair (BND notation; SURVIVOR writes INV)	19560	4346	14747	38653
+All	19560	5268	23945	48773

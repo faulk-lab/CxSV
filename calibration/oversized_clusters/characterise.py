@@ -48,7 +48,9 @@ SPAN = ("DEL", "DUP", "INV")
 # Candidate rules. ends_over: span records whose interval is longer than this link only at
 # their two breakends (None = never); bnd_ends: records written in breakend (bracket) ALT
 # notation link only at their breakends whatever their length; drop_single_over: records
-# longer than this supported by ONE caller are left out of clustering and of the locus.
+# longer than this supported by ONE caller are left out of clustering and of the locus;
+# drop_all_over: records longer than this are left out whatever their support (the
+# rule adopted: cxsv_params.long_span_rule exclude).
 VARIANTS = {
     "V0_current":     dict(ends_over=None,   bnd_ends=False, drop_single_over=None),
     "S500_ends":      dict(ends_over=500000, bnd_ends=False, drop_single_over=None),
@@ -56,6 +58,7 @@ VARIANTS = {
     "B_S500_ends":    dict(ends_over=500000, bnd_ends=True,  drop_single_over=None),
     "B_S500_ends_x1": dict(ends_over=500000, bnd_ends=True,  drop_single_over=500000),
     "S50_ends":       dict(ends_over=50000,  bnd_ends=False, drop_single_over=None),
+    "S500_exclude":   dict(ends_over=None,   bnd_ends=False, drop_single_over=None, drop_all_over=500000),
 }
 
 
@@ -175,6 +178,9 @@ def transform(rows, ev, v):
             if v["drop_single_over"] is not None and L > v["drop_single_over"] and sv.count("1") == 1:
                 dropped.add(vid)
                 continue
+            if v.get("drop_all_over") is not None and L > v["drop_all_over"]:
+                dropped.add(vid)
+                continue
             if (v["ends_over"] is not None and L > v["ends_over"]) or (v["bnd_ends"] and bnd_alt):
                 out.append((chrom, max(0, s - BND_WINDOW), s + BND_WINDOW, t, vid, inter))
                 out.append((chrom, max(0, e - BND_WINDOW), e + BND_WINDOW, t, vid + "_end", inter))
@@ -283,9 +289,10 @@ def one(task):
             clustered = bt_cluster(trows, CLUSTER_D)
         res = classify(clustered, rows_len, by_id, order, dropped)
         over = [(c["chrom"], c["start"], c["end"]) for _, c, x in res if x is None]
-        loci = {}
+        loci, n_cl = {}, 0
         for cid, c, x in res:
             if x is not None and x["is_cxsv"]:
+                n_cl += 1
                 key = frozenset(i for i in c["ids"] if i not in dropped)
                 loci[key] = (c["chrom"], c["start"], c["end"], x["class"], x["n_junctions"], c["maxlen"],
                              ",".join(x["criteria"]))
@@ -299,7 +306,7 @@ def one(task):
             orow[f"resid_{vname}"] = resid.get(orow["cluster"], 0)
         summary[vname] = {"n_clusters": len(res), "n_oversized": len(over), "blind_span": merged_span(over),
                           "largest_oversized": max([e - s for _, s, e in over], default=0),
-                          "n_cxsv": len(loci), "n_dropped_records": len(dropped)}
+                          "n_cxsv": len(loci), "n_cxsv_clusters": n_cl, "n_dropped_records": len(dropped)}
     base = loci_by_v["V0_current"]
     for vname, loci in loci_by_v.items():
         same = sum(1 for k in loci if k in base)

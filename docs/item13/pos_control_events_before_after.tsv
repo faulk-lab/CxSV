@@ -1,0 +1,14 @@
+event	name	gene	verdict_v1.0	cxsv_loci_v1.0	classes_v1.0	panel_status_v1.0	score_v1.0	tier_v1.0	verdict_item13	cxsv_loci_item13	classes_item13	panel_status_item13	score_item13	tier_item13	score_breakends	tier_breakends
+E01	DUP-TRP/INV-DUP	MECP2	PASS	1	Complex_inversion	private	1.35	Tier1_high_priority	PASS	1	Complex_inversion	private	1.35	Tier1_high_priority	1.35	Tier1_high_priority
+E02	delINVdel	NF1	FAIL	0	.	.	.	.	PASS	1	Complex_inversion	private	1.95	Tier1_high_priority	1.95	Tier1_high_priority
+E03	dupINVdup	PMP22	PASS	1	Complex_inversion	private	1.72	Tier1_high_priority	PASS	1	Complex_inversion	private	1.72	Tier1_high_priority	1.72	Tier1_high_priority
+E04	DEL+INV+DUP	SHANK3	PASS	1	DUP+INV	private	1.74	Tier1_high_priority	PASS	1	DUP+INV	private	1.74	Tier1_high_priority	1.74	Tier1_high_priority
+E05	nested inversion with inner deletion	NRXN1	PASS	1	Nested_SV	private	1.93	Tier1_high_priority	PASS	1	Nested_SV	private	1.93	Tier1_high_priority	1.93	Tier1_high_priority
+E06	templated insertions at a deletion (FoSTeS/MMBIR)	AUTS2	PASS	1	DUP+INV	private	1.94	Tier1_high_priority	PASS	1	DUP+INV	private	1.94	Tier1_high_priority	1.94	Tier1_high_priority
+E07	reciprocal translocation with junction deletions	SATB2/FOXP2	PASS	2	BND_cluster	private	1.55	Tier1_high_priority	PASS	2	BND_cluster	private	1.55	Tier1_high_priority	1.55	Tier1_high_priority
+E08	chromoplexy (balanced 3-chromosome chain)	NSD2/EHMT1/ZIC2	PASS	1	BND_cluster	private	1.44	Tier1_high_priority	PASS	1	BND_cluster	private	1.44	Tier1_high_priority	1.44	Tier1_high_priority
+E09	localized chromothripsis	CHD2	PASS	1	Chromothripsis_like	private	2.66	Tier1_high_priority	PASS	1	Chromothripsis_like	private	2.66	Tier1_high_priority	2.66	Tier1_high_priority
+E10	multi-breakpoint cluster	intergenic	PASS	1	Multi_breakpoint_cluster	private	0.26	Tier3	PASS	1	Multi_breakpoint_cluster	private	0.26	Tier3	0.26	Tier3
+E11	simple deletion (specificity control)	intergenic	PASS	0	.	.	.	.	PASS	0	.	.	.	.	.	.
+E12	simple inversion (specificity control)	intergenic	PASS	0	.	.	.	.	PASS	0	.	.	.	.	.	.
+E13	public spike-in: deletion-inversion cluster	intergenic	FAIL	1	Nested_SV	private	0.08	Tier3	FAIL	1	Nested_SV	private	0.08	Tier3	0.08	Tier3

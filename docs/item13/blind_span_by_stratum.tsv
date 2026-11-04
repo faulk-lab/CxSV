@@ -1,0 +1,9 @@
+	V0_current	S500_exclude	n	stratum
+ONT 1kGP-ONT	279.66	0.57	1017	platform
+ONT LRSC R10	509.11	7.12	247	platform
+ONT LRSC R9	413.5	4.7	220	platform
+PacBio HiFi	415.06	3.73	135	platform
+<10x	206.07	0.0	89	coverage
+10-20x	271.74	0.53	610	coverage
+20-30x	322.98	1.18	292	coverage
+>=30x	440.01	5.24	628	coverage

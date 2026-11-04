@@ -1,0 +1,5 @@
+platform_group	records	genomes	median_len_Mb	single_caller	records_per_genome
+ONT 1kGP-ONT	18838	1014	11.394	0.857	18.578
+ONT LRSC R10	12782	247	9.29	0.941	51.749
+ONT LRSC R9	8971	220	6.072	0.936	40.777
+PacBio HiFi	8182	135	6.066	0.849	60.607

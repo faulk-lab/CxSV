@@ -1,0 +1,9 @@
+set	rule	genomes	tier1_per_genome	tier2_per_genome	genomes_with_tier1	cxsv_loci_per_genome
+97 genomes (3 QC outliers with 37-82 Tier-1 calls before removed)	panel-v1.0 rule	97	0.196	2.835	0.175	985.2
+97 genomes (3 QC outliers with 37-82 Tier-1 calls before removed)	breakends (not adopted)	97	0.371	3.515	0.309	1121.6
+97 genomes (3 QC outliers with 37-82 Tier-1 calls before removed)	item 13 (exclude)	97	0.237	3.144	0.206	1110.4
+98 genomes scored under all three rules	panel-v1.0 rule	98	0.571	5.316	0.184	1006.8
+98 genomes scored under all three rules	breakends (not adopted)	98	0.806	6.306	0.316	1146.2
+98 genomes scored under all three rules	item 13 (exclude)	98	0.673	5.929	0.214	1135.1
+all 100 genomes	panel-v1.0 rule	100	1.97	12.83	0.2	1024.6
+all 100 genomes	item 13 (exclude)	100	4.76	27.24	0.23	1199.9

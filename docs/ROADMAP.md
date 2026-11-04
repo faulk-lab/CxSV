@@ -75,8 +75,14 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
     334 Mb (about 11% of the genome) this way. The positive control's *NF1*
     event E02 is lost, and its span is inside such a cluster in 952/1,619 panel
     genomes. A fix changes the calling fingerprint and needs a new panel release
-    (classification + aggregate only). *Decided 2026-11-04: approved; item 13
-    is in progress on its own branch.*
+    (classification + aggregate only). *Decided 2026-11-04: approved. Done
+    2026-11-04 (section 13, docs/OVERSIZED_CLUSTERS.md); the panel rebuild is
+    decision 14.*
+14. **Rebuild the panel with item 13 (new, 2026-11-04).** Re-run only the
+    downstream per-sample rules and the aggregate from the panel-v1.0 caller
+    outputs into a new build root, tag `panel-v1.1` (proposed). About 3-3.5 h on
+    freya with `callable_mask` held (plan and cost: docs/OVERSIZED_CLUSTERS.md
+    section 5). *Recommendation:* approve, with the name `panel-v1.1`.
 13. **Small fixes found in the 2026-11-03 validation.** *Approved 2026-11-04;
     done on branch `small-fixes-2026-11` (section "Small fixes 2026-11"
     below), awaiting merge.* As proposed:
@@ -108,7 +114,7 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
 | 10 | Graded privacy penalty for partly matched loci | done 2026-11-03; merged (PR #17) | `main`, docs/SCORING.md section 6b |
 | 11 | Curated literature set of pathogenic CxSVs | **on hold** (decision 5) | below |
 | 12 | Full panel build and first real release | **done 2026-11-03**: release `cxsv-panel-20261102-cd7e1d194cd4`, tag `panel-v1.0`; bundle validated offline (check 7: one locale-dependent plot, data identical); positive control run against it | `main` (tag), `validation-panel-v1.0`, below |
-| 13 | Oversized-cluster blind spot | **in progress** (approved 2026-11-04; separate branch) | below |
+| 13 | Oversized-cluster blind spot | **done 2026-11-04** (fix + panel evaluation); panel rebuild awaits decision 14 | `main` (`de23a0e`), `item13-oversized-clusters-2`, docs/OVERSIZED_CLUSTERS.md |
 | – | Small fixes 2026-11 (8 fixes from the panel-v1.0 validation) | done 2026-11-04; awaiting merge | `small-fixes-2026-11`, below |
 
 ---
@@ -307,7 +313,8 @@ and no planted event changes tier.
   (docs/POSITIVE_CONTROL.md):
   - 40/41 junctions exact, 1 partial;
   - E01, E03-E09 private Tier 1; E10 Tier 3; E11/E12 not CxSV;
-  - **E02 not called** (oversized cluster, proposed item 13);
+  - **E02 not called** (oversized cluster; called with item 13: private,
+    Tier 1, 1.95 points, docs/OVERSIZED_CLUSTERS.md);
   - E13 private (expected: its carriers exist only in the regression's spliced
     backgrounds);
   - 0 Tier-1 host calls.
@@ -358,7 +365,7 @@ per fix, each with a test. None changes the calling fingerprint
 
 ## Queued
 
-### 13. Oversized-cluster blind spot (approved 2026-11-04; in progress on a separate branch)
+### 13. Oversized-cluster blind spot (done 2026-11-04; panel rebuild = decision 14)
 
 `bedtools cluster -d 50000` chains records into clusters; a cluster over
 `max_cluster_size` (500 kb) is dropped whole (`FILTERED_oversized_cluster`). In
@@ -379,6 +386,25 @@ and aggregate. The callers do not need to rerun, but the fingerprint changes,
 so this means a new panel release. **Done when:** E02 is called in the whole
 genome, the per-genome oversized span drops by an order of magnitude, and the
 regression and full-panel positive control pass.
+
+**Result (2026-11-04; docs/OVERSIZED_CLUSTERS.md).** 99.5% of the oversized
+span comes from 48,773 records longer than 500 kb: 79% breakend pairs that
+SURVIVOR writes as INV intervals, 89% single-caller, 62% recurrent in >= 100
+panel genomes, and only about a quarter with a read-depth change. Such records
+now take no part in CxSV discovery (`cxsv_params.span_link_max` 500 kb,
+`long_span_rule: exclude`); they stay junctions and merged calls and are listed
+per sample in `cxsv/long_span_records.tsv`. No locus that panel-v1.0 classified
+changes. Blind span per panel genome: median 334 → 1.4 Mb (all four platforms;
+what remains are dense SV runs in satellite and acrocentric sequence). Over 100
+panel genomes, re-run downstream only (caller outputs byte-identical), healthy
+LOFO Tier 1 0.196 → 0.237 per genome (97 genomes; three QC-outlier genomes
+carry most of the increase), provisional until the rebuild. Positive control:
+E02 private Tier 1; every other planted event and the host's 0 Tier-1 calls
+unchanged. The first version merged in `de23a0e` clustered such records at
+their breakends instead; that rule raised healthy Tier 1 to 0.371 and gave the
+host 3 Tier-1 calls, and is replaced (kept as `long_span_rule: breakends`).
+Also fixed: `calling_fingerprint` was not re-made after a code change in an
+existing build tree.
 
 
 ### 8. Read-level mechanism axes (PI criteria 3, 4, 6) — on hold (decision 6)

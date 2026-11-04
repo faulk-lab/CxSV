@@ -1,0 +1,4 @@
+mechanism	clusters	span_Mb	resid_after_Mb	cxsv_loci_inside_after	share_of_span
+bridged by 50-500 kb records	1487	1014.6	1014.6	0	0.0017
+contains a record > 500 kb	18165	578617.5	1564.2	181722	0.9952
+dense run of short SVs	2889	1788.9	1788.9	0	0.0031

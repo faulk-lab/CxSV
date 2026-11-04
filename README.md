@@ -332,6 +332,15 @@ dosage HI/TS), `scoring/gnomad_constraint.tsv` (gnomAD v4.1 LOEUF),
 ## CxSV Definition (Computational)
 
 Each sample's SV calls are clustered within 50 kb (`cxsv_params.cluster_distance`).
+A DEL/DUP/INV longer than `cxsv_params.span_link_max` (500 kb, equal to
+`max_cluster_size`) takes no part in discovery (`long_span_rule: exclude`,
+roadmap item 13): as one interval it would chain everything it spans into a
+cluster too large to classify. Such records are mostly recurrent, single-caller
+breakend pairs without a copy-number change; they stay junctions and merged
+calls and are listed in `cxsv/long_span_records.tsv`. Clusters still longer than
+500 kb (dense SV runs in satellite and acrocentric sequence, median 1.4 Mb per
+panel genome) are not classified (`FILTERED_oversized_cluster`).
+Details: [docs/OVERSIZED_CLUSTERS.md](docs/OVERSIZED_CLUSTERS.md).
 Every cluster is then described by its **distinct junctions**, not by VCF
 records (`workflow/lib/cxsv_classes.py`, roadmap item 5):
 

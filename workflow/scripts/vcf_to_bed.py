@@ -26,17 +26,21 @@ BND records
 
 Long span records (roadmap item 13)
 -----------------------------------
-  A DEL/DUP/INV whose interval is longer than --span-link-max bp is written as
-  its two breakends (POS and END, each +- --window bp; the END row's ID gets the
-  suffix "_end"), like a BND, instead of as one interval. Written as one
-  interval, such a record joins every SV it spans into one cluster: a 25.7 Mb
-  record across the chr17 pericentromere put 224 records into one 25.8 Mb
-  cluster, which classify_cxsv.py then drops whole as oversized. As two
-  breakends it links only to SVs near its own breakpoints. The record is still
-  one junction of the locus (classify_cxsv.py strips "_end" like "_mate").
-  The value equals cxsv_params.max_cluster_size: a record longer than that
-  would make any cluster containing it oversized on its own, so clusters that
-  are not oversized are unchanged. 0 disables.
+  Written as one interval, a DEL/DUP/INV longer than cxsv_params.max_cluster_size
+  joins every SV it spans into one cluster that classify_cxsv.py then drops whole
+  as oversized: a 25.7 Mb record across the chr17 pericentromere put 224 records
+  into one 25.8 Mb cluster. For records longer than --span-link-max bp
+  (= max_cluster_size, so no cluster that is not oversized changes):
+    --long-span-rule exclude    the record is not
+        written: it takes no part in CxSV discovery, as before, when any cluster
+        containing it was dropped; it stays a junction of the sample
+        (junctions.tsv) and a merged call (merged_sv.vcf)
+    --long-span-rule breakends  the record is written as its two breakends (POS
+        and END +- --window bp; the END row's ID gets the suffix "_end"), like a
+        BND, so it links only to SVs near its own breakpoints and is a junction
+        of the loci there (classify_cxsv.py strips "_end" like "_mate")
+  Either way the record is listed in --long-out (ID CHROM POS END SVTYPE LENGTH
+  SUPP_VEC RULE). --span-link-max 0 restores the interval rule for every record.
 
 TRA records
 -----------
@@ -55,7 +59,8 @@ Output columns
 
 Usage
 -----
-  python vcf_to_bed.py --vcf input.vcf --out output.bed [--window 1] [--span-link-max 500000]
+  python vcf_to_bed.py --vcf input.vcf --out output.bed [--window 1] \
+      [--span-link-max 500000 --long-span-rule exclude --long-out long_span_records.tsv]
 """
 
 import argparse
@@ -135,12 +140,20 @@ def emit_records(chrom, start, end, svtype, vid, is_inter="intra"):
     yield f"{chrom}\t{start}\t{end}\t{svtype}\t{vid}\t{is_inter}"
 
 
-def process_vcf(vcf_path: str, window: int, span_link_max: int = 0, counts: dict = None):
+LONG_RULES = ("exclude", "breakends")
+
+
+def process_vcf(vcf_path: str, window: int, span_link_max: int = 0, counts: dict = None,
+                long_rule: str = "breakends", long_rows: list = None):
     """
     Generator: yield BED lines for each VCF record.
-    BND/TRA, and DEL/DUP/INV longer than span_link_max (> 0), yield 2 lines
-    each (both breakend positions). counts["split"] counts the latter.
+    BND/TRA yield 2 lines each (both breakend positions). A DEL/DUP/INV longer
+    than span_link_max (> 0) yields 2 breakend lines (long_rule "breakends") or
+    none ("exclude"); counts[long_rule] counts them and long_rows, if given,
+    receives (ID, CHROM, POS, END, SVTYPE, LENGTH, SUPP_VEC, RULE) for each.
     """
+    if long_rule not in LONG_RULES:
+        raise ValueError(f"long_rule must be one of {LONG_RULES}, not {long_rule!r}")
     with open(vcf_path) as fh:
         for line in fh:
             if line.startswith("#"):
@@ -171,7 +184,12 @@ def process_vcf(vcf_path: str, window: int, span_link_max: int = 0, counts: dict
                 start, end = coords
                 if span_link_max > 0 and svtype != "INS" and end - start > span_link_max:
                     if counts is not None:
-                        counts["split"] = counts.get("split", 0) + 1
+                        counts[long_rule] = counts.get(long_rule, 0) + 1
+                    if long_rows is not None:
+                        long_rows.append((vid, chrom, start, end, svtype, end - start,
+                                          info.get("SUPP_VEC", "."), long_rule))
+                    if long_rule == "exclude":
+                        continue
                     yield from emit_records(chrom, max(0, start - window), start + window, svtype, vid, "intra")
                     yield from emit_records(chrom, max(0, end - window), end + window, svtype,
                                             f"{vid}_end", "intra")
@@ -250,20 +268,31 @@ def main():
     parser.add_argument("--window", type=int, default=DEFAULT_WINDOW,
                         help=f"bp window around BND/TRA breakpoints (default: {DEFAULT_WINDOW})")
     parser.add_argument("--span-link-max", type=int, default=0,
-                        help="DEL/DUP/INV longer than this many bp are written as their two "
-                             "breakends instead of one interval (cxsv_params.span_link_max; 0 = off)")
+                        help="DEL/DUP/INV longer than this many bp follow --long-span-rule "
+                             "(cxsv_params.span_link_max; 0 = every record is one interval)")
+    parser.add_argument("--long-span-rule", choices=LONG_RULES, default="breakends",
+                        help="exclude: leave such records out of clustering; breakends: write "
+                             "their two breakends (cxsv_params.long_span_rule)")
+    parser.add_argument("--long-out", default=None,
+                        help="TSV listing the records longer than --span-link-max and the rule applied")
     args = parser.parse_args()
 
     n_written = 0
-    counts = {}
+    counts, long_rows = {}, []
     with open(args.out, "w") as out_fh:
-        for bed_line in process_vcf(args.vcf, args.window, args.span_link_max, counts):
+        for bed_line in process_vcf(args.vcf, args.window, args.span_link_max, counts,
+                                    args.long_span_rule, long_rows):
             out_fh.write(bed_line + "\n")
             n_written += 1
+    if args.long_out:
+        with open(args.long_out, "w") as fh:
+            fh.write("ID\tCHROM\tPOS\tEND\tSVTYPE\tLENGTH\tSUPP_VEC\tRULE\n")
+            for r in long_rows:
+                fh.write("\t".join(map(str, r)) + "\n")
 
     print(f"vcf_to_bed: wrote {n_written} BED records to {args.out}", file=sys.stderr)
-    print(f"vcf_to_bed: {counts.get('split', 0)} DEL/DUP/INV records longer than {args.span_link_max} bp "
-          f"written as two breakends", file=sys.stderr)
+    print(f"vcf_to_bed: {len(long_rows)} DEL/DUP/INV records longer than {args.span_link_max} bp "
+          f"({args.long_span_rule})", file=sys.stderr)
 
 
 if __name__ == "__main__":
