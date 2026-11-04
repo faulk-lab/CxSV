@@ -45,8 +45,9 @@ small, separable change.
 Unit tests: `tests/unit/test_paired_linkage.py` (8 tests). They cover:
 
 - a DUP-NML-DUP pair joined into one cluster sized by its parts;
-- the 25.7 Mb artefact DEL without partners, handled as under `exclude` (E02
-  recovered);
+- a synthetic 25.7 Mb DEL modelled on the E02 artefact, given no partners,
+  handled as under `exclude` (E02 recovered). In the real positive-control
+  data the artefact does find partners at both ends; see the evaluation below;
 - a partner at one end only, which is not enough;
 - duplicates of the same junction, which are not partners;
 - a long partner that must itself be paired;
