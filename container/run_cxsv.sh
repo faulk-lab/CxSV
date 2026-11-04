@@ -24,6 +24,10 @@
 #                     site's runtime forbids it; the bundle needs no network)
 #   -- ARGS           passed to snakemake
 #
+# Temporary files: TMPDIR (TMP, TEMP; R and Python read TMPDIR) is
+# /work/.tmp, and the same directory is mounted as /tmp, so nothing lands in
+# Singularity's 64 MB /tmp tmpfs (--containall) or the Docker container layer.
+#
 # Inside the container: bundle -> /bundle (read-only), workdir -> /work, the
 # --bind paths, nothing else (Singularity/Apptainer --containall: no $HOME, no
 # host environment; Docker: no host mounts besides these). Network: Singularity /
@@ -34,7 +38,7 @@ BUNDLE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "$BUNDLE/bundle.env"          # CXSV_BUNDLE_ID CXSV_COMMIT CXSV_RELEASE_ID CXSV_IMAGE ...
 
-usage() { sed -n '4,30p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { awk 'NR >= 4 && /^# =====/ {exit} NR >= 4' "$0" | sed 's/^# \{0,1\}//'; }
 [ $# -ge 1 ] || { usage; exit 1; }
 CMD="$1"; shift
 WORKDIR=""; CONFIGS=(); BINDS=(); CORES=16; RUNTIME="${CXSV_RUNTIME:-}"; DRY=false; NETNS=true; EXTRA=()
@@ -67,8 +71,8 @@ fi
 case "$CMD" in
     patient|panel|shell)
         [ -n "$WORKDIR" ] || { echo "--workdir is required"; exit 1; }
-        mkdir -p "$WORKDIR/config"; WORKDIR="$(cd "$WORKDIR" && pwd)" ;;
-    verify-release|netcheck) WORKDIR="$(mktemp -d)"; trap 'rm -rf "$WORKDIR"' EXIT ;;
+        mkdir -p "$WORKDIR/config" "$WORKDIR/.tmp"; WORKDIR="$(cd "$WORKDIR" && pwd)" ;;
+    verify-release|netcheck) WORKDIR="$(mktemp -d)"; mkdir -p "$WORKDIR/.tmp"; trap 'rm -rf "$WORKDIR"' EXIT ;;
     *) echo "unknown command: $CMD"; usage; exit 1 ;;
 esac
 
@@ -78,9 +82,11 @@ for f in "${CONFIGS[@]}"; do
     cp "$f" "$WORKDIR/config/$(basename "$f")"; CFG_IN+=("/work/config/$(basename "$f")")
 done
 
-# XDG_CACHE_HOME: snakemake's source cache in the writable run directory
+# XDG_CACHE_HOME: snakemake's source cache in the writable run directory;
+# TMPDIR/TMP/TEMP: temporary files in the run directory (/work/.tmp, also /tmp)
 ENVS=(CXSV_BUNDLE_ID="$CXSV_BUNDLE_ID" CXSV_COMMIT="$CXSV_COMMIT" CXSV_IMAGE_ID="$CXSV_IMAGE_ID"
-      CXSV_SIF_SHA256="$CXSV_SIF_SHA256" CXSV_RUNTIME="$RUNTIME" XDG_CACHE_HOME=/work/.cache)
+      CXSV_SIF_SHA256="$CXSV_SIF_SHA256" CXSV_RUNTIME="$RUNTIME" XDG_CACHE_HOME=/work/.cache
+      TMPDIR=/work/.tmp TMP=/work/.tmp TEMP=/work/.tmp)
 
 case "$CMD" in
     patient|panel)
@@ -107,14 +113,15 @@ if [ "$RUNTIME" = docker ]; then
     [ "$got" = "$CXSV_IMAGE_ID" ] || { echo "image $CXSV_IMAGE is $got, bundle expects $CXSV_IMAGE_ID"; exit 1; }
     # the calling uid has no passwd entry in the image: USER/LOGNAME satisfy getpass (snakemake)
     D=(docker run --rm -i --user "$(id -u):$(id -g)" -e HOME=/tmp -e USER=cxsv -e LOGNAME=cxsv -w /work
-       -v "$BUNDLE:/bundle:ro" -v "$WORKDIR:/work")
+       -v "$BUNDLE:/bundle:ro" -v "$WORKDIR:/work" -v "$WORKDIR/.tmp:/tmp")
     $NETNS && D+=(--network none)
     [ "$CMD" = shell ] && [ -t 0 ] && D+=(-t)
     for b in "${BINDS[@]}"; do D+=(-v "$b:$b:ro"); done
     for e in "${ENVS[@]}"; do D+=(-e "$e"); done
     exec "${D[@]}" "$CXSV_IMAGE" "${INNER[@]}"
 else
-    S=("$RUNTIME" exec --containall --pwd /work --bind "$BUNDLE:/bundle:ro" --bind "$WORKDIR:/work")
+    S=("$RUNTIME" exec --containall --pwd /work --bind "$BUNDLE:/bundle:ro" --bind "$WORKDIR:/work"
+       --bind "$WORKDIR/.tmp:/tmp")
     $NETNS && S+=(--net --network none)
     for b in "${BINDS[@]}"; do S+=(--bind "$b:$b:ro"); done
     for e in "${ENVS[@]}"; do S+=(--env "$e"); done
