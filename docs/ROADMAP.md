@@ -58,7 +58,7 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
      earlier deletions, and frees space only when emptied;
    - `/mnt/sargasso1/CxSV/bundles/cxsv-bundle-20261103-dc7f582c01cc.SUPERSEDED`
      (10.5 GB; failed the full-genome positive control at `locus_depth`, see
-     docs/RELEASE_AND_BUNDLE.md 6a) can be deleted;
+     docs/RELEASE_AND_BUNDLE.md 6a): **deleted 2026-11-04** (PI-approved);
    - the stand-in genome HG01868 (91 GB BAM, public, re-downloadable) sits in
      `datasets/standins/HG01868/` and in freya local scratch;
    - `/mnt/sargasso2/CxSV-old` is scheduled for deletion (nothing to rescue,
@@ -75,8 +75,11 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
     334 Mb (about 11% of the genome) this way. The positive control's *NF1*
     event E02 is lost, and its span is inside such a cluster in 952/1,619 panel
     genomes. A fix changes the calling fingerprint and needs a new panel release
-    (classification + aggregate only). *Recommendation:* approve item 13.
-13. **Small fixes found in the 2026-11-03 validation (new; not started).**
+    (classification + aggregate only). *Decided 2026-11-04: approved; item 13
+    is in progress on its own branch.*
+13. **Small fixes found in the 2026-11-03 validation.** *Approved 2026-11-04;
+    done on branch `small-fixes-2026-11` (section "Small fixes 2026-11"
+    below), awaiting merge.* As proposed:
     - `plot_complexity_class.R`: give the heatmap explicit factor levels, so its
       row order no longer depends on the host locale (validation check 7).
     - `run_cxsv.sh`: point `TMPDIR` at the run directory; the container's
@@ -105,7 +108,8 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
 | 10 | Graded privacy penalty for partly matched loci | done 2026-11-03; merged (PR #17) | `main`, docs/SCORING.md section 6b |
 | 11 | Curated literature set of pathogenic CxSVs | **on hold** (decision 5) | below |
 | 12 | Full panel build and first real release | **done 2026-11-03**: release `cxsv-panel-20261102-cd7e1d194cd4`, tag `panel-v1.0`; bundle validated offline (check 7: one locale-dependent plot, data identical); positive control run against it | `main` (tag), `validation-panel-v1.0`, below |
-| 13 | Oversized-cluster blind spot (proposed) | **awaiting decision 12** | below |
+| 13 | Oversized-cluster blind spot | **in progress** (approved 2026-11-04; separate branch) | below |
+| – | Small fixes 2026-11 (8 fixes from the panel-v1.0 validation) | done 2026-11-04; awaiting merge | `small-fixes-2026-11`, below |
 
 ---
 
@@ -311,20 +315,50 @@ and no planted event changes tier.
   off-reference BND mate contig (`chrN`). Fixed in `33c075a` with PI approval;
   outside the fingerprint.
 
-Open, not fixed:
+Open at the release, fixed since on `small-fixes-2026-11` (below):
 - `release.json` lacks the image id and SIF sha256 (`runtime` is null;
-  the bundle records them);
-- mosdepth 0.3.10 cannot read CRAM 3.1, so a CRAM 3.1 patient gives no
-  callability-dependent output and the workflow does not stop; transcode
-  first, as `pos_control_full_genome.sh` does;
+  the bundle records them); panel-v1.0's `release.json` stays as released;
+- mosdepth 0.3.10 cannot read CRAM 3.1 and writes an empty mask without
+  failing;
 - SVIM reads CRAMs without `--reference` (depends on the MD5 cache);
 - `plot_cxsv_venn.R` lets sample names collide.
 
 ---
 
+### Small fixes 2026-11 — done 2026-11-04, awaiting merge
+
+PI-approved 2026-11-04 (decision 13). Branch `small-fixes-2026-11`, one commit
+per fix, each with a test. None changes the calling fingerprint
+(`cd7e1d194cd4`): no fingerprinted rule, script or parameter changed.
+
+1. `plot_complexity_class.R`: heatmap rows/columns and panel-A ties in an
+   explicit order, independent of the locale (bundle validation check 7).
+   Test: `tests/synthetic/check_plot_scripts.sh` (C, POSIX, C.UTF-8,
+   en_US.UTF-8 give one PDF).
+2. `run_cxsv.sh`: `TMPDIR`/`TMP`/`TEMP` = `/work/.tmp`, also mounted as
+   `/tmp`, under Singularity and Docker. Test: `tests/lab/check_container_env.sh`.
+3. Release tooling: `release.json` records the SIF sha256 and image id (and
+   their source) for future releases; a container build without them is
+   refused. panel-v1.0's `release.json` is not rewritten. Tests: unit.
+4. Callability vs CRAM 3.1: `callable_mask.sh` transcodes CRAM 3.1 to a
+   temporary CRAM 3.0 (or fails, `panel_callability.cram31`), and fails on
+   mosdepth decode errors or a 0-bp mask. Test:
+   `tests/synthetic/check_cram31_callability.sh` with the fixture
+   `tests/fixtures/cram31/`.
+5. SVIM and the reference: `REF_PATH`/`REF_CACHE` set in the container
+   environment (`run_cxsv.sh`, `lib.sh`); new `check_svim_output` fails a
+   sample with SVIM decode errors or contigs cut off. Caller rules and outputs
+   unchanged. Tests: unit, `check_container_env.sh`.
+6. `plot_cxsv_venn.R`: sample name `<cohort>/<sample>` from the input path,
+   so call ids no longer collide across samples. Test: `check_plot_scripts.sh`.
+7. Panel-build runner: at start, samples the ledger leaves open get a `done`
+   event (finished during a restart) or a `retry` event (re-queued); a live
+   instance without a pid file is adopted, not started twice. Tests: unit.
+8. Docs: this list; the dc7f582 bundle deletion; item 13 in progress.
+
 ## Queued
 
-### 13. Oversized-cluster blind spot (proposed 2026-11-03; awaiting decision 12)
+### 13. Oversized-cluster blind spot (approved 2026-11-04; in progress on a separate branch)
 
 `bedtools cluster -d 50000` chains records into clusters; a cluster over
 `max_cluster_size` (500 kb) is dropped whole (`FILTERED_oversized_cluster`). In
