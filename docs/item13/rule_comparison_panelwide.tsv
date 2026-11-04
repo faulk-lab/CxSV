@@ -1,0 +1,8 @@
+variant	blind_median_Mb	blind_mean_Mb	genomes_with_oversized	cxsv_loci_mean
+B_S500_ends	1.55	2.669	1270	1104.369
+B_S500_ends_x1	1.242	2.567	1227	1096.006
+S500_ends	1.641	2.803	1284	1101.643
+S500_ends_x1	1.397	2.7	1245	1093.548
+S500_exclude	1.397	2.698	1245	1092.03
+S50_ends	1.07	2.01	1133	1114.795
+V0_current	334.152	359.123	1616	979.698

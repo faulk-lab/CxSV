@@ -330,6 +330,32 @@ failed at rule `locus_depth`. Sniffles2 2.8.1 wrote a PAR1 BND
 get no interval; the count is logged (here `chrN 1`), and a unit test covers it.
 `locus_segments.py` is outside the calling fingerprint.
 
+## Item 13 check (2026-11-04, whole genome against panel-v1.0)
+
+A check of the item-13 discovery change, not an input to it
+(docs/OVERSIZED_CLUSTERS.md section 4c). The bundle run above was re-used with
+its Snakemake metadata and this branch's code bound over the bundle's repo
+(`calibration/oversized_clusters/pc_check.sh`); Snakemake re-made only the
+downstream and patient rules (17 jobs, 1,455 s), with `allow_fingerprint_mismatch`
+because the panel is still panel-v1.0. Records longer than 500 kb (47 in this
+genome) take no part in discovery.
+
+| | panel-v1.0 rule | item 13 |
+|---|---|---|
+| E02 *NF1* delINVdel | not called (25.8 Mb oversized cluster) | **private, Complex_inversion, Tier 1, 1.95** (regression 1.97) |
+| E01, E03-E12 | | class, privacy, tier and score unchanged |
+| E13 | private, Tier 3, 0.08 | unchanged (panel composition) |
+| host Tier 1 / Tier 2 | 0 / 4 | 0 / 4 |
+| loci scored | 1,065 | 1,246 |
+| junctions | 40/41 exact, 1 partial | unchanged |
+
+The first version of the change (clustering long records at their breakends,
+`de23a0e`) also called E02 but gave the host 3 Tier-1 calls, each at an end
+of a > 500 kb record whose whole interval was counted for genes; it was
+replaced by excluding such records.
+
+![Positive control before/after item 13](figures/item13/fig_pos_control.png)
+
 ## Latest 10-slice regression result (2026-10-29, roadmap item 5: classifier on distinct junctions + scoring)
 
 Fresh workdir `freya:/home/minknow/scratch/cxsv_item5_regression`, `CORES=24

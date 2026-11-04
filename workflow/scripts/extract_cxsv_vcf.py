@@ -14,6 +14,8 @@ record whose second end is on another chromosome (CHR2; END is then a position
 on CHR2, not on CHROM). Every record of a locus has a breakend in the locus,
 so no locus loses one of its own records. Both apply when --span-link-max > 0;
 with 0 every record is extracted by interval overlap (the rule before item 13).
+With --long-span-rule exclude, a record longer than --span-link-max is in no
+locus (vcf_to_bed.py left it out of clustering) and is never extracted.
 
 Usage
 -----
@@ -93,6 +95,9 @@ def main():
     parser.add_argument("--span-link-max", type=int, default=0,
                         help="DEL/DUP/INV longer than this are extracted only when a breakend lies in a "
                              "locus (cxsv_params.span_link_max; 0 = interval overlap for every record)")
+    parser.add_argument("--long-span-rule", choices=("exclude", "breakends"), default="breakends",
+                        help="exclude: records longer than --span-link-max are never extracted "
+                             "(vcf_to_bed.py left them out of every locus)")
     args = parser.parse_args()
 
     regions = load_cxsv_regions(args.summary)
@@ -141,8 +146,11 @@ def main():
                 if field.startswith("SVTYPE="):
                     svtype = field[7:]
                     break
-            if args.span_link_max > 0 and (chr2 != chrom or (svtype in ("DEL", "DUP", "INV")
-                                                             and abs(end - pos) > args.span_link_max)):
+            long_span = (args.span_link_max > 0 and chr2 == chrom and svtype in ("DEL", "DUP", "INV")
+                         and abs(end - pos) > args.span_link_max)
+            if long_span and args.long_span_rule == "exclude":
+                keep = False
+            elif args.span_link_max > 0 and (chr2 != chrom or long_span):
                 keep = overlaps(chrom, pos, pos, regions) or overlaps(chr2, end, end, regions)
             else:
                 keep = overlaps(chrom, pos, end, regions)

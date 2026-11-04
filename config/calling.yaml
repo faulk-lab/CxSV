@@ -78,14 +78,16 @@ survivor_params:
 #   composite_fraction     a single-caller junction at the midpoint of two others
 #                          (within max(collapse_distance, this x their distance))
 #                          is a composite record and not counted
-#   span_link_max          a DEL/DUP/INV longer than this is clustered at its two
-#                          breakends only, like a BND (scripts/vcf_to_bed.py), not
-#                          as one interval spanning everything inside it (roadmap
-#                          item 13, 2026-11-04: such records, 89% single-caller,
-#                          mostly recurrent and without a read-depth change, put a
+#   span_link_max          DEL/DUP/INV longer than this are not clustered as one
+#   long_span_rule         interval spanning everything inside it (roadmap item 13,
+#                          2026-11-04: such records, 89% single-caller, mostly
+#                          recurrent and mostly without a read-depth change, put a
 #                          median 334 Mb per panel genome into oversized clusters).
-#                          Equal to max_cluster_size, so no cluster that is not
-#                          oversized changes. 0 restores the interval rule.
+#                          exclude = left out of CxSV discovery (they stay junctions
+#                          and merged calls); breakends = clustered at their two
+#                          breakends only. Listed in cxsv/long_span_records.tsv.
+#                          span_link_max equals max_cluster_size, so no cluster that
+#                          is not oversized changes. span_link_max 0 = interval rule.
 #   max_cluster_size       a cluster spanning more than this is not classified
 #                          (FILTERED_oversized_cluster); after item 13 these are
 #                          dense runs of SVs in satellite / acrocentric / subtelomeric
@@ -100,6 +102,7 @@ cxsv_params:
   chromoanag_min_svs:        3
   max_cluster_size: 500000
   span_link_max:    500000
+  long_span_rule:   exclude
   extreme_min_breakends:     6
   min_interleaved:           3
   interleave_alt_min_intra:  3

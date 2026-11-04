@@ -60,13 +60,13 @@ def cluster(bed_lines, d=50_000):
     return out
 
 
-def classify(tmp, vcf, link):
-    bed = list(v2b.process_vcf(str(vcf), 1, link))
-    cl = tmp / f"clusters.{link}.bed"
+def classify(tmp, vcf, link, rule="breakends"):
+    bed = list(v2b.process_vcf(str(vcf), 1, link, long_rule=rule))
+    cl = tmp / f"clusters.{link}.{rule}.bed"
     cl.write_text("".join(l + "\n" for l in cluster(bed)))
     fai = tmp / "ref.fai"
     fai.write_text("chr17\t84276897\t7\t60\t61\n")
-    out = tmp / f"summary.{link}.tsv"
+    out = tmp / f"summary.{link}.{rule}.tsv"
     subprocess.run([sys.executable, str(SCRIPTS / "classify_cxsv.py"), "--bed", str(cl), "--vcf", str(vcf),
                     "--fai", str(fai), "--output", str(out), "--max-cluster-size", "500000"], check=True,
                    capture_output=True)
@@ -193,8 +193,47 @@ def test_extract_cxsv_vcf_uses_breakends_of_long_and_interchromosomal_records(tm
     assert ids(0) == e02 | {"Sniffles2.DEL.giant", "svim.DUP.edge", "svim.DEL.mid", "svim.TRA.x"}
 
 
-@pytest.mark.parametrize("key", ["span_link_max", "max_cluster_size"])
-def test_calling_config_links_long_records_at_max_cluster_size(key):
+def test_exclude_rule_leaves_long_records_out_and_lists_them(tmp_path):
+    near = [rec("chr17", 42450000, "svim.INV.n1", "INV", 42455000, "011"),
+            rec("chr17", 42460000, "svim.DEL.n2", "DEL", 42462000, "111")]
+    vcf = write(tmp_path, "m.vcf", [GIANT] + FILLER + E02 + near)
+    long_rows, counts = [], {}
+    rows = [l.split("\t") for l in v2b.process_vcf(str(vcf), 1, LINK, counts, "exclude", long_rows)]
+    assert not any(r[4].startswith("Sniffles2.DEL.giant") for r in rows)
+    assert long_rows == [("Sniffles2.DEL.giant", "chr17", 16716382, 42430144, "DEL", 25713762, "001", "exclude")]
+    assert counts == {"exclude": 1}
+    _, after = classify(tmp_path, vcf, LINK, "exclude")
+    e02 = [r for r in after if int(r["Start"]) <= 32250000 <= int(r["End"])]
+    assert len(e02) == 1 and e02[0]["IsCxSV"] == "YES" and e02[0]["N_Records"] == "3"
+    loc = [r for r in after if int(r["Start"]) <= 42450000 <= int(r["End"])]
+    assert len(loc) == 1 and loc[0]["N_Records"] == "2"          # the long DEL is not a junction here
+    assert not any(r["CxSV_Criteria"] == "FILTERED_oversized_cluster" for r in after)
+    # under breakends the same locus also holds the long DEL (its END breakend is 20 kb away)
+    _, ends = classify(tmp_path, vcf, LINK, "breakends")
+    loc_b = [r for r in ends if int(r["Start"]) <= 42450000 <= int(r["End"])]
+    assert loc_b[0]["N_Records"] == "3" and int(loc_b[0]["Start"]) == 42430143
+
+
+def test_unknown_long_span_rule_is_refused(tmp_path):
+    vcf = write(tmp_path, "m.vcf", [GIANT])
+    with pytest.raises(ValueError):
+        list(v2b.process_vcf(str(vcf), 1, LINK, long_rule="split"))
+
+
+def test_extract_cxsv_vcf_never_takes_long_records_under_exclude(tmp_path):
+    summ = tmp_path / "cxsv_summary.tsv"
+    summ.write_text("ClusterID\tChr\tStart\tEnd\tSize\tN_Breakpoints\tN_SVtypes\tSV_Types\tHas_Inter\tIsCxSV\n"
+                    "1\tchr17\t42430000\t42462000\t32000\t4\t2\tDEL,INV\tNO\tYES\n")
+    vcf = write(tmp_path, "m.vcf", [GIANT, rec("chr17", 42450000, "svim.INV.n1", "INV", 42455000, "011")])
+    out = tmp_path / "only.vcf"
+    subprocess.run([sys.executable, str(SCRIPTS / "extract_cxsv_vcf.py"), "--vcf", str(vcf), "--summary", str(summ),
+                    "--output", str(out), "--span-link-max", str(LINK), "--long-span-rule", "exclude"],
+                   check=True, capture_output=True)
+    assert {l.split("\t")[2] for l in out.read_text().splitlines() if l and not l.startswith("#")} == {"svim.INV.n1"}
+
+
+def test_calling_config_long_span_rule():
     import yaml
     cfg = yaml.safe_load((REPO / "config" / "calling.yaml").read_text())["cxsv_params"]
-    assert cfg[key] == 500_000 and cfg["span_link_max"] == cfg["max_cluster_size"]
+    assert cfg["span_link_max"] == cfg["max_cluster_size"] == 500_000
+    assert cfg["long_span_rule"] in v2b.LONG_RULES

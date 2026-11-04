@@ -523,6 +523,14 @@ positive-control check).
   is still defined per chromosome, so a two-chromosome event appears as two
   loci with the same genes (E07: both loci 1.60).
 - Criteria 3, 4 and 6 are deferred (ROADMAP item 8).
+- **Records longer than 500 kb are not part of any locus** (roadmap item 13,
+  docs/OVERSIZED_CLUSTERS.md): a real large rearrangement contributes only its
+  local junctions to the loci at its ends, and its genes are not counted. Letting
+  such a junction into a locus (`long_span_rule: breakends`) made the scorer count
+  genes and read depth over its whole interval (up to 129 Mb) and raised healthy
+  Tier 1 from 0.196 to 0.371 per genome, against 0.237 with the records left out.
+  Scoring long junctions by their breakends only would be needed before they can
+  be let back in.
 
 ## 8. Changing the scoring
 

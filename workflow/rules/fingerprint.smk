@@ -16,11 +16,20 @@ rule tool_versions:
 
 
 rule calling_fingerprint:
+    """The fingerprinted code files and config/calling.yaml are inputs and the
+    calling parameters are params, so the fingerprint is rebuilt whenever they
+    change, also in an existing work directory or build tree (roadmap item 13:
+    without them an old calling_fingerprint.json was kept after a code change,
+    so a release or a patient compatibility check could carry a stale value)."""
     input:
         manifest = REF_MD5_MANIFEST,
-        tools    = f"{RESULTS_ROOT}/tool_versions.tsv"
+        tools    = f"{RESULTS_ROOT}/tool_versions.tsv",
+        code     = [os.path.join(WORKFLOW_DIR, f) for f in cxsv_fingerprint.CALLING_CODE],
+        calling  = os.path.join(PROJECT_DIR, "config", "calling.yaml")
     output:
         f"{RESULTS_ROOT}/calling_fingerprint.json"
+    params:
+        calling = lambda wc: json.dumps(cxsv_fingerprint.calling_params(config), sort_keys=True)
     run:
         fp = cxsv_fingerprint.build(config, WORKFLOW_DIR, input.manifest, input.tools)
         empty = [t for t, v in fp["tools"].items() if not v]
