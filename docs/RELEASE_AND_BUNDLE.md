@@ -8,7 +8,7 @@ network, from material whose origin can be checked. This document defines:
 3. the **container image**: one pinned environment for both workflows;
 4. the **offline bundle**: everything needed to score a patient with no network;
 5. how to **build** and **run** each of them;
-6. the **validation record** of the first bundle.
+6. the **validation records** of the bundles (6a: panel-v1.0, the current one).
 
 ## 1. Panel release
 
@@ -71,7 +71,10 @@ release:
 - `files`: the file list.
 
 Release tags are **not** created by the workflow. The commit hash is recorded
-instead; tagging a release is the PI's decision.
+instead; tagging a release is the PI's decision. The first real release,
+`cxsv-panel-20261102-cd7e1d194cd4`, carries the annotated tag `panel-v1.0`
+(on its source commit da6cb90), written into `release.json` by
+`write_release_metadata.py --finalise` (2026-11-03).
 
 ### The patient workflow refuses a release that does not verify
 
@@ -290,7 +293,74 @@ Docker archive.
 
 ## 6. Validation record
 
-### 6a. Bundle with scoring (roadmap items 4–5), 2026-10-29
+### 6a. Bundle with panel-v1.0 (the first real release), 2026-11-03
+
+Built with `scripts/make_bundle.sh bundle` and validated with
+`tests/lab/validate_bundle.sh` on freya (Singularity CE 4.4.1, Docker 29.9.2),
+networking off. The run directory was freya local disk; the bundle was on the
+NAS. Records: `validation.log`, `compare_*.tsv`
+(saved with the validation deliverables).
+
+| | |
+|---|---|
+| bundle | `/mnt/sargasso1/CxSV/bundles/cxsv-bundle-20261103-33c075a22071` |
+| commit | `33c075a22071dd229d268427600847ec01ea020e` (branch `validation-panel-v1.0`) = dc7f582 (`item10-graded-privacy`, merged as PR #17; contains `panel-v1.0` = da6cb90, item 9 and item 10) + the `locus_depth` fix below. Calling code and `config/calling.yaml` unchanged since dc7f582 (`git diff` empty) |
+| panel release | `cxsv-panel-20261102-cd7e1d194cd4`, **not a test release**, tag `panel-v1.0`. Fingerprint `cd7e1d194cd4…`, release source commit da6cb90, 1,634 files, `release_manifest.tsv` sha256 `928d721ac91bd179be195ab8af5cf7324a4b0db09e043dd1aeb799f2fa835326`; identical before and after the bundle builds and the validation |
+| image | reused `cxsv-pipeline:ba820f7b2bd3`, id `sha256:b6c1bded…`, SIF sha256 `9f4e049fe5c5eb89717e1f531d284836efc7c306e0103374872c8165c01ff967` (the SIF the panel was built in, checked on every node at preflight) |
+| recorded in the bundle | `bundle.json` / `bundle.env`: commit, release id, fingerprint, release source commit, image id, SIF and Docker-archive sha256, env-lock sha256. `MANIFEST.sha256` (1,900 files; its own sha256 `c6dbb153…`) covers the release's `release_manifest.tsv` (`928d721a…`), `release.json` (`fede1a48…`), `resources/resources_manifest.tsv` (`2713b466…`) and the 4 catalogue manifests. `release.json` itself has `runtime.image_id`/`sif_sha256` null (open defect, item 12), so `bundle.json` `built_in_sif` is null too |
+| size | 10,524,465,214 bytes (9.9 GiB). By component: reference 6,296,932,150; panel release 2,432,071,602; container 1,511,291,981; resources 229,422,362; catalogues 46,466,039; source 4,691,591; repo 2,928,889 |
+| build time | 83 s (61 s copying, the rest checksums); image reused |
+| stand-in patient | **HG01868**: 1kGP-LRSC, KHV/EAS, female, ONT R9 LSK110 (dorado 0.5.0 sup), **whole genome**, ~28x (median flank depth at MAPQ ≥ 20). Public, and **not** in the panel (absent from `registry/individuals.tsv`); from the 1kGP ONT bucket's `ALIGNED_TO_CHM13/MINIMAP_ALIGNED_BAMS_2026/` (90,944,951,543-byte BAM, sha256 `61181675…`; minimap2 2.28 to CHM13v2, contigs identical to `hs1.fa.fai`). Copy kept at `datasets/standins/HG01868/` with a README. HG002 was considered, but no HG002 long-read data were on the NAS, and it would have needed downloading and aligning. The earlier stand-in HG00130 is a panel individual now |
+
+| Check | Result |
+|---|---|
+| 1. bundle integrity | PASS: all 1,900 files (107 s) |
+| 2. panel release integrity | PASS: 1,634 files verified, manifest sha256 `928d721a…` |
+| 3. network off (Singularity, Docker) + controls | PASS: loopback only; TCP/DNS/HTTPS fail; `/mnt/sargasso1`, conda and the repo clone absent; `/bundle` read-only. The `--no-netns` controls connect |
+| 4. patient run, Singularity, bundle only | PASS (2,894 s, 12 cores) |
+| 5. patient run, Docker, image loaded from the bundle archive | PASS (2,907 s) |
+| 6. patient run outside the bundle (clean worktree at the commit, conda env, NAS release, resources and catalogues) | PASS (2,652 s) |
+| 7. records, 4 vs 6 and 5 vs 6 | **FAIL as scripted; explained, no data difference.** Of 57 files: 51 identical; 3 identical after path normalisation; 2 expected run-record differences; **1 differs: `plots/complexity_class_heatmap.pdf`**. Its panel B rows are ordered by base R `sort()`, which depends on the locale: the image sets `LC_ALL=C.UTF-8`; the host job had no `LANG` (POSIX). `CN_plus_orientation_change` and `Chromothripsis_like` swap places (the slice stand-ins had no `CN_plus…` locus). Re-rendering only that plot in run 6 with `LC_ALL=C.UTF-8` gives 52 identical, 3 path-normalised, 2 expected, **0 unexpected**, for both 4 vs 6 and 5 vs 6. Runs 4 and 5 are identical to each other |
+| 8a/8b. tampered release (one digit / one extra file) | PASS: refused before any job ran |
+| total | 8,897 s (2 h 28 min) |
+
+Stand-in result (identical in runs 4, 5 and 6):
+
+- 974 CxSV loci: 0 private, 62 `shared_junctions`, 912 public;
+- 0 Tier 1, 5 Tier 2 (4 public, 1 shared_junctions), 22 Tier 3,
+  947 Benign_likely.
+
+That is 0 Tier-1 calls for a healthy genome that is not in the panel. Healthy
+panel genomes average 0.36 at 20-30x (item-10 calibration, leave-one-family-out).
+
+**Defect found and fixed (PI-approved).** A first bundle,
+`cxsv-bundle-20261103-dc7f582c01cc` (from dc7f582, 86 s), passed checks 1-5
+on the stand-in, but the whole-genome positive control failed at rule
+`locus_depth`. Sniffles2 2.8.1 gave a PAR1 BND the ALT mate contig `chrN`
+(`CHR2=chrY`). `scripts/locus_segments.py` emitted depth intervals on it, and
+`samtools bedcov` exited 2. Commit `33c075a`:
+
+- skips breakends on contigs absent from the reference `.fai` and logs the count;
+- adds a unit test;
+- leaves the fingerprint unchanged (`locus_segments.py` is not calling code).
+
+The dc7f582 bundle's validation was stopped after check 5 and the bundle renamed
+`*.SUPERSEDED` (deletable). The same commit adds
+`tests/lab/pos_control_full_genome.sh` and the `STANDIN_RUN` label to
+`validate_bundle.sh`. Positive control against this bundle:
+docs/POSITIVE_CONTROL.md, "Full-panel result".
+
+Findings, not fixed (outside this validation):
+
+- The heatmap row order depends on the locale. A fix is explicit factor
+  levels in `plot_complexity_class.R`, or `LC_ALL=C.UTF-8` for check 6.
+- `run_cxsv.sh` gives the container a 64 MB tmpfs `/tmp` (`--containall`,
+  `TMPDIR` unset). Whole-genome runs did not need more; the panel build binds a
+  disk `/tmp`.
+- Whole-genome CxSV detection loses events inside oversized clusters
+  (docs/ROADMAP.md item 13).
+
+### 6b. Bundle with scoring (roadmap items 4–5), 2026-10-29
 
 Built and validated on freya with the same scripts (`make_bundle.sh image|bundle`,
 `tests/lab/validate_bundle.sh`). The bundle now also ships `resources/scoring/`
@@ -328,11 +398,11 @@ Stand-in result:
   hotspot locus).
 - The same in all three runs.
 
-No bundle failed or was superseded in this round. `/mnt/sargasso1/CxSV/bundles/`
-holds only this bundle and the previous validated one
+No bundle failed or was superseded in this round. At the time,
+`/mnt/sargasso1/CxSV/bundles/` held only this bundle and the previous validated one
 (`cxsv-bundle-20261028-26085cdd9977`); nothing was removed.
 
-### 6b. First bundle (roadmap item 2), 2026-10-28
+### 6c. First bundle (roadmap item 2), 2026-10-28
 
 Run on freya (Singularity CE 4.4.1, Docker 29.9.2), 2026-10-28, with
 `tests/lab/validate_bundle.sh`. Full log: `validation.log` (saved with the

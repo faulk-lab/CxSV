@@ -13,6 +13,12 @@ local baseline. Output BED (0-based, half-open), sorted:
 
 The rule then runs `samtools bedcov` on the patient alignment over these
 intervals; scripts/score_cxsv.py turns mean depth into copy number.
+
+Breakends on a contig that is not in the reference (--fai) get no interval:
+samtools bedcov would stop with exit 2 on them. A caller can write such a mate
+contig, e.g. Sniffles2 2.8.1 gave a PAR1 BND the ALT mate 'chrN' (CHR2=chrY) on
+the positive control. The count is reported on stderr (the rule's log); the
+locus keeps its intervals on the reference contigs.
 """
 import argparse
 import csv
@@ -56,14 +62,18 @@ def main():
         loci = [f"{r['Chr']}:{r['Start']}-{r['End']}" for r in csv.DictReader(fh, delimiter="\t")]
     p = {**cc.DEFAULTS, "collapse_distance": a.collapse_distance, "composite_fraction": a.composite_fraction}
     out = []
+    off_ref = defaultdict(int)                # contig -> breakends skipped (not in --fai)
     for L in loci:
         kept, _ = cc.distinct_junctions(rows_to_junctions(by_locus.get(L, [])), order, p)
         per_chrom = defaultdict(list)
         for chrom, pos in cc.breakends(kept, a.collapse_distance):
             per_chrom[chrom].append(pos)
         for chrom, ps in per_chrom.items():
+            if chrom not in lengths:          # not a reference contig: bedcov cannot measure it
+                off_ref[chrom] += len(ps)
+                continue
             ps.sort()
-            n = lengths.get(chrom, max(ps) + a.flank + a.gap + 1)
+            n = lengths[chrom]
             lo, hi = max(0, ps[0] - a.gap - a.flank), max(0, ps[0] - a.gap)
             if hi > lo:
                 out.append((chrom, lo, hi, L, "flank_left", 0))
@@ -79,6 +89,9 @@ def main():
         for r in out:
             fh.write("\t".join(map(str, r)) + "\n")
     print(f"{len(loci)} loci -> {len(out)} depth intervals", file=sys.stderr)
+    if off_ref:
+        print("skipped breakends on contigs absent from the reference: "
+              + ", ".join(f"{c} {n}" for c, n in sorted(off_ref.items())), file=sys.stderr)
 
 
 if __name__ == "__main__":
