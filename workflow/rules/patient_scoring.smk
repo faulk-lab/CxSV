@@ -13,6 +13,9 @@
 #   scoring/cxsv_scores.tsv             ranked loci with every feature's value and points
 #   scoring/cxsv_score_features.tsv     the same in long format
 #   scoring/cxsv_score_report.md        human-readable per-call report
+#   private/cxsv_literature_hits.tsv    per locus: match to the curated literature set of published
+#                                       pathogenic germline CxSVs (item 11; annotation only, no points;
+#                                       only when config literature_set.root is set)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 import csv as _csv
@@ -22,6 +25,8 @@ CATS = config.get("external_catalogues") or {}
 CAT_MATCH = CATS.get("match", {})
 SCORING_RES = config.get("scoring_resources") or {}
 CN = config["copy_number"]
+LIT = config.get("literature_set") or {}
+LIT_MATCH = LIT.get("match") or {}
 
 
 def catalogue_specs():
@@ -102,6 +107,36 @@ rule catalogue_hits:
         "--out-junctions {output.junctions} --out-check {output.check} 2> {log}"
 
 
+def literature_hits_input(wildcards):
+    """The literature annotation, when a literature set is configured (item 11)."""
+    if not LIT.get("root"):
+        return {}
+    return {"literature": f"{SAMPLES_ROOT}/{wildcards.cohort}/{wildcards.sample}/private/cxsv_literature_hits.tsv"}
+
+
+if LIT.get("root"):
+    rule literature_hits:
+        """Which published pathogenic rearrangement (docs/LITERATURE_SET.md) each locus matches; no points."""
+        input:
+            junctions = f"{S}/junctions/junctions.tsv",
+            loci      = f"{S}/private/cxsv_panel_status.tsv",
+            lit_j     = f"{LIT['root']}/literature_junctions.tsv",
+            lit_e     = f"{LIT['root']}/literature_events.tsv",
+            script    = f"{SCRIPTS}/match_literature.py"
+        output: f"{S}/private/cxsv_literature_hits.tsv"
+        params:
+            root = LIT["root"],
+            tol  = LIT_MATCH.get("tolerance_bp", 500),
+            tola = LIT_MATCH.get("tolerance_approximate", 10000),
+            tolr = LIT_MATCH.get("tolerance_region", 50000),
+            frac = LIT_MATCH.get("min_event_fraction", 0.75)
+        log: f"{S}/logs/literature_hits.log"
+        shell:
+            "python {input.script} --junctions {input.junctions} --loci {input.loci} --literature {params.root} "
+            "--tolerance-bp {params.tol} --tolerance-approximate {params.tola} --tolerance-region {params.tolr} "
+            "--min-event-fraction {params.frac} --out {output} 2> {log}"
+
+
 rule locus_depth:
     """Mean read depth (MAPQ >= copy_number.min_mapq) over each locus's segments and flanks."""
     input:
@@ -160,6 +195,7 @@ rule score_cxsv:
     """Explainable points per locus, total, tier, report (scripts/score_cxsv.py)."""
     input:
         unpack(lambda wc: {f"parent_{k}": v for k, v in parent_junctions(wc).items()}),
+        unpack(literature_hits_input),
         status    = f"{S}/private/cxsv_panel_status.tsv",
         cats      = f"{S}/private/cxsv_catalogue_hits.tsv",
         check     = f"{S}/private/catalogue_check.tsv",
@@ -183,7 +219,8 @@ rule score_cxsv:
         features = f"{S}/scoring/cxsv_score_features.tsv",
         report   = f"{S}/scoring/cxsv_score_report.md"
     params:
-        parents = lambda wc: " ".join(f"--parent {k}={v}" for k, v in parent_junctions(wc).items())
+        parents = lambda wc: " ".join(f"--parent {k}={v}" for k, v in parent_junctions(wc).items()),
+        literature = lambda wc: " ".join(f"--literature-hits {v}" for v in literature_hits_input(wc).values())
     log: f"{S}/logs/score_cxsv.log"
     shell:
         "python {input.script} --status {input.status} --catalogue-hits {input.cats} "
@@ -191,5 +228,5 @@ rule score_cxsv:
         "--vcf {input.vcf} --caller-vcf Sniffles2={input.sniffles} --caller-vcf cuteSV={input.cutesv} "
         "--caller-vcf SVIM={input.svim} --depth {input.depth} --params {input.params} "
         "--genes {input.genes} --exons {input.exons} --repeats {input.repeats} --segdups {input.segdups} "
-        "--fai {input.fai} {params.parents} --sample {wildcards.sample} "
+        "--fai {input.fai} {params.parents} {params.literature} --sample {wildcards.sample} "
         "--out-tsv {output.tsv} --out-features {output.features} --out-report {output.report} 2> {log}"

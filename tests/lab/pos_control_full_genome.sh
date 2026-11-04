@@ -16,16 +16,20 @@
 #   1. CRAM version a CRAM 3.1 input is rewritten as CRAM 3.0 exactly as the panel
 #                   build did (scripts/panel_build/lib.sh cxsv_cram30): the pinned
 #                   mosdepth 0.3.10 cannot decode 3.1 (empty callability, exit 0)
-#   2. E13 splice   E13 exists only as an add-on (datasets/pos_control/addons/E13):
-#                   host reads overlapping E13.replace.bed are dropped (by name,
-#                   all their records) and the simulated E13 reads are merged in,
-#                   as splice_spikein() in the regression, over the whole genome.
-#                   Output CRAM 3.0. Record counts are checked:
+#   2. add-on splice  E13 (and, with ADDONS, the literature add-ons L01-L04, roadmap
+#                   item 11) exist only as add-ons (datasets/pos_control/addons/<ID>):
+#                   host reads overlapping any <ID>.replace.bed are dropped (by name,
+#                   all their records) and the simulated reads of every add-on are
+#                   merged in, as splice_spikein() in the regression, over the whole
+#                   genome. Output CRAM 3.0. Record counts are checked:
 #                   out = in - dropped records + simulated records
 #   3. patient run  run_cxsv.sh patient (bundle only, --containall, --network none)
-#   4. scoring      score_pos_control.py (truth + E13 add-on truth), in the SIF
+#   4. scoring      score_pos_control.py (truth + every add-on's truth), in the SIF;
+#                   EVENTS (default: the bundle's events.yaml) lists the events scored
 #   5. release      the bundle's release still verifies
 # All samtools/python steps run inside the bundle's SIF with no network.
+# ADDONS="dir ..." (default "$PC/addons/E13") lists the add-ons to splice; each has
+# MD5SUMS, reads/<ID>.replace.bed, reads/pos_control.<ID>.sim.bam and truth/.
 # SKIP_MD5=1 skips the 100 GB MD5 of step 0. Exit 0 = the run finished (event
 # verdicts are reported, not enforced: E13 is expected to FAIL against a real
 # panel, whose genomes do not carry the spike-in).
@@ -34,7 +38,9 @@ set -euo pipefail
 BUNDLE="$(cd "$1" && pwd)"; W="$(mkdir -p "$2" && cd "$2" && pwd)"; CORES="${3:-12}"
 PC="${PC:-/mnt/sargasso1/CxSV/datasets/pos_control}"
 POS_CRAM="${POS_CRAM:-$PC/release/pos_control_3559.hs1.minimap2.cram}"
-ADDON="${ADDON:-$PC/addons/E13}"
+ADDONS="${ADDONS:-${ADDON:-$PC/addons/E13}}"
+EVENTS="${EVENTS:-/bundle/repo/tests/positive_control/events.yaml}"
+ADDON_IDS=""; for a in $ADDONS; do ADDON_IDS="${ADDON_IDS:+$ADDON_IDS+}$(basename "$a")"; done
 # shellcheck disable=SC1091
 source "$BUNDLE/bundle.env"
 RUN="$BUNDLE/run_cxsv.sh"; SIF="$BUNDLE/container/cxsv-pipeline.sif"
@@ -61,7 +67,7 @@ if [ "${SKIP_MD5:-0}" != 1 ]; then
     got=$(md5sum "$POS_CRAM" | cut -c1-32)
     [ "$got" = "$want" ] && echo "release CRAM md5 $got matches MD5SUMS" || { echo "release CRAM md5 $got != $want"; exit 1; }
 fi
-(cd "$ADDON" && md5sum -c --quiet MD5SUMS) && echo "E13 add-on matches its MD5SUMS"
+for a in $ADDONS; do (cd "$a" && md5sum -c --quiet MD5SUMS) && echo "$(basename "$a") add-on matches its MD5SUMS"; done
 n_m5=0
 for m in $(in_sif "samtools view -H '$POS_CRAM'" | grep '^@SQ' | grep -o 'M5:[0-9a-f]*' | cut -c4-); do
     [ -f "$BUNDLE/reference/ref_cache/${m:0:2}/${m:2:2}/${m:4}" ] || { echo "M5 $m missing from the bundle cache"; exit 1; }
@@ -84,21 +90,25 @@ else
     echo "no transcode needed"
 fi
 
-hdr "2. E13 splice (whole genome)"
-OUT="$IN/pos_control.E13.cram"
+hdr "2. add-on splice (whole genome): ${ADDON_IDS//+/ }"
+OUT="$IN/pos_control.$ADDON_IDS.cram"; TAG="$ADDON_IDS"
+BEDS=""; SIMS=""
+for a in $ADDONS; do id=$(basename "$a"); BEDS="$BEDS $a/reads/$id.replace.bed"; SIMS="$SIMS $a/reads/pos_control.$id.sim.bam"; done
 if [ ! -f "$OUT.splice.ok" ]; then
     t=$(date +%s)
-    in_sif "samtools view -@ $T -L '$ADDON/reads/E13.replace.bed' '$SRC' | cut -f1 | sort -u > '$IN/E13.dropped_names.txt'"
-    in_sif "samtools view -@ $T -u -N '^$IN/E13.dropped_names.txt' -U '$IN/E13.dropped_records.bam' '$SRC' \
+    cat $BEDS | sort -k1,1 -k2,2n > "$IN/$TAG.replace.bed"
+    in_sif "samtools view -@ $T -L '$IN/$TAG.replace.bed' '$SRC' | cut -f1 | sort -u > '$IN/$TAG.dropped_names.txt'"
+    in_sif "samtools view -@ $T -u -N '^$IN/$TAG.dropped_names.txt' -U '$IN/$TAG.dropped_records.bam' '$SRC' \
             | samtools merge -@ $T --reference $REF -O cram --output-fmt-option version=3.0 -o '$OUT.part' - \
-                  '$ADDON/reads/pos_control.E13.sim.bam' && samtools index -@ $T '$OUT.part' '$OUT.part.crai'"
-    n_in=$(total_records "$SRC"); n_drop=$(in_sif "samtools view -c '$IN/E13.dropped_records.bam'")
-    n_sim=$(in_sif "samtools view -c '$ADDON/reads/pos_control.E13.sim.bam'"); n_out=$(total_records "$OUT.part")
-    echo "records: input $n_in, dropped $n_drop ($(wc -l < "$IN/E13.dropped_names.txt") read names), simulated $n_sim, output $n_out"
+                  $SIMS && samtools index -@ $T '$OUT.part' '$OUT.part.crai'"
+    n_in=$(total_records "$SRC"); n_drop=$(in_sif "samtools view -c '$IN/$TAG.dropped_records.bam'")
+    n_sim=0; for b in $SIMS; do n_sim=$((n_sim + $(in_sif "samtools view -c '$b'"))); done
+    n_out=$(total_records "$OUT.part")
+    echo "records: input $n_in, dropped $n_drop ($(wc -l < "$IN/$TAG.dropped_names.txt") read names), simulated $n_sim, output $n_out"
     [ "$n_out" = $((n_in - n_drop + n_sim)) ] || { echo "splice record count mismatch"; exit 1; }
     mv "$OUT.part.crai" "$OUT.crai"; mv "$OUT.part" "$OUT"
     printf 'source\t%s\nsource_md5\t%s\nreplace_bed\t%s\ndropped_names\t%s\ndropped_records\t%s\nsimulated_records\t%s\ninput_records\t%s\noutput_records\t%s\ncram_version\t%s\nseconds\t%s\n' \
-        "$SRC" "${got:-not checked}" "$ADDON/reads/E13.replace.bed" "$(wc -l < "$IN/E13.dropped_names.txt")" \
+        "$SRC" "${got:-not checked}" "$IN/$TAG.replace.bed" "$(wc -l < "$IN/$TAG.dropped_names.txt")" \
         "$n_drop" "$n_sim" "$n_in" "$n_out" "$(cram_version "$OUT")" "$(( $(date +%s)-t ))" > "$OUT.splice.ok"
 fi
 cat "$OUT.splice.ok"
@@ -118,9 +128,10 @@ S="$W/run/results/patient/samples/pos_control/pos_control"
 sed 's/^/  /' "$W/run/results/patient/panel_release_check.txt"
 grep -E '^(this run|panel|status)' "$W/run/results/patient/panel_compatibility.txt" | sed 's/^/  /'
 
-hdr "4. score against the truth set (E01-E12 release truth + E13 add-on truth)"
+hdr "4. score against the truth set (E01-E12 release truth + add-on truth: ${ADDON_IDS//+/ })"
+XT=""; for a in $ADDONS; do XT="$XT --extra-truth '$a/truth'"; done
 in_sif "python /bundle/repo/tests/positive_control/score_pos_control.py '$PC/release/truth' '$S' \
-        /bundle/repo/tests/positive_control/events.yaml '$W/score' --extra-truth '$ADDON/truth' \
+        '$EVENTS' '$W/score' $XT \
         --known-failures /bundle/repo/tests/positive_control/known_failures.tsv" > "$W/score.txt" 2>&1 || true
 tail -25 "$W/score.txt"
 

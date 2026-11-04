@@ -40,6 +40,15 @@ external_catalogues:
     - {name: HPRC,      version: release2-mc-v2.1}
     - {name: gnomAD-SV, version: v4.1}
 
+# ─── Curated literature set of published pathogenic germline CxSVs (roadmap item 11;
+# acquisition/literature, docs/LITERATURE_SET.md). ANNOTATION ONLY: adds
+# Literature_Match / Literature_Events to the scores and private/cxsv_literature_hits.tsv;
+# no points. null = off. Lab copy: /mnt/sargasso1/CxSV/resources/literature/lit-v1.0
+# (bundles built with it set literature_set.root to /bundle/resources/literature/<version>).
+literature_set:
+  root: null
+  match: {tolerance_bp: 500, tolerance_approximate: 10000, tolerance_region: 50000, min_event_fraction: 0.75}
+
 # ─── Per-patient information (all optional). Keyed by sample_id. Sample-sheet
 # columns sex, hpo_terms (comma/semicolon list), mother, father are read too;
 # values here win. Parents must be samples of the same patient run.
