@@ -76,7 +76,8 @@ rule sample_vcf_to_bed:
     Merged VCF -> BED for clustering. Each BND/TRA emits both ends; so does
     DEL/DUP/INV longer than cxsv_params.span_link_max (roadmap item 13), which
     as one interval would chain every SV it spans into one oversized cluster,
-    follow cxsv_params.long_span_rule and are listed in long_span_records.tsv.
+    follow cxsv_params.long_span_rule (exclude | breakends | paired) and are
+    listed in long_span_records.tsv.
     """
     input:
         vcf    = f"{S}/merged_sv.vcf",
@@ -87,16 +88,26 @@ rule sample_vcf_to_bed:
     params:
         window   = config["cxsv_params"]["bnd_window"],
         link_max = config["cxsv_params"]["span_link_max"],
-        rule     = config["cxsv_params"]["long_span_rule"]
+        rule     = config["cxsv_params"]["long_span_rule"],
+        dist     = config["cxsv_params"]["cluster_distance"],
+        collapse = config["junction_params"]["collapse_distance"]
     log:    f"{S}/logs/vcf_to_bed.log"
     shell:
         "python {input.script} --vcf {input.vcf} --out {output.bed} --window {params.window} "
-        "--span-link-max {params.link_max} --long-span-rule {params.rule} --long-out {output.long} 2> {log}"
+        "--span-link-max {params.link_max} --long-span-rule {params.rule} --long-out {output.long} "
+        "--cluster-distance {params.dist} --collapse-distance {params.collapse} 2> {log}"
 
 
 rule sample_cluster_sv:
-    """Cluster this sample's SVs within cxsv_params.cluster_distance."""
-    input:  f"{S}/cxsv/merged_sv.bed"
+    """
+    Cluster this sample's SVs within cxsv_params.cluster_distance; with
+    long_span_rule paired, join the two end clusters of each paired long record
+    (link_paired_clusters.py; unchanged output for the other rules).
+    """
+    input:
+        bed    = f"{S}/cxsv/merged_sv.bed",
+        long   = f"{S}/cxsv/long_span_records.tsv",
+        script = f"{SCRIPTS}/link_paired_clusters.py"
     output:
         sorted_bed   = f"{S}/cxsv/merged_sv_sorted.bed",
         clusters_bed = f"{S}/cxsv/clusters.bed"
@@ -104,9 +115,12 @@ rule sample_cluster_sv:
     log:    f"{S}/logs/cluster_sv.log"
     shell:
         """
-        bedtools sort -i {input} > {output.sorted_bed} 2>> {log}
-        bedtools cluster -d {params.cluster_dist} -i {output.sorted_bed} \
-            > {output.clusters_bed} 2>> {log}
+        bedtools sort -i {input.bed} > {output.sorted_bed} 2>> {log}
+        bedtools cluster -d {params.cluster_dist} -i {output.sorted_bed} \\
+            > {output.clusters_bed}.raw 2>> {log}
+        python {input.script} --clusters {output.clusters_bed}.raw --long {input.long} \\
+            --out {output.clusters_bed} 2>> {log}
+        rm -f {output.clusters_bed}.raw
         """
 
 
@@ -165,7 +179,8 @@ rule sample_extract_cxsv_vcf:
     """This sample's merged calls that fall inside its own CxSV loci."""
     input:
         vcf     = f"{S}/merged_sv.vcf",
-        summary = f"{S}/cxsv/cxsv_summary.tsv"
+        summary = f"{S}/cxsv/cxsv_summary.tsv",
+        long    = f"{S}/cxsv/long_span_records.tsv"
     output: f"{S}/cxsv/cxsv_only.vcf"
     params:
         link_max = config["cxsv_params"]["span_link_max"],
@@ -173,7 +188,8 @@ rule sample_extract_cxsv_vcf:
     log:    f"{S}/logs/extract_cxsv_vcf.log"
     shell:
         "python {SCRIPTS}/extract_cxsv_vcf.py --vcf {input.vcf} --summary {input.summary} "
-        "--span-link-max {params.link_max} --long-span-rule {params.rule} --output {output} > {log} 2>&1"
+        "--span-link-max {params.link_max} --long-span-rule {params.rule} --long-records {input.long} "
+        "--output {output} > {log} 2>&1"
 
 
 rule sample_annotate_cxsv:

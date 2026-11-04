@@ -13,6 +13,8 @@
 #                        work dir (as in BUILD/aggregate) nothing is planned
 #   dryrun_forcerun.txt  --forcerun sample_vcf_to_bed: the downstream rules only
 # then the forced run executes; benchmarks/<rule>.tsv give the per-sample cost.
+# LONG_SPAN_RULE=exclude|breakends|paired sets cxsv_params.long_span_rule in eval.yaml
+# (default: CODE's config/calling.yaml).
 set -euo pipefail
 SUB=$1; W=$2; CODE=$3; SIF=$4; CORES=${5:-16}
 BUILD=/mnt/sargasso1/CxSV/build/panel-v1.0
@@ -42,6 +44,9 @@ for c, spec in list(cfg["panel_cohorts"].items()):
         w.writeheader(); w.writerows(r for r in rows if r["sample_id"] in want[c])
     spec["samples"] = out
 cfg["release"]["test_release"] = True
+import os
+if os.environ.get("LONG_SPAN_RULE"):
+    cfg.setdefault("cxsv_params", {})["long_span_rule"] = os.environ["LONG_SPAN_RULE"]
 json.dump(cfg, open(f"{W}/eval.yaml", "w"), indent=1)
 with open(f"{W}/targets.txt", "w") as fh:
     for c, ss in want.items():

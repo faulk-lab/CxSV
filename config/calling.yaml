@@ -85,7 +85,13 @@ survivor_params:
 #                          median 334 Mb per panel genome into oversized clusters).
 #                          exclude = left out of CxSV discovery (they stay junctions
 #                          and merged calls); breakends = clustered at their two
-#                          breakends only. Listed in cxsv/long_span_records.tsv.
+#                          breakends only; paired = clustered at their two breakends
+#                          only when BOTH ends lie within cluster_distance of another
+#                          record (not a duplicate of the same junction), and then the
+#                          two end clusters are joined into one, sized by its parts
+#                          (link_paired_clusters.py); the others as exclude (roadmap
+#                          item 13 follow-up, docs/PAIRED_LINKAGE.md). Listed in
+#                          cxsv/long_span_records.tsv with the rule applied.
 #                          span_link_max equals max_cluster_size, so no cluster that
 #                          is not oversized changes. span_link_max 0 = interval rule.
 #   max_cluster_size       a cluster spanning more than this is not classified

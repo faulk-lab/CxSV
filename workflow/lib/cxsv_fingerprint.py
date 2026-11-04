@@ -33,6 +33,7 @@ CALLING_CODE = (
     "rules/calling.smk",
     "rules/per_sample.smk",
     "scripts/vcf_to_bed.py",
+    "scripts/link_paired_clusters.py",
     "scripts/classify_cxsv.py",
     "scripts/extract_cxsv_vcf.py",
     "scripts/annotate_cxsv.py",

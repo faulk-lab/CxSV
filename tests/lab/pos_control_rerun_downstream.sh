@@ -26,7 +26,14 @@
 #   4. scoring    CODE's score_pos_control.py against the same truth (+ ADDONS)
 # ADDONS / EVENTS as for pos_control_full_genome.sh. LITERATURE=DIR (a literature
 # set, acquisition/literature) also turns on the literature_match annotation.
-# DRY_ONLY=1 stops after step 2.
+# DRY_ONLY=1 stops after step 2. LONG_SPAN_RULE=exclude|breakends|paired overrides
+# cxsv_params.long_span_rule (default: CODE's config/calling.yaml). SAMPLE_REL names
+# the sample directory under run/ (default: the positive control's); SCORE=0 skips
+# step 4 (for a genome without a truth set, e.g. the HG01868 stand-in). For a run
+# not made by pos_control_full_genome.sh: RUN_SUBDIR (default run) is the run
+# directory under SRC_WORKDIR, RUN_CONFIG (default pos_control_full.yaml) its config
+# file in RUN_SUBDIR/config, INPUT_DIR (default SRC_WORKDIR/input) the directory of
+# its sample sheet and alignments (bound read-only at the same path).
 # =============================================================================
 set -euo pipefail
 BUNDLE="$(cd "$1" && pwd)"; SRCW="$(cd "$2" && pwd)"; W="$(mkdir -p "$3" && cd "$3" && pwd)"
@@ -37,7 +44,7 @@ ADDONS="${ADDONS:-$PC/addons/E13}"
 source "$BUNDLE/bundle.env"
 SIF="$BUNDLE/container/cxsv-pipeline.sif"
 RT=$(command -v singularity || command -v apptainer)
-S_REL=results/patient/samples/pos_control/pos_control
+S_REL=${SAMPLE_REL:-results/patient/samples/pos_control/pos_control}
 hdr() { echo; echo "== $* ($(date '+%F %T'))"; }
 
 COMMIT=$(git -C "$CODE" rev-parse HEAD 2>/dev/null || echo unknown)
@@ -46,7 +53,8 @@ echo "source run $SRCW"
 
 hdr "1. copy the finished run"
 mkdir -p "$W/run"
-rsync -a --exclude '.snakemake' --exclude '.cache' --exclude 'tmp' "$SRCW/run/" "$W/run/"
+RUN_SUBDIR=${RUN_SUBDIR:-run}; RUN_CONFIG=${RUN_CONFIG:-pos_control_full.yaml}; INPUT_DIR=${INPUT_DIR:-$SRCW/input}
+rsync -a --exclude '.snakemake' --exclude '.cache' --exclude 'tmp' "$SRCW/$RUN_SUBDIR/" "$W/run/"
 mkdir -p "$W/run/tmp"
 ( cd "$W/run/$S_REL" && sha256sum callers/*.vcf merged_sv.vcf > "$W/upstream.sha256" )
 LITBIND=(); LITCFG="literature_set: {root: null}"
@@ -59,16 +67,17 @@ cat > "$W/run/config/rerun_downstream.yaml" <<YAML
 allow_fingerprint_mismatch: true
 $LITCFG
 YAML
+[ -n "${LONG_SPAN_RULE:-}" ] && printf 'cxsv_params: {long_span_rule: %s}\n' "$LONG_SPAN_RULE" >> "$W/run/config/rerun_downstream.yaml"
 
 X=("$RT" exec --containall --net --network none --pwd /work
    --bind "$BUNDLE:/bundle:ro" --bind "$W/run:/work" --bind "$CODE:/code:ro"
-   --bind "$SRCW/input:$SRCW/input:ro" --bind "$PC:$PC:ro" "${LITBIND[@]}"
+   --bind "$INPUT_DIR:$INPUT_DIR:ro" --bind "$PC:$PC:ro" "${LITBIND[@]}"
    --env "CXSV_BUNDLE_ID=$CXSV_BUNDLE_ID,CXSV_COMMIT=$COMMIT,CXSV_IMAGE_ID=$CXSV_IMAGE_ID"
    --env "CXSV_SIF_SHA256=$CXSV_SIF_SHA256,CXSV_RUNTIME=$(basename "$RT"),XDG_CACHE_HOME=/work/.cache,TMPDIR=/work/tmp"
    "$SIF")
 SM=(snakemake -s /code/workflow/patient/Snakefile --directory /work --cores "$CORES" --keep-going
     --printshellcmds --rerun-triggers mtime --forcerun sample_vcf_to_bed calling_fingerprint
-    --configfile /bundle/config/bundle_site.yaml /work/config/pos_control_full.yaml
+    --configfile /bundle/config/bundle_site.yaml "/work/config/$RUN_CONFIG"
                  /work/config/rerun_downstream.yaml)
 
 hdr "2. dry run"
@@ -86,6 +95,8 @@ t=$(date +%s)
 echo "downstream run finished: $(( $(date +%s)-t )) s"
 ( cd "$W/run/$S_REL" && sha256sum -c --quiet "$W/upstream.sha256" ) && echo "caller VCFs unchanged"
 grep -E '^(this run|panel|status)' "$W/run/results/patient/panel_compatibility.txt" | sed 's/^/  /' || true
+grep -h 'long-span-rule' "$W/rerun.log" | head -1 | grep -o -- '--long-span-rule [a-z]*' || true
+[ "${SCORE:-1}" = 0 ] && { echo "SCORE=0: no truth scoring"; echo "done"; exit 0; }
 
 hdr "4. score against the truth set"
 XT=""; for a in $ADDONS; do XT="$XT --extra-truth $a/truth"; done

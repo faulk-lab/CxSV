@@ -27,6 +27,10 @@ Inputs
         Breakend rows carry ID suffixes _mate / _dest (BND, TRA) or _end (the END of
         a DEL/DUP/INV longer than cxsv_params.span_link_max, roadmap item 13); they
         are stripped, so such a record is one junction of each cluster it touches.
+        An optional 8th column (link_paired_clusters.py, long_span_rule paired) names
+        the bedtools cluster a row came from when paired long records joined several
+        into one: such a cluster's Size (and the --max-cluster-size test) is the sum
+        of its parts' spans, not End - Start.
 --vcf   merged_sv.vcf (the records' junctions and SUPP_VEC, cxsv_junctions.parse_vcf)
 --fai   reference .fai (contig order of junction ends)
 
@@ -71,9 +75,13 @@ def read_clusters(path):
                 continue
             chrom, start, end, _svtype, vid, is_inter, cid = parts[:7]
             c = clusters.setdefault(cid, {"chrom": chrom, "start": int(start), "end": int(end),
-                                          "ids": set(), "inter": False, "order": len(clusters)})
+                                          "ids": set(), "inter": False, "order": len(clusters),
+                                          "parts": {}})
             c["start"] = min(c["start"], int(start))
             c["end"] = max(c["end"], int(end))
+            if len(parts) > 7 and parts[7]:
+                ps, pe = c["parts"].get(parts[7], (int(start), int(end)))
+                c["parts"][parts[7]] = (min(ps, int(start)), max(pe, int(end)))
             c["ids"].add(cj.canonical_id(vid))
             c["inter"] = c["inter"] or is_inter == "inter"
     return clusters
@@ -122,7 +130,7 @@ def main():
     rows, n_cxsv = [], 0
     crit_counts, class_counts = defaultdict(int), defaultdict(int)
     for cid, c in sorted(clusters.items(), key=lambda kv: kv[1]["order"]):
-        size = c["end"] - c["start"]
+        size = sum(e - s for s, e in c["parts"].values()) if c["parts"] else c["end"] - c["start"]
         js = [by_id[i] for i in sorted(c["ids"]) if i in by_id]
         res = cc.analyse_locus(js, c["chrom"], order, params)
         has_inter = "YES" if (c["inter"] or res["n_inter"]) else "NO"

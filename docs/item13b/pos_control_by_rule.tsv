@@ -1,0 +1,18 @@
+event	exclude	breakends	paired	verdict_paired
+E01	Tier1 1.35	Tier1 1.35	Tier1 1.35	PASS
+E02	Tier1 1.95	Tier1 1.95	Tier1 1.95	FAIL
+E03	Tier1 1.72	Tier1 1.72	Tier1 1.72	PASS
+E04	Tier1 1.74	Tier1 1.74	Tier1 1.74	PASS
+E05	Tier1 1.93	Tier1 1.93	Tier1 1.93	PASS
+E06	Tier1 1.94	Tier1 1.94	Tier1 1.94	PASS
+E07	Tier1 1.55	Tier1 1.55	Tier1 1.55	PASS
+E08	Tier1 1.44	Tier1 1.44	Tier1 1.44	PASS
+E09	Tier1 2.66	Tier1 2.66	Tier1 2.66	PASS
+E10	Tier3 0.26	Tier3 0.26	Tier3 0.26	PASS
+E11	not_called	not_called	not_called	PASS
+E12	not_called	not_called	not_called	PASS
+E13	Tier3 0.08	Tier3 0.08	Tier3 0.08	FAIL
+L01	not_called	not_called	not_called	FAIL
+L02	Tier1 1.04	Tier1 1.04	Tier1 1.04	PASS
+L03	Tier1 1.04	Tier1 1.64	Tier1 2.33	FAIL
+L04	Tier1 1.74	Tier1 1.74	Tier1 1.74	PASS

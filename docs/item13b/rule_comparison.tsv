@@ -1,0 +1,5 @@
+rule	lit_called	lit_tier1	healthy_t1_per_genome	healthy_t2_per_genome	healthy_any_t1	blind_span_median_mb	blind_span_mean_mb	loci_per_genome_median	loci_per_genome_mean	pc_events_t1	pc_host_t1	pc_e02	pc_l03_best	hg01868_t1	hg01868_t2
+v1.0 (reference)	8	6	0.196	2.84	0.175			983.0	985.2	11	0	not called	1.04	0	5
+exclude	8	7	0.237	3.14	0.206	3.13	3.67	1127.0	1110.4	12	0	Tier1_high_priority 1.95	1.04	0	5
+breakends	24	18	0.371	3.52	0.309	3.32	3.79	1138.0	1121.6	12	3	Tier1_high_priority 1.95	1.64	4	6
+paired	9	8	0.247	3.32	0.216	3.47	4.08	1125.0	1107.7	12	1	Tier1_high_priority 1.95	2.33	0	6

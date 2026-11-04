@@ -39,8 +39,22 @@ Long span records (roadmap item 13)
         and END +- --window bp; the END row's ID gets the suffix "_end"), like a
         BND, so it links only to SVs near its own breakpoints and is a junction
         of the loci there (classify_cxsv.py strips "_end" like "_mate")
+    --long-span-rule paired     paired-breakend linkage: the record is written as
+        its two breakends (as for "breakends") only when BOTH ends independently
+        link to another record that takes part in discovery, i.e. lie within
+        --cluster-distance bp of it (the bedtools cluster -d rule). Records that
+        duplicate it (both ends within --collapse-distance of its two ends: the
+        same junction called twice, e.g. a Sniffles2 BND pair rewritten as INV
+        beside an SVIM INV) do not count. Long records are tested together until
+        no more fail (a long partner must itself be paired). A record that fails
+        is not written, as under "exclude". The two end clusters of a paired
+        record are joined into one cluster afterwards (link_paired_clusters.py),
+        so the record is an edge between them; its interval is never a clustering
+        interval, and classify_cxsv.py sizes such a cluster by its parts.
   Either way the record is listed in --long-out (ID CHROM POS END SVTYPE LENGTH
-  SUPP_VEC RULE). --span-link-max 0 restores the interval rule for every record.
+  SUPP_VEC RULE; RULE is the rule applied: exclude, breakends, or for "paired"
+  either paired or exclude). --span-link-max 0 restores the interval rule for
+  every record.
 
 TRA records
 -----------
@@ -60,7 +74,8 @@ Output columns
 Usage
 -----
   python vcf_to_bed.py --vcf input.vcf --out output.bed [--window 1] \
-      [--span-link-max 500000 --long-span-rule exclude --long-out long_span_records.tsv]
+      [--span-link-max 500000 --long-span-rule exclude|breakends|paired --long-out long_span_records.tsv]
+      [--cluster-distance 50000 --collapse-distance 300]   (used by "paired" only)
 """
 
 import argparse
@@ -140,11 +155,105 @@ def emit_records(chrom, start, end, svtype, vid, is_inter="intra"):
     yield f"{chrom}\t{start}\t{end}\t{svtype}\t{vid}\t{is_inter}"
 
 
-LONG_RULES = ("exclude", "breakends")
+LONG_RULES = ("exclude", "breakends", "paired")
+
+
+def _near(row_start, row_end, pos, distance):
+    """A BED row [row_start, row_end] lies within distance bp of point pos."""
+    return max(0, row_start - pos, pos - row_end) <= distance
+
+
+def paired_records(rows, long_rows, cluster_distance, collapse_distance):
+    """IDs of the long records whose two ends each lie within cluster_distance of
+    another record taking part in discovery (paired-breakend linkage).
+
+    rows       BED lines ("CHROM\tSTART\tEND\tSVTYPE\tID\tIS_INTER") of every record,
+               long records written as their two breakend rows (ID, ID_end)
+    long_rows  (ID, CHROM, POS, END, ...) of the long records
+
+    A record whose rows touch both ends of the long record within collapse_distance
+    is the same junction (a duplicate) and is no partner. A long partner counts only
+    while it is itself paired: long records that fail are removed and the rest are
+    tested again until none fails.
+    """
+    by_chrom = {}
+    points = {}                                   # canonical id -> [(chrom, pos)]
+    for line in rows:
+        c, s, e, _t, vid, _i = line.split("\t")[:6]
+        rid = _canonical(vid)
+        by_chrom.setdefault(c, []).append((int(s), int(e), rid))
+        points.setdefault(rid, []).extend([(c, int(s)), (c, int(e))])
+    for c in by_chrom:
+        by_chrom[c].sort()
+    longs = {r[0]: (r[1], int(r[2]), int(r[3])) for r in long_rows}
+
+    def duplicate(rid, chrom, p1, p2):
+        pts = points.get(rid, ())
+        return (any(c == chrom and abs(p - p1) <= collapse_distance for c, p in pts)
+                and any(c == chrom and abs(p - p2) <= collapse_distance for c, p in pts))
+
+    def linked(lid, chrom, p, other_end, alive):
+        for s, e, rid in by_chrom.get(chrom, ()):
+            if s > p + cluster_distance:
+                break
+            if rid == lid or not _near(s, e, p, cluster_distance):
+                continue
+            if rid in longs and rid not in alive:
+                continue
+            if duplicate(rid, chrom, p, other_end):
+                continue
+            return True
+        return False
+
+    alive = set(longs)
+    while True:
+        failed = {lid for lid in alive
+                  if not (linked(lid, longs[lid][0], longs[lid][1], longs[lid][2], alive)
+                          and linked(lid, longs[lid][0], longs[lid][2], longs[lid][1], alive))}
+        if not failed:
+            return alive
+        alive -= failed
+
+
+def _canonical(vid):
+    for suf in ("_mate", "_dest", "_end"):
+        if vid.endswith(suf):
+            return vid[: -len(suf)]
+    return vid
 
 
 def process_vcf(vcf_path: str, window: int, span_link_max: int = 0, counts: dict = None,
-                long_rule: str = "breakends", long_rows: list = None):
+                long_rule: str = "breakends", long_rows: list = None,
+                cluster_distance: int = 50000, collapse_distance: int = 300):
+    """
+    Generator: yield BED lines for each VCF record (see the module docstring).
+    long_rule "paired" reads the whole VCF first (paired_records), then yields
+    every row except those of the long records that are not paired.
+    """
+    if long_rule not in LONG_RULES:
+        raise ValueError(f"long_rule must be one of {LONG_RULES}, not {long_rule!r}")
+    if long_rule != "paired":
+        yield from _process_vcf(vcf_path, window, span_link_max, counts, long_rule, long_rows)
+        return
+    lrows = []
+    rows = list(_process_vcf(vcf_path, window, span_link_max, None, "breakends", lrows))
+    keep = paired_records(rows, lrows, cluster_distance, collapse_distance)
+    for r in lrows:
+        rule = "paired" if r[0] in keep else "exclude"
+        if counts is not None:
+            counts[rule] = counts.get(rule, 0) + 1
+        if long_rows is not None:
+            long_rows.append(tuple(r[:7]) + (rule,))
+    drop = {r[0] for r in lrows} - keep
+    for line in rows:
+        f = line.split("\t")
+        if f[3] in ("DEL", "DUP", "INV") and _canonical(f[4]) in drop:
+            continue
+        yield line
+
+
+def _process_vcf(vcf_path: str, window: int, span_link_max: int = 0, counts: dict = None,
+                 long_rule: str = "breakends", long_rows: list = None):
     """
     Generator: yield BED lines for each VCF record.
     BND/TRA yield 2 lines each (both breakend positions). A DEL/DUP/INV longer
@@ -272,7 +381,13 @@ def main():
                              "(cxsv_params.span_link_max; 0 = every record is one interval)")
     parser.add_argument("--long-span-rule", choices=LONG_RULES, default="breakends",
                         help="exclude: leave such records out of clustering; breakends: write "
-                             "their two breakends (cxsv_params.long_span_rule)")
+                             "their two breakends; paired: write their two breakends only when "
+                             "both ends link to other records (cxsv_params.long_span_rule)")
+    parser.add_argument("--cluster-distance", type=int, default=50000,
+                        help="paired: an end links to a record within this many bp (cxsv_params.cluster_distance)")
+    parser.add_argument("--collapse-distance", type=int, default=300,
+                        help="paired: a record with rows within this many bp of both ends is the same "
+                             "junction, not a partner (junction_params.collapse_distance)")
     parser.add_argument("--long-out", default=None,
                         help="TSV listing the records longer than --span-link-max and the rule applied")
     args = parser.parse_args()
@@ -281,7 +396,8 @@ def main():
     counts, long_rows = {}, []
     with open(args.out, "w") as out_fh:
         for bed_line in process_vcf(args.vcf, args.window, args.span_link_max, counts,
-                                    args.long_span_rule, long_rows):
+                                    args.long_span_rule, long_rows, args.cluster_distance,
+                                    args.collapse_distance):
             out_fh.write(bed_line + "\n")
             n_written += 1
     if args.long_out:
@@ -292,7 +408,8 @@ def main():
 
     print(f"vcf_to_bed: wrote {n_written} BED records to {args.out}", file=sys.stderr)
     print(f"vcf_to_bed: {len(long_rows)} DEL/DUP/INV records longer than {args.span_link_max} bp "
-          f"({args.long_span_rule})", file=sys.stderr)
+          f"({args.long_span_rule}: " + ", ".join(f"{k} {v}" for k, v in sorted(counts.items())) + ")",
+          file=sys.stderr)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,7 @@
 # Oversized clusters: the long-record blind spot (roadmap item 13)
 
+*Follow-up (2026-11-04): a paired-breakend linkage rule (`long_span_rule: paired`) was prototyped and evaluated against `exclude` and `breakends`; it is not adopted. See docs/PAIRED_LINKAGE.md.*
+
 Status 2026-11-04: implemented and evaluated on panel-v1.0 data; **the panel
 has not been rebuilt** (needs the PI's tag decision, proposed `panel-v1.1`).
 History: the first version (`de23a0e`, merged into `main` as PR #20 before the

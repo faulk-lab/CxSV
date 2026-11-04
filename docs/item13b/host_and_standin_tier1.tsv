@@ -1,0 +1,9 @@
+rule	genome	locus	size	status	score	top
+breakends	pos_control_3559	chr17:42430143-42437362	7219	public	1.64	panel_privacy -1.00; gene_dosage +1.00; gene_count +0.90
+breakends	pos_control_3559	chr17:16672217-16716383	44166	public	1.07	panel_privacy -1.00; gene_dosage +1.00; gene_count +0.90
+breakends	pos_control_3559	chr1:16760548-16764806	4258	public	1.06	panel_privacy -1.00; gene_dosage +1.00; gene_count +0.90
+paired	pos_control_3559	chr17:16672217-42437362	51385	public	1.92	panel_privacy -1.00; gene_dosage +1.00; gene_count +0.90
+breakends	HG01868	chr17:42430143-42437362	7219	public	1.75	panel_privacy -1.00; gene_dosage +1.00; gene_count +0.90
+breakends	HG01868	chr17:16672220-16788621	116401	public	1.34	panel_privacy -1.00; gene_dosage +1.00; gene_count +0.90
+breakends	HG01868	chr16:29389099-29423241	34142	public	1.25	panel_privacy -1.00; gene_dosage +1.00; gene_count +0.90
+breakends	HG01868	chr8:66992801-67485072	492271	private	1.2	gene_dosage +0.30; panel_privacy +0.25; exons +0.15

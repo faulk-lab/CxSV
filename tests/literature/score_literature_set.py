@@ -10,9 +10,8 @@ scripts are run on it, rule by rule, with the same parameters:
                        (1/1 when the carrier is homozygous or hemizygous)
   vcf_to_bed.py -> bedtools sort/cluster -d cluster_distance -> classify_cxsv.py
                        in four discovery modes (MODES): v1.0 (span_link_max 0, as in panel-v1.0),
-                       breakends (item 13 first rule, de23a0e), main (item 13 follow-up:
-                       records > span_link_max excluded from discovery) and filter_off (main
-                       with --max-cluster-size 0)
+                       breakends (item 13 first rule, de23a0e), exclude (main: records >
+                       span_link_max left out of discovery) and paired (paired-breakend linkage)
   extract_cxsv_vcf.py -> annotate_cxsv.py -> extract_junctions.py
   classify_patient_cxsv.py   against the panel-v1.0 release (verified separately);
                        Panel_Callable is filled from the release's callability masks,
@@ -55,13 +54,12 @@ import yaml
 
 # mode -> (max_cluster_size, span_link_max, long_span_rule); None = the value in config/calling.yaml.
 #   v1.0        discovery as in panel-v1.0 and bundle 33c075a: every record clustered as its interval
-#   breakends   item 13 first rule (de23a0e, superseded): records > span_link_max clustered at
-#               their two breakends
-#   main        discovery on main (item 13 follow-up a1515bd): records > span_link_max left out of
-#               discovery (long_span_rule exclude), listed in cxsv/long_span_records.tsv
-#   filter_off  main without the oversized-cluster filter (--max-cluster-size 0)
+#   breakends   item 13 first rule (de23a0e): records > span_link_max clustered at their two breakends
+#   exclude     main since a1515bd (default): records > span_link_max left out of discovery
+#   paired      paired-breakend linkage: a long record joins its two end clusters only when both
+#               ends link to other records (link_paired_clusters.py); otherwise as exclude
 MODES = {"v1.0": (None, 0, "breakends"), "breakends": (None, None, "breakends"),
-         "main": (None, None, None), "filter_off": (0, None, None)}
+         "exclude": (None, None, "exclude"), "paired": (None, None, "paired")}
 GROUPS = ("privacy", "genes", "event", "evidence", "chromothripsis", "phenotype", "inheritance")
 ALT_FMT = {("+", "-"): "N[{c}:{p}[", ("+", "+"): "N]{c}:{p}]", ("-", "-"): "[{c}:{p}[N", ("-", "+"): "]{c}:{p}]N"}
 
@@ -174,9 +172,12 @@ def run_event(task):
     link_max = cp.get("span_link_max", 0) if slm is None else slm
     rule = cp.get("long_span_rule", "breakends") if rule is None else rule
     sh(f"python {W}/vcf_to_bed.py --vcf {S}/merged_sv.vcf --out {S}/cxsv/merged_sv.bed --window {cp['bnd_window']} "
-       f"--span-link-max {link_max} --long-span-rule {rule} --long-out {S}/cxsv/long_span_records.tsv", log)
+       f"--span-link-max {link_max} --long-span-rule {rule} --long-out {S}/cxsv/long_span_records.tsv "
+       f"--cluster-distance {cp['cluster_distance']} --collapse-distance {jp['collapse_distance']}", log)
     sh(f"bedtools sort -i {S}/cxsv/merged_sv.bed > {S}/cxsv/merged_sv_sorted.bed && "
-       f"bedtools cluster -d {cp['cluster_distance']} -i {S}/cxsv/merged_sv_sorted.bed > {S}/cxsv/clusters.bed", log)
+       f"bedtools cluster -d {cp['cluster_distance']} -i {S}/cxsv/merged_sv_sorted.bed > {S}/cxsv/clusters.raw.bed && "
+       f"python {W}/link_paired_clusters.py --clusters {S}/cxsv/clusters.raw.bed "
+       f"--long {S}/cxsv/long_span_records.tsv --out {S}/cxsv/clusters.bed", log)
     sh(f"python {W}/classify_cxsv.py --bed {S}/cxsv/clusters.bed --vcf {S}/merged_sv.vcf --fai {a.fai} "
        f"--output {S}/cxsv/cxsv_summary.tsv --collapse-distance {jp['collapse_distance']} "
        f"--ins-len-ratio {jp['ins_len_ratio']} --composite-fraction {cp['composite_fraction']} "
@@ -186,7 +187,8 @@ def run_event(task):
        f"--min-interleaved {cp['min_interleaved']} --interleave-alt-min-intra {cp['interleave_alt_min_intra']} "
        f"--interleave-alt-min-inter {cp['interleave_alt_min_inter']} --max-cluster-size {max_cluster}", log)
     sh(f"python {W}/extract_cxsv_vcf.py --vcf {S}/merged_sv.vcf --summary {S}/cxsv/cxsv_summary.tsv "
-       f"--span-link-max {link_max} --long-span-rule {rule} --output {S}/cxsv/cxsv_only.vcf", log)
+       f"--span-link-max {link_max} --long-span-rule {rule} --long-records {S}/cxsv/long_span_records.tsv "
+       f"--output {S}/cxsv/cxsv_only.vcf", log)
     sh(f"python {W}/annotate_cxsv.py --summary {S}/cxsv/cxsv_summary.tsv --vcf {S}/cxsv/cxsv_only.vcf "
        f"--genes {ann['genes_bed']} --exons {ann['exons_bed']} --repeats {ann['repeats_bed']} "
        f"--segdups {ann['segdup_bed']} --out-table {S}/cxsv/cxsv_master_table.tsv --out-bed {S}/cxsv/cxsv_loci.bed", log)

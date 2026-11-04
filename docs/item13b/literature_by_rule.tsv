@@ -1,0 +1,64 @@
+event_id	source_id	author_event_type	genes_reported	known_pathogenic	v1.0	breakends	exclude	paired	breakends_long_records	exclude_long_records	paired_long_records	paired_long_paired	paired_long_excluded
+BAH19_BAB8920	bahrambeigi2019	DUP-NML-INV/DUP	PLP1	yes	not_called	not_called	not_called	not_called	2	2	2	0.0	2.0
+BAH19_BAB8923	bahrambeigi2019	DUP-NML-DUP	PLP1	yes	not_called	not_called	not_called	not_called	2	2	2	0.0	2.0
+BAH19_BAB8928	bahrambeigi2019	DUP-NML-DUP	PLP1	yes	not_called	not_called	not_called	not_called	1	1	1	0.0	1.0
+BAH19_BAB8934	bahrambeigi2019	DUP-NML-INV/DUP with templated insertion	PLP1	yes	not_called	Tier2 0.70	not_called	not_called	2	2	2	0.0	2.0
+BAH19_BAB8938	bahrambeigi2019	DUP-TRP/INV-DUP	PLP1	yes	not_called	not_called	not_called	not_called	1	1	1	0.0	1.0
+BAH19_BAB8959	bahrambeigi2019	DUP-NML-DUP-NML-DUP	PLP1	yes	Tier1 2.18	Tier1 2.18	Tier1 2.18	Tier1 2.18	0	0	0	0.0	0.0
+BAH19_BAB8962	bahrambeigi2019	two tandem DUPs (DUP-NML-DUP)	PLP1	yes	not_called	not_called	not_called	not_called	0	0	0	0.0	0.0
+BAH19_BAB8964	bahrambeigi2019	DUP-TRP/INV-DUP	PLP1	yes	not_called	not_called	not_called	not_called	1	1	1	0.0	1.0
+COL17_TL009	collins2017	mosaic chromoanasynthesis of chromosome 19 (dupINVdup core)	.	yes	not_called	not_called	not_called	not_called	9	9	9	0.0	9.0
+COL17_TL010	collins2017	balanced germline chromothripsis (4 chromosomes)	.	yes	Tier2 0.71	Tier1 2.43	Tier1 1.20	Tier1 2.68	33	33	33	25.0	8.0
+COL17_UTR22	collins2017	balanced germline chromothripsis (4 chromosomes)	.	yes	Tier1 1.04	Tier1 1.65	Tier1 1.11	Tier1 2.55	20	20	20	20.0	0.0
+EIS24_P12	eisfeldt2024	complex translocation t(1;4;6;4) with del(6)(p12.3)	DAB1;SMARCAD1;CFAP299;PTCHD4	yes	Tier1 1.00	Tier1 1.00	Tier1 1.00	Tier1 1.00	1	1	1	0.0	1.0
+EIS24_P3	eisfeldt2024	DEL-INV-DEL	ARSA	yes	Tier2 0.86	Tier2 0.86	Tier2 0.86	Tier2 0.86	0	0	0	0.0	0.0
+EIS24_P4a	eisfeldt2024	DUP-TRIP-QUAD-TRIP-DUP-NML-DEL (2p25)	.	yes	not_called	Tier1 1.09	not_called	not_called	3	3	3	0.0	3.0
+EIS24_P4b	eisfeldt2024	DEL-INV-DEL (2q21.2-q22.1)	NCKAP5;LRP1B	yes	not_called	not_called	not_called	not_called	2	2	2	0.0	2.0
+EIS24_P5	eisfeldt2024	DEL-INV-NML-DUP-NML-DUP (chr3)	CACNA2D3;SYNPR	yes	not_called	Tier1 1.95	not_called	not_called	5	5	5	0.0	5.0
+EIS24_P6	eisfeldt2024	translocated insertion with deletion (Xq28;9q22.33)	BCAP31;TMOD1	yes	Tier1 1.74	Tier1 1.74	Tier1 1.74	Tier1 1.74	0	0	0	0.0	0.0
+EIS24_P8.1	eisfeldt2024	DUP-INV-DUP (Xp22.2-Xq28)	GPR143	yes	not_called	not_called	not_called	not_called	2	2	2	0.0	2.0
+GRO24_BAB12566	grochowski2024	DUP-TRP/INV-DUP	PLP1	yes	not_called	not_called	not_called	not_called	0	0	0	0.0	0.0
+GRO24_BAB14392	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	not_called	not_called	not_called	not_called	1	1	1	0.0	1.0
+GRO24_BAB14547	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	not_called	not_called	not_called	not_called	0	0	0	0.0	0.0
+GRO24_BAB14604	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	not_called	not_called	not_called	not_called	0	0	0	0.0	0.0
+GRO24_BAB14686	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	not_called	not_called	not_called	not_called	1	1	1	0.0	1.0
+GRO24_BAB15418	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	not_called	not_called	not_called	not_called	0	0	0	0.0	0.0
+GRO24_BAB15420	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	not_called	not_called	not_called	not_called	0	0	0	0.0	0.0
+GRO24_BAB15428	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	not_called	Tier1 1.88	not_called	not_called	1	1	1	0.0	1.0
+GRO24_BAB15702	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	not_called	not_called	not_called	not_called	0	0	0	0.0	0.0
+GRO24_BAB15705	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	not_called	not_called	not_called	not_called	1	1	1	0.0	1.0
+GRO24_BAB15740	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	not_called	not_called	not_called	not_called	0	0	0	0.0	0.0
+GRO24_BAB15789	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	not_called	not_called	not_called	not_called	1	1	1	0.0	1.0
+GRO24_BAB2727	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	not_called	not_called	not_called	not_called	0	0	0	0.0	0.0
+GRO24_BAB2769	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	not_called	not_called	not_called	not_called	0	0	0	0.0	0.0
+GRO24_BAB2772	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	not_called	not_called	not_called	not_called	0	0	0	0.0	0.0
+GRO24_BAB2796	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	not_called	not_called	not_called	not_called	0	0	0	0.0	0.0
+GRO24_BAB2797	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	not_called	not_called	not_called	not_called	0	0	0	0.0	0.0
+GRO24_BAB2801	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	not_called	not_called	not_called	not_called	0	0	0	0.0	0.0
+GRO24_BAB2805	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	not_called	not_called	not_called	not_called	0	0	0	0.0	0.0
+GRO24_BAB3114	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	not_called	not_called	not_called	not_called	0	0	0	0.0	0.0
+GRO24_BAB3147	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	not_called	not_called	not_called	not_called	1	1	1	0.0	1.0
+GRO24_BAB3216	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	not_called	not_called	not_called	not_called	0	0	0	0.0	0.0
+GRO24_BAB3255	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	not_called	not_called	not_called	not_called	0	0	0	0.0	0.0
+GRO24_BAB3274	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	not_called	not_called	not_called	not_called	0	0	0	0.0	0.0
+NP18_P00	nazaryan2018	clustered deletions with inversions	7q11.23q21.11	yes	not_called	Tier1 1.21	not_called	not_called	5	5	5	1.0	4.0
+NP18_P06	nazaryan2018	DUP-NML-DUP (inserted duplications)	2p25.3	no	not_called	not_called	not_called	not_called	1	1	1	0.0	1.0
+NP18_P1426_301	nazaryan2018	chromoanasynthesis-like clustered CNVs	21q21.1q22.3	yes	not_called	Tier1 1.10	not_called	not_called	10	10	10	0.0	10.0
+NP18_P2046_133	nazaryan2018	clustered deletions with inversions	5q31.3q32	yes	not_called	Tier2 0.79	not_called	not_called	7	7	7	0.0	7.0
+NP18_P2109_123	nazaryan2018	delINVdel	17p13.3	no	Tier1 1.24	Tier1 1.24	Tier1 1.24	Tier1 1.24	0	0	0	0.0	0.0
+NP18_P2109_150	nazaryan2018	inserted duplication	7q31.1	no	not_called	not_called	not_called	not_called	1	1	1	0.0	1.0
+NP18_P2109_151	nazaryan2018	inverted inserted duplication	14q32.31	no	not_called	not_called	not_called	not_called	2	2	2	0.0	2.0
+NP18_P2109_162	nazaryan2018	deletions and duplication with inversions	1q43q44	yes	not_called	Tier1 2.38	not_called	not_called	4	4	4	0.0	4.0
+NP18_P2109_176	nazaryan2018	deletions and duplication with inversions	2q32.1q36.3	yes	not_called	Tier1 2.37	not_called	Tier1 2.82	8	8	8	6.0	2.0
+NP18_P2109_185	nazaryan2018	deletion and duplications with inversions	5p15.33;5q35.3	yes	not_called	Tier1 2.64	not_called	not_called	2	2	2	0.0	2.0
+NP18_P2109_188	nazaryan2018	clustered deletions with inversions	21q22.3	yes	not_called	Tier1 1.00	not_called	not_called	3	3	3	0.0	3.0
+NP18_P2109_190	nazaryan2018	delINVdel	5p15.1	no	Tier1 1.04	Tier1 1.04	Tier1 1.04	Tier1 1.04	0	0	0	0.0	0.0
+NP18_P2109_302	nazaryan2018	delINVdel	11q14.3	no	not_called	Tier3 0.35	not_called	not_called	1	1	1	0.0	1.0
+NP18_P4855_511	nazaryan2018	DUP-NML-DUP (inserted duplications)	2p25.3	no	not_called	not_called	not_called	not_called	1	1	1	0.0	1.0
+NP18_P4855_512	nazaryan2018	duplications with inverted insertion	21q22.3	no	not_called	Tier1 2.56	not_called	not_called	2	2	2	0.0	2.0
+NP18_P5371_204	nazaryan2018	duplications and deletion with inversion	13q31.3q34	yes	not_called	Tier1 1.57	not_called	not_called	2	2	2	0.0	2.0
+NP18_P5513_116	nazaryan2018	terminal Xq deletion with inverted Xp duplication	Xp22.33p21.3;Xq21.1q28	yes	not_called	not_called	not_called	not_called	1	1	1	0.0	1.0
+NP18_P5513_206	nazaryan2018	clustered duplications with inversions	14q21.3q31.3	yes	not_called	Tier2 0.64	not_called	not_called	5	5	5	0.0	5.0
+NP18_P72	nazaryan2018	delINVdel	7q11.22q11.23	no	not_called	Tier2 0.77	not_called	not_called	2	2	2	0.0	2.0
+NP18_P74	nazaryan2018	DUP-NML-DUP	16q24.3	no	not_called	not_called	not_called	not_called	1	1	1	0.0	1.0
+NP18_P81	nazaryan2018	clustered deletions with inversion	4q31.3q34.1	yes	not_called	not_called	not_called	not_called	3	3	3	0.0	3.0
