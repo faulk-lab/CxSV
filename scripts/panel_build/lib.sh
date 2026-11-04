@@ -10,6 +10,16 @@
 #       --containall --cleanenv (no host $HOME or environment), the NAS bound at
 #       the same path (/mnt/sargasso1), LOCAL_TMP (on the node's own disk, never
 #       a RAM tmpfs) bound as /tmp, working directory WORKDIR.
+#       The image's provenance goes in with it (release.json runtime block,
+#       scripts/write_release_metadata.py): CXSV_SIF_SHA256 and CXSV_IMAGE_ID,
+#       see cxsv_image_ids.
+#   cxsv_image_ids    sets CXSV_SIF_SHA256 / CXSV_IMAGE_ID (and
+#       CXSV_RUNTIME_IDS_SOURCE) for $CXSV_SIF, unless already set for it: from the
+#       bundle.env of the bundle the SIF belongs to (<bundle>/container/
+#       cxsv-pipeline.sif; both values were computed when the bundle was built
+#       and are covered by its MANIFEST.sha256), else the SIF's sha256 is
+#       computed once and cached under ${XDG_CACHE_HOME:-~/.cache}/cxsv (keyed
+#       by path, size and mtime); a SIF outside a bundle has no Docker image id.
 #   CXSV_EXTRA_BINDS  space-separated host directories also bound at the same
 #       path (e.g. the node-local staging directory holding alignment copies)
 #   cxsv_snakemake WORKDIR LOCAL_TMP CODE CORES CONFIG... -- [snakemake args]
@@ -34,6 +44,28 @@ cxsv_runtime() {
         || { echo "no singularity/apptainer on $(hostname)" >&2; return 1; }
 }
 
+cxsv_image_ids() {
+    [ -n "${CXSV_SIF_SHA256:-}" ] && [ "${CXSV_IDS_FOR:-$CXSV_SIF}" = "$CXSV_SIF" ] && return 0
+    local benv; benv="$(dirname "$(dirname "$CXSV_SIF")")/bundle.env"
+    if [ "$(basename "$CXSV_SIF")" = cxsv-pipeline.sif ] && [ -f "$benv" ]; then
+        CXSV_SIF_SHA256="$(sed -n 's/^CXSV_SIF_SHA256=//p' "$benv" | tr -d '"')"
+        CXSV_IMAGE_ID="$(sed -n 's/^CXSV_IMAGE_ID=//p' "$benv" | tr -d '"')"
+        CXSV_RUNTIME_IDS_SOURCE="bundle.env of $(dirname "$benv")"
+    else
+        local cache="${XDG_CACHE_HOME:-$HOME/.cache}/cxsv" key
+        key="$(printf '%s %s %s' "$(readlink -f "$CXSV_SIF")" "$(stat -c %s "$CXSV_SIF")" "$(stat -c %Y "$CXSV_SIF")" \
+               | sha256sum | cut -c1-16)"
+        if [ ! -s "$cache/sif_sha256.$key" ]; then
+            mkdir -p "$cache" && sha256sum "$CXSV_SIF" | cut -c1-64 > "$cache/sif_sha256.$key.tmp" \
+                && mv "$cache/sif_sha256.$key.tmp" "$cache/sif_sha256.$key" || return 1
+        fi
+        CXSV_SIF_SHA256="$(cat "$cache/sif_sha256.$key")"; CXSV_IMAGE_ID=""
+        CXSV_RUNTIME_IDS_SOURCE="sha256 of $CXSV_SIF"
+    fi
+    CXSV_IDS_FOR="$CXSV_SIF"
+    export CXSV_SIF_SHA256 CXSV_IMAGE_ID CXSV_RUNTIME_IDS_SOURCE CXSV_IDS_FOR
+}
+
 cxsv_container() {
     local wd="$1" tmp="$2"; shift 2
     mkdir -p "$tmp" "$wd"
@@ -41,10 +73,13 @@ cxsv_container() {
         ( cd "$wd" && TMPDIR="$tmp" "$@" ); return
     fi
     local rt; rt="$(cxsv_runtime)" || return 1
+    cxsv_image_ids || { echo "cannot determine the sha256 of $CXSV_SIF" >&2; return 1; }
     local binds=(--bind "$CXSV_NAS" --bind "$tmp:/tmp") b
     for b in ${CXSV_EXTRA_BINDS:-}; do binds+=(--bind "$b"); done
-    "$rt" exec --containall --cleanenv "${binds[@]}" --pwd "$wd" \
-        --env TMPDIR=/tmp --env XDG_CACHE_HOME="$wd/.cache" \
+    local envs=(--env TMPDIR=/tmp --env XDG_CACHE_HOME="$wd/.cache" --env CXSV_SIF_SHA256="$CXSV_SIF_SHA256"
+                --env CXSV_RUNTIME_IDS_SOURCE="$CXSV_RUNTIME_IDS_SOURCE")
+    [ -n "${CXSV_IMAGE_ID:-}" ] && envs+=(--env CXSV_IMAGE_ID="$CXSV_IMAGE_ID")
+    "$rt" exec --containall --cleanenv "${binds[@]}" --pwd "$wd" "${envs[@]}" \
         "$CXSV_SIF" "$@"
 }
 

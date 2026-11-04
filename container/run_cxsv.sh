@@ -85,7 +85,8 @@ done
 # XDG_CACHE_HOME: snakemake's source cache in the writable run directory;
 # TMPDIR/TMP/TEMP: temporary files in the run directory (/work/.tmp, also /tmp)
 ENVS=(CXSV_BUNDLE_ID="$CXSV_BUNDLE_ID" CXSV_COMMIT="$CXSV_COMMIT" CXSV_IMAGE_ID="$CXSV_IMAGE_ID"
-      CXSV_SIF_SHA256="$CXSV_SIF_SHA256" CXSV_RUNTIME="$RUNTIME" XDG_CACHE_HOME=/work/.cache
+      CXSV_SIF_SHA256="$CXSV_SIF_SHA256" CXSV_RUNTIME="$RUNTIME" CXSV_RUNTIME_IDS_SOURCE="bundle.env of $CXSV_BUNDLE_ID"
+      XDG_CACHE_HOME=/work/.cache
       TMPDIR=/work/.tmp TMP=/work/.tmp TEMP=/work/.tmp)
 
 case "$CMD" in

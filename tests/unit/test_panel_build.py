@@ -203,3 +203,37 @@ def test_runner_honours_reassign_plan(tmp_path):
     assert live.sheet_row(live.plan[0])["alignment"] == "/live/s3.bam"
     dead = run_node.Runner(str(b), "dead")
     assert [r["sample_id"] for r in dead.plan] == ["s1"]
+
+
+def _image_ids(sif, extra_env=None, cache=None):
+    import os
+    import subprocess
+    lib = REPO / "scripts" / "panel_build" / "lib.sh"
+    env = {"PATH": os.environ["PATH"], "HOME": str(cache), "CXSV_SIF": str(sif), **(extra_env or {})}
+    out = subprocess.run(["bash", "-c", f"source '{lib}' && cxsv_image_ids && "
+                          "printf '%s\\n%s\\n%s\\n' \"$CXSV_SIF_SHA256\" \"$CXSV_IMAGE_ID\" \"$CXSV_RUNTIME_IDS_SOURCE\""],
+                         capture_output=True, text=True, env=env, check=True)
+    return out.stdout.split("\n")[:3]
+
+
+def test_lib_image_ids_from_bundle_env_or_sif_sha256(tmp_path):
+    """cxsv_container passes the image's ids into release.json: a bundle SIF's from its bundle.env,
+    any other SIF's sha256 computed (and cached), never a stale value from another SIF."""
+    import hashlib
+    b = tmp_path / "bundle"
+    (b / "container").mkdir(parents=True)
+    (b / "container" / "cxsv-pipeline.sif").write_bytes(b"sif")
+    (b / "bundle.env").write_text("CXSV_BUNDLE_ID=x\nCXSV_IMAGE_ID=sha256:feed\nCXSV_SIF_SHA256=" + "a" * 64 + "\n")
+    sha, iid, src = _image_ids(b / "container" / "cxsv-pipeline.sif", cache=tmp_path)
+    assert (sha, iid) == ("a" * 64, "sha256:feed") and src.startswith("bundle.env of")
+    loose = tmp_path / "other.sif"
+    loose.write_bytes(b"another image")
+    want = hashlib.sha256(b"another image").hexdigest()
+    sha, iid, src = _image_ids(loose, cache=tmp_path)
+    assert (sha, iid) == (want, "") and src == f"sha256 of {loose}"
+    assert list((tmp_path / ".cache" / "cxsv").glob("sif_sha256.*"))       # cached for the next call
+    # ids exported for one SIF are recomputed when CXSV_SIF changes
+    sha, _, _ = _image_ids(loose, {"CXSV_SIF_SHA256": "b" * 64, "CXSV_IDS_FOR": "/elsewhere.sif"}, cache=tmp_path)
+    assert sha == want
+    sha, _, _ = _image_ids(loose, {"CXSV_SIF_SHA256": "b" * 64}, cache=tmp_path)   # set by the caller: kept
+    assert sha == "b" * 64
