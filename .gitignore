@@ -34,3 +34,6 @@ __pycache__/
 
 # ─── Local tool config (machine-specific, not project source) ───────────────
 .claude/
+
+# macOS AppleDouble files (created when copying from macOS)
+._*

@@ -1,0 +1,13 @@
+event	run	junctions	exact	partial	missed	junctions_over_500kb_excluded	loci_with_event_breakends	junctions_in_loci	scorer_loci	classes	panel_status	best_score	tier	verdict
+L01	bundle 33c075a	2	2	0	0	0	0	0	0	.	.	.	.	FAIL
+L01	main 65ef970	2	2	0	0	1	0	0	0	.	.	.	.	FAIL
+L02	bundle 33c075a	2	2	0	0	0	1	2	1	Complex_inversion	private	1.04	Tier1_high_priority	PASS
+L02	main 65ef970	2	2	0	0	0	1	2	1	Complex_inversion	private	1.04	Tier1_high_priority	PASS
+L03	bundle 33c075a	40	40	0	0	0	5	11	6	BND_cluster;Multi_breakpoint_cluster	private;shared_junctions	1.04	Tier1_high_priority	PASS
+L03	main 65ef970	40	40	0	0	20	13	23	19	BND_cluster;Complex_other;DEL+DUP+INV;Multi_breakpoint_cluster;Nested_SV	private;public;shared_junctions	1.04	Tier1_high_priority	FAIL
+L04	bundle 33c075a	2	2	0	0	0	2	2	2	BND_cluster	private	1.74	Tier1_high_priority	PASS
+L04	main 65ef970	2	2	0	0	0	2	2	2	BND_cluster	private	1.74	Tier1_high_priority	PASS
+E02	bundle 33c075a	2	2	0	0	0	0	.	0	.	.	.	.	FAIL
+E02	main 65ef970	2	2	0	0	0	1	.	1	Complex_inversion	private	1.95	Tier1_high_priority	PASS
+E13	bundle 33c075a	4	4	0	0	0	1	.	1	Nested_SV	private	0.08	Tier3	FAIL
+E13	main 65ef970	4	4	0	0	0	1	.	1	Nested_SV	private	0.08	Tier3	FAIL

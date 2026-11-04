@@ -426,14 +426,15 @@ def main():
             "inputs": [dict(source_id=r["source_id"], file=r["file"], sha256=r["sha256"], role=r["role"])
                        for r in L.read_tsv(os.path.join(HERE, "sources.tsv")) if r["sha256"] != "."],
             "curated_tables": {f: sha256(os.path.join(a.curated, f)) for f in sorted(os.listdir(a.curated))
-                               if f.endswith(".tsv")},
+                               if f.endswith(".tsv") and not f.startswith(".")},
             "chains": {"hg19ToHg38": sha256(a.chain_hg19), "hg38ToHs1": sha256(a.chain_hg38)},
             "counts": {"events": len(events), "junctions": len(lifted),
                        "junctions_lifted": sum(j["lift_status"] == "lifted" for j in lifted),
                        "junction_sites": dict(counts), "clinvar_nstd102": cv_counts}}
     with open(o("literature_set.json"), "w") as fh:
         json.dump(meta, fh, indent=2, sort_keys=True)
-    files = sorted(f for f in os.listdir(a.out) if f != "MANIFEST.tsv" and os.path.isfile(o(f)))
+    files = sorted(f for f in os.listdir(a.out)
+                   if f != "MANIFEST.tsv" and not f.startswith(".") and os.path.isfile(o(f)))
     with open(o("MANIFEST.tsv"), "w") as fh:
         fh.write("file\tbytes\tsha256\n")
         for f in files:

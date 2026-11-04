@@ -1,0 +1,64 @@
+event_id	source_id	author_event_type	genes_reported	known_pathogenic	n_junctions	n_junctions_over_500kb	v1.0_tier_score	breakends_de23a0e_tier_score	main_65ef970_tier_score	main_filter_off_tier_score	interval_rule_filter_off_tier_score	main_65ef970_outcome
+BAH19_BAB8920	bahrambeigi2019	DUP-NML-INV/DUP	PLP1	yes	2	2	NC	NC	NC	NC	Tier1 2.13	long-span junctions excluded
+BAH19_BAB8923	bahrambeigi2019	DUP-NML-DUP	PLP1	yes	2	2	NC	NC	NC	NC	Tier1 2.09	long-span junctions excluded
+BAH19_BAB8928	bahrambeigi2019	DUP-NML-DUP	PLP1	yes	2	1	NC	NC	NC	NC	Tier1 2.03	long-span junctions excluded
+BAH19_BAB8934	bahrambeigi2019	DUP-NML-INV/DUP with templated insertion	PLP1	yes	3	2	NC	Tier2 0.70	NC	NC	Tier1 2.13	long-span junctions excluded
+BAH19_BAB8938	bahrambeigi2019	DUP-TRP/INV-DUP	PLP1	yes	2	1	NC	NC	NC	NC	NC	split into non-complex clusters
+BAH19_BAB8959	bahrambeigi2019	DUP-NML-DUP-NML-DUP	PLP1	yes	3	0	Tier1 2.18	Tier1 2.18	Tier1 2.18	Tier1 2.18	Tier1 2.18	called
+BAH19_BAB8962	bahrambeigi2019	two tandem DUPs (DUP-NML-DUP)	PLP1	yes	2	0	NC	NC	NC	NC	NC	split into non-complex clusters
+BAH19_BAB8964	bahrambeigi2019	DUP-TRP/INV-DUP	PLP1	yes	2	1	NC	NC	NC	NC	NC	split into non-complex clusters
+COL17_TL009	collins2017	mosaic chromoanasynthesis of chromosome 19 (dupINVdup core)	.	yes	9	9	NC	NC	NC	NC	Tier1 2.81	long-span junctions excluded
+COL17_TL010	collins2017	balanced germline chromothripsis (4 chromosomes)	.	yes	65	33	Tier2 0.71	Tier1 2.43	Tier1 1.20	Tier1 1.20	Tier1 1.97	called
+COL17_UTR22	collins2017	balanced germline chromothripsis (4 chromosomes)	.	yes	40	20	Tier1 1.04	Tier1 1.65	Tier1 1.11	Tier1 1.11	Tier1 2.53	called
+EIS24_P12	eisfeldt2024	complex translocation t(1;4;6;4) with del(6)(p12.3)	DAB1;SMARCAD1;CFAP299;PTCHD4	yes	5	1	Tier1 1.00	Tier1 1.00	Tier1 1.00	Tier1 1.00	Tier1 1.00	called
+EIS24_P3	eisfeldt2024	DEL-INV-DEL	ARSA	yes	2	0	Tier2 0.86	Tier2 0.86	Tier2 0.86	Tier2 0.86	Tier2 0.86	called
+EIS24_P4a	eisfeldt2024	DUP-TRIP-QUAD-TRIP-DUP-NML-DEL (2p25)	.	yes	4	3	NC	Tier1 1.09	NC	NC	Tier1 1.77	long-span junctions excluded
+EIS24_P4b	eisfeldt2024	DEL-INV-DEL (2q21.2-q22.1)	NCKAP5;LRP1B	yes	2	2	NC	NC	NC	NC	Tier1 1.33	long-span junctions excluded
+EIS24_P5	eisfeldt2024	DEL-INV-NML-DUP-NML-DUP (chr3)	CACNA2D3;SYNPR	yes	5	5	NC	Tier1 1.95	NC	NC	Tier1 2.82	long-span junctions excluded
+EIS24_P6	eisfeldt2024	translocated insertion with deletion (Xq28;9q22.33)	BCAP31;TMOD1	yes	2	0	Tier1 1.74	Tier1 1.74	Tier1 1.74	Tier1 1.74	Tier1 1.74	called
+EIS24_P8.1	eisfeldt2024	DUP-INV-DUP (Xp22.2-Xq28)	GPR143	yes	2	2	NC	NC	NC	NC	Tier2 0.86	long-span junctions excluded
+GRO24_BAB12566	grochowski2024	DUP-TRP/INV-DUP	PLP1	yes	2	0	NC	NC	NC	NC	NC	split into non-complex clusters
+GRO24_BAB14392	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	2	1	NC	NC	NC	NC	NC	split into non-complex clusters
+GRO24_BAB14547	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	2	0	NC	NC	NC	NC	NC	split into non-complex clusters
+GRO24_BAB14604	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	2	0	NC	NC	NC	NC	NC	split into non-complex clusters
+GRO24_BAB14686	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	2	1	NC	NC	NC	NC	NC	split into non-complex clusters
+GRO24_BAB15418	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	2	0	NC	NC	NC	NC	NC	split into non-complex clusters
+GRO24_BAB15420	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	2	0	NC	NC	NC	NC	NC	split into non-complex clusters
+GRO24_BAB15428	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	2	1	NC	Tier1 1.88	NC	NC	Tier1 1.93	long-span junctions excluded
+GRO24_BAB15702	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	2	0	NC	NC	NC	NC	NC	split into non-complex clusters
+GRO24_BAB15705	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	2	1	NC	NC	NC	NC	NC	split into non-complex clusters
+GRO24_BAB15740	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	2	0	NC	NC	NC	NC	NC	split into non-complex clusters
+GRO24_BAB15789	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	2	1	NC	NC	NC	NC	NC	split into non-complex clusters
+GRO24_BAB2727	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	2	0	NC	NC	NC	NC	NC	split into non-complex clusters
+GRO24_BAB2769	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	2	0	NC	NC	NC	NC	NC	split into non-complex clusters
+GRO24_BAB2772	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	2	0	NC	NC	NC	NC	NC	split into non-complex clusters
+GRO24_BAB2796	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	2	0	NC	NC	NC	NC	NC	split into non-complex clusters
+GRO24_BAB2797	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	2	0	NC	NC	NC	NC	NC	split into non-complex clusters
+GRO24_BAB2801	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	2	0	NC	NC	NC	NC	NC	split into non-complex clusters
+GRO24_BAB2805	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	2	0	NC	NC	NC	NC	NC	split into non-complex clusters
+GRO24_BAB3114	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	2	0	NC	NC	NC	NC	NC	split into non-complex clusters
+GRO24_BAB3147	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	2	1	NC	NC	NC	NC	NC	split into non-complex clusters
+GRO24_BAB3216	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	2	0	NC	NC	NC	Tier1 1.95	Tier1 1.95	oversized cluster (>500 kb)
+GRO24_BAB3255	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	2	0	NC	NC	NC	NC	NC	split into non-complex clusters
+GRO24_BAB3274	grochowski2024	DUP-TRP/INV-DUP	MECP2	yes	2	0	NC	NC	NC	NC	NC	split into non-complex clusters
+NP18_P00	nazaryan2018	clustered deletions with inversions	7q11.23q21.11	yes	7	5	NC	Tier1 1.21	NC	NC	Tier1 2.52	long-span junctions excluded
+NP18_P06	nazaryan2018	DUP-NML-DUP (inserted duplications)	2p25.3	no	2	1	NC	NC	NC	NC	Tier1 2.08	long-span junctions excluded
+NP18_P1426_301	nazaryan2018	chromoanasynthesis-like clustered CNVs	21q21.1q22.3	yes	11	10	NC	Tier1 1.10	NC	NC	Tier1 2.83	long-span junctions excluded
+NP18_P2046_133	nazaryan2018	clustered deletions with inversions	5q31.3q32	yes	7	7	NC	Tier2 0.79	NC	NC	Tier1 3.53	long-span junctions excluded
+NP18_P2109_123	nazaryan2018	delINVdel	17p13.3	no	2	0	Tier1 1.24	Tier1 1.24	Tier1 1.24	Tier1 1.24	Tier1 1.24	called
+NP18_P2109_150	nazaryan2018	inserted duplication	7q31.1	no	2	1	NC	NC	NC	NC	Tier2 0.75	long-span junctions excluded
+NP18_P2109_151	nazaryan2018	inverted inserted duplication	14q32.31	no	2	2	NC	NC	NC	NC	Tier1 1.22	long-span junctions excluded
+NP18_P2109_162	nazaryan2018	deletions and duplication with inversions	1q43q44	yes	4	4	NC	Tier1 2.38	NC	NC	Tier1 3.64	long-span junctions excluded
+NP18_P2109_176	nazaryan2018	deletions and duplication with inversions	2q32.1q36.3	yes	8	8	NC	Tier1 2.37	NC	NC	Tier1 2.91	long-span junctions excluded
+NP18_P2109_185	nazaryan2018	deletion and duplications with inversions	5p15.33;5q35.3	yes	4	2	NC	Tier1 2.64	NC	NC	Tier1 2.98	long-span junctions excluded
+NP18_P2109_188	nazaryan2018	clustered deletions with inversions	21q22.3	yes	3	3	NC	Tier1 1.00	NC	NC	Tier1 2.34	long-span junctions excluded
+NP18_P2109_190	nazaryan2018	delINVdel	5p15.1	no	2	0	Tier1 1.04	Tier1 1.04	Tier1 1.04	Tier1 1.04	Tier1 1.04	called
+NP18_P2109_302	nazaryan2018	delINVdel	11q14.3	no	2	1	NC	Tier3 0.35	NC	NC	Tier3 0.45	long-span junctions excluded
+NP18_P4855_511	nazaryan2018	DUP-NML-DUP (inserted duplications)	2p25.3	no	2	1	NC	NC	NC	NC	Tier1 2.08	long-span junctions excluded
+NP18_P4855_512	nazaryan2018	duplications with inverted insertion	21q22.3	no	3	2	NC	Tier1 2.56	NC	NC	Tier1 2.66	long-span junctions excluded
+NP18_P5371_204	nazaryan2018	duplications and deletion with inversion	13q31.3q34	yes	4	2	NC	Tier1 1.57	NC	NC	Tier1 1.72	long-span junctions excluded
+NP18_P5513_116	nazaryan2018	terminal Xq deletion with inverted Xp duplication	Xp22.33p21.3;Xq21.1q28	yes	2	1	NC	NC	NC	NC	NC	split into non-complex clusters
+NP18_P5513_206	nazaryan2018	clustered duplications with inversions	14q21.3q31.3	yes	5	5	NC	Tier2 0.64	NC	NC	Tier1 2.82	long-span junctions excluded
+NP18_P72	nazaryan2018	delINVdel	7q11.22q11.23	no	2	2	NC	Tier2 0.77	NC	NC	Tier2 0.92	long-span junctions excluded
+NP18_P74	nazaryan2018	DUP-NML-DUP	16q24.3	no	2	1	NC	NC	NC	NC	Tier1 1.19	long-span junctions excluded
+NP18_P81	nazaryan2018	clustered deletions with inversion	4q31.3q34.1	yes	4	3	NC	NC	NC	NC	Tier1 2.55	long-span junctions excluded
