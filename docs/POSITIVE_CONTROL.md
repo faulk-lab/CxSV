@@ -157,6 +157,24 @@ records of the merged VCF, the CxSV summary, the junction, panel-status and
 catalogue tables, the locus depth and all scoring outputs must then be
 byte-identical.
 
+### Whole genome against a full panel release, from the offline bundle
+
+```bash
+B=/mnt/sargasso1/CxSV/bundles/cxsv-bundle-20261103-33c075a22071
+bash $B/repo/tests/lab/pos_control_full_genome.sh $B ~/scratch/pc_full 12   # 12 cores on freya: ~2 h (splice 864 s + run 6,324 s)
+python tests/positive_control/full_panel_report.py IN OUT                    # tables + figure
+```
+
+This driver builds no panel and slices nothing:
+
+- It checks the control's MD5 and CRAM version. A CRAM 3.1 input is transcoded
+  to 3.0 as the panel build did, because mosdepth 0.3.10 cannot decode 3.1.
+- It splices the E13 add-on over the whole genome.
+- It runs `run_cxsv.sh patient` (network off) against the bundle's own release
+  and scores with `score_pos_control.py`. All of it runs inside the bundle's SIF.
+- Verdicts are reported, not enforced: against a real panel E13 is expected to
+  FAIL (see the full-panel result below).
+
 ## Splice checks (2026-10-28)
 
 - Host: 13,928,513 reads in the original modBAM = 13,928,513 primary
@@ -175,7 +193,143 @@ byte-identical.
   `pos_control_3559.hs1.minimap2.cram` (md5 77d1b04f9c27fcd9d6b4b25a469743eb),
   `truth/`, `MD5SUMS`.
 
-## Latest regression result (2026-10-29, roadmap item 5: classifier on distinct junctions + scoring)
+## Full-panel result (2026-11-03, panel-v1.0, whole genome, from the offline bundle)
+
+The whole-genome control scored against the real panel release, run from the
+validated offline bundle. Nothing is sliced and no panel is built. Driver:
+`tests/lab/pos_control_full_genome.sh BUNDLE WORKDIR [CORES]`; report, tables
+and figure: `tests/positive_control/full_panel_report.py`.
+
+| | |
+|---|---|
+| bundle | `cxsv-bundle-20261103-33c075a22071` (commit `33c075a`, see docs/RELEASE_AND_BUNDLE.md section 6a) |
+| panel release | `cxsv-panel-20261102-cd7e1d194cd4` (tag `panel-v1.0`; 1,619 genomes, 1,582 individuals). VERIFIED before and after the run: 1,634 files, manifest sha256 `928d721a…` unchanged |
+| fingerprint | this run `cd7e1d194cd4…` = panel `cd7e1d194cd4…`: COMPATIBLE |
+| input | `release/pos_control_3559.hs1.minimap2.cram` (md5 `77d1b04f…`, matches `MD5SUMS`). **CRAM 3.0**, so no 3.1 → 3.0 transcode was needed. All 25 `@SQ` M5 are in the bundle's cache |
+| E13 | the add-on (MD5SUMS OK) spliced over the whole genome, as the regression does for its slice: 760 read names (847 records) in `E13.replace.bed` dropped, 914 simulated records added; 18,558,204 → 18,558,271 records (checked), written as CRAM 3.0 in 864 s |
+| run | Singularity, `--containall --net --network none`, 12 cores on freya: patient workflow **6,324 s** (1 h 45 min; SVIM is the critical path); driver total 6,515 s with the splice reused from the first attempt (the splice itself takes 864 s) |
+| depth | host ~35x (median flank depth at MAPQ ≥ 20) |
+
+![Positive control against panel-v1.0](figures/pos_control_full_panel_v1.0.png)
+
+*Figure. (a) Each planted event's best-scoring CxSV locus: whole genome against
+panel-v1.0 (dots, coloured by tier) and the 10-slice regression (black ticks),
+with the Tier 1 and Tier 2 thresholds (dashed). E11 and E12 are simple SVs and
+must not be CxSVs. (b) Tier-1 and Tier-2 calls per genome outside the planted
+events, for the host and for the HG01868 stand-in (validation genome, not in the
+panel). These are compared with healthy panel genomes scored leave-one-family-out
+by the same scorer (item-10 calibration; n = 1,619 all, 292 at 20-30x, 628 at
+≥30x; Tier 2 by stratum was not computed). (c) Genome span inside clusters that
+the classifier drops whole as `FILTERED_oversized_cluster`, per panel genome
+(n = 1,619), against the host, the stand-in and the 10-slice regression.*
+
+| ID | Gene | Junctions exact/partial/missed (max offset bp) | Class | Panel status (carriers) | Junctions seen in panel | Score | Tier | 10-slice regression: status, score, tier | Panel genomes with the event span in an oversized cluster | Verdict |
+|---|---|---|---|---|---|---:|---|---|---:|---|
+| E01 | MECP2 | 2/0/0 (0) | Complex_inversion | private (0) | 0/2 | 1.35 | Tier1 | private (0), 1.37, Tier1 | 3/1619 | PASS |
+| E02 | NF1 | 2/0/0 (1) | **no CxSV locus** | . | . | . | . | private (0), 1.97, Tier1 | 952/1619 | FAIL |
+| E03 | PMP22 | 2/0/0 (1) | Complex_inversion | private (0) | 0/3 | 1.72 | Tier1 | private (0), 1.75, Tier1 | 9/1619 | PASS |
+| E04 | SHANK3 | 3/0/0 (1) | DUP+INV | private (0) | 0/4 | 1.74 | Tier1 | private (0), 1.80, Tier1 | 0/1619 | PASS |
+| E05 | NRXN1 | 4/0/0 (3) | Nested_SV | private (0) | 0/4 | 1.93 | Tier1 | private (0), 1.97, Tier1 | 72/1619 | PASS |
+| E06 | AUTS2 | 3/0/0 (8) | DUP+INV | private (0) | 0/4 | 1.94 | Tier1 | private (0), 1.94, Tier1 | 454/1619 | PASS |
+| E07 | SATB2/FOXP2 | 2/0/0 (3) | BND_cluster | private (0) | 0/2 | 1.55 | Tier1 | private (0), 1.60, Tier1 | 153/1619 | PASS |
+| E08 | NSD2/EHMT1/ZIC2 | 2/1/0 (1) | BND_cluster | private (0) | 0/2 | 1.44 | Tier1 | private (0), 1.47, Tier1 | 56/1619 | PASS |
+| E09 | CHD2 | 9/0/0 (438) | Chromothripsis_like | private (0) | 0/10 | 2.66 | Tier1 | private (0), 2.74, Tier1 | 4/1619 | PASS |
+| E10 | intergenic | 4/0/0 (2) | Multi_breakpoint_cluster | private (0) | 0/6 | 0.26 | Tier3 | private (0), 0.33, Tier3 | 27/1619 | PASS |
+| E11 | intergenic | 1/0/0 (1) | not a CxSV locus | . | . | . | . | not a CxSV (expected) | 96/1619 | PASS |
+| E12 | intergenic | 2/0/0 (1) | not a CxSV locus | . | . | . | . | not a CxSV (expected) | 622/1619 | PASS |
+| E13 | intergenic | 4/0/0 (1) | Nested_SV | private (0) | 0/4 | 0.08 | Tier3 | public (3), -1.15, Benign_likely | 11/1619 | FAIL |
+
+*Junctions seen in panel: the best locus's junctions with ≥ 1 panel carrier
+(`Panel_Junctions_Seen/Panel_Junctions`); 0 for every planted locus. Max offset:
+the largest distance (bp) between a truth breakpoint and the closest matching
+call, over the exact junctions. E04's 903 and E09's 95 region-overlap carriers
+are panel loci that overlap the span but share no junction (hotspots).*
+
+**Detection.** 40 of 41 truth junctions exact, 1 partial (E08's chr4-chr9
+junction, as in the regression), 0 missed. Classes match
+`ideal_class` for 10/11 CxSV events; the exception is E02, which has no locus.
+
+**Privacy and scores.** Every called planted event is private, with 0
+carriers and none of its junctions seen among the 1,582 panel individuals.
+The scores are 0.00-0.08 below the 10-slice regression because the private
+bonus is weighted by panel callability (0.30 × Panel_Callable/Panel_Individuals),
+which is below 1 on the real panel. They are identical to item 10's re-scoring
+of the slice calls against the full panel (`score_pos_control_full_panel.sh`):
+the whole-genome calling reproduces the slice calling at these loci.
+E01, E03-E09 are Tier 1; E10 is Tier 3 (intergenic, `below_top` as expected).
+
+**E13 is private: a panel-composition effect, not a defect.** E13 is public in
+the regression only because the regression splices its simulated reads into 3
+of its 10 background genomes (HG00125, HG00111, HG00096). The real genomes of
+those individuals in panel-v1.0 do not carry it, so against the real panel no
+individual shares any of E13's 4 junctions. Its `public, 3 carriers`
+expectation cannot hold against a real panel; the verdict FAIL is expected and
+is not added to `known_failures.tsv`, which is for the regression. E13 scores
+0.08 (Tier 3): no_genes -0.60, panel_privacy +0.23, complexity_class +0.10.
+
+**E02 (*NF1* delINVdel) is lost in the whole genome: a new finding.** Both
+junctions are called exactly (Sniffles2 + cuteSV, the same 5 records as in the
+slice). In the whole genome, `bedtools cluster -d 50000` (rule `cluster_sv`,
+`cxsv_params.cluster_distance` 50 kb), which joins records whose intervals
+overlap or lie within 50 kb,
+also chains them to multi-megabase records across the chr17 pericentromere. Examples: `Sniffles2.DEL.814S11`, a 25.7 Mb DEL at
+chr17:16.7-42.4 Mb, and two SVIM INV/BND records of the same span. This gives
+cluster 1953, chr17:16,672,217-42,437,362: 25.8 Mb, 189 records, 184 junctions.
+Any cluster over `max_cluster_size` (500 kb) is dropped whole
+(`FILTERED_oversized_cluster`), with E02 inside it. A ±1 Mb slice cannot contain such records,
+which is why the regression never showed it. The effect is genome-wide (panel c):
+
+- the host has 20 oversized clusters covering 539 Mb (largest 130 Mb, chr1);
+- HG01868 has 16 covering 434 Mb;
+- the 10-slice regression has 1 covering 4.4 Mb;
+- in the panel, 1,616 of 1,619 genomes have at least one: median 12 clusters
+  and 334 Mb per genome (5th-95th percentile 158-636 Mb; mean
+  359 Mb, about 11% of the genome).
+
+The E02 span lies inside an oversized cluster in 952 panel genomes, E06's in
+454 and E12's in 622. Two consequences:
+
+- CxSVs inside these spans are not called, in patients or in panel genomes.
+- Privacy is not affected, because matching is junction-by-junction against all
+  junction sites, not only CxSV loci.
+
+The fix belongs to the calling (fingerprinted) code: for example, keep records
+longer than `max_cluster_size` out of cluster linkage, or split oversized
+clusters at those records. It would change the fingerprint and need a new
+panel release (per-sample classification and aggregate, not the callers).
+This is a decision for the PI (docs/ROADMAP.md).
+
+**The host's own calls.** 1,054 CxSV loci lie outside the planted events: 1 private (Benign_likely),
+121 `shared_junctions`, 932 public. By tier: **0 Tier 1**, 4 Tier 2, 25 Tier 3,
+1,025 Benign_likely. A healthy panel genome has 0.457 Tier-1 calls on average
+(0.868 at ≥30x) and 4.35 Tier-2 calls (item-10 calibration, deployed scorer,
+leave-one-family-out). The host is within that range: at 0.868, P(0 Tier-1
+calls) = 0.42. The HG01868 stand-in (974 loci, ~28x) also has 0 Tier 1 and 5
+Tier 2. The 4 host Tier-2 calls:
+
+| Locus | Size | Class | Panel status (carriers) | Genes | Score | Main contributions |
+|---|---:|---|---|---|---:|---|
+| chrX:32,547,958-32,608,507 | 60.5 kb | Multi_breakpoint_cluster | public (1,380) | *DMD* broken | 0.72 | public -1.00; gene_dosage +0.90; cn_oscillation +0.30 |
+| chr19:32,981,723-32,985,224 | 3.5 kb | Nested_SV | shared_junctions (0; 1/2 junctions seen, f = 0.50, below the graded ramp) | *ZNF536* broken | 0.65 | gene_dosage +0.30; complexity_class +0.10; caller_agreement +0.10 |
+| chr2:1,687,266-1,871,455 | 184 kb | Multi_breakpoint_cluster | public (584) | *MYT1L*, *PXDN* broken | 0.60 | public -1.00; gene_dosage +0.90; breakpoint_tier +0.25 |
+| chr16:95,478,668-95,535,709 | 57 kb | Multi_breakpoint_cluster | public (1,178) | *ANKRD11* broken | 0.50 | public -1.00; gene_dosage +0.90; breakpoint_tier +0.25 |
+
+Three of the four are common panel loci (584-1,380 carriers) that still reach
+Tier 2 through gene-dosage points; the public penalty (-1.00) does not take them
+below 0.50. The *EHMT1* host locus (chr9:150,076,936-150,111,418), Tier 1 before
+item 10 on the regression, is public against panel-v1.0 (14 carriers):
+0.00, Tier 3.
+
+**Defect found and fixed on the way (PI-approved, commit `33c075a`).** The
+first run, from bundle `cxsv-bundle-20261103-dc7f582c01cc` (now `*.SUPERSEDED`),
+failed at rule `locus_depth`. Sniffles2 2.8.1 wrote a PAR1 BND
+(`Sniffles2.BND.90AS7`, chrX:142,943) whose ALT mate contig is `chrN`
+(`CHR2=chrY`). `locus_segments.py` made depth intervals on `chrN`, and
+`samtools bedcov` exited 2. Breakends on contigs absent from the reference now
+get no interval; the count is logged (here `chrN 1`), and a unit test covers it.
+`locus_segments.py` is outside the calling fingerprint.
+
+## Latest 10-slice regression result (2026-10-29, roadmap item 5: classifier on distinct junctions + scoring)
 
 Fresh workdir `freya:/home/minknow/scratch/cxsv_item5_regression`, `CORES=24
 RERUN=1`, 10 ONT backgrounds (first 10 with `passes_17x`), 16 regions (34.4 Mb),

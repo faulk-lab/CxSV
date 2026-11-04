@@ -1,6 +1,8 @@
 # CxSV roadmap
 
-*Regenerated 2026-10-29 after items 1–6 were merged into `main` (cae06a8).*
+*Regenerated 2026-10-29 after items 1–6 were merged into `main` (cae06a8). Updated 2026-11-03: panel-v1.0
+released and tagged (item 12), items 9 and 10 done, offline bundle rebuilt and re-validated with panel-v1.0,
+whole-genome positive control against the full panel (branch `validation-panel-v1.0`).*
 
 Goal (unchanged): separate **public** CxSVs, seen in a background panel of
 presumed-healthy long-read genomes, from **private** CxSVs in a patient. Then
@@ -15,7 +17,8 @@ leave it. Workflow engine: Snakemake (decision 2026-10-28).
 
 Each item below has a recommendation; nothing in it starts until the PI says so.
 
-1. **Start the full panel build** (item 12): **decided.** Scope (2026-10-29):
+1. **Start the full panel build** (item 12): **decided; done 2026-11-03** (release
+   `cxsv-panel-20261102-cd7e1d194cd4`, item 12). Scope (2026-10-29):
    all three cohorts, every verified file, no coverage floor. Dispatch
    (2026-10-30, after the measured estimate): all 5 usable nodes at once
    (freya, shadowfax, athena, betsy, keurig; princess excluded, since it cannot
@@ -39,24 +42,50 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
    locus near *EHMT1* (chr9:150,076,936–150,111,418) reaches Tier 1 this way.
    *Recommendation:* scale the privacy points by the matched fraction, tuned on
    the panel rather than on the positive control. *Decided 2026-10-29; done
-   2026-11-03 on branch `item10-graded-privacy`, see item 10.*
-5. **Curated literature set of pathogenic CxSVs** (item 11, the open part of
+   2026-11-03 and merged (PR #17), see item 10.*
+5. **ON HOLD.** **Curated literature set of pathogenic CxSVs** (item 11, the open part of
    item 5's "done when"). To decide: which sources, and whether selected
    literature structures should also be re-planted into the positive control
    so detection, not only scoring, is tested.
-6. **When to start item 8** (read-level mechanism axes, PI criteria 3, 4, 6), and
+6. **ON HOLD.** **When to start item 8** (read-level mechanism axes, PI criteria 3, 4, 6), and
    whether phasing runs on patients only or on the whole panel.
-7. **For the restricted environment's IT** (item 2): which workflow engine and
+7. **ON HOLD.** **For the restricted environment's IT** (item 2): which workflow engine and
    container runtime are allowed. The bundle assumes Snakemake plus
    Apptainer/Singularity and also ships a Docker archive.
-8. **SLURM for the lab fleet** (item 7): held for a separate discussion.
+8. **ON HOLD.** **SLURM for the lab fleet** (item 7): held for a separate discussion.
 9. **Housekeeping on the NAS:**
    - the sargasso1 `#recycle` bin holds superseded test bundles (~24 GB) and
      earlier deletions, and frees space only when emptied;
+   - `/mnt/sargasso1/CxSV/bundles/cxsv-bundle-20261103-dc7f582c01cc.SUPERSEDED`
+     (10.5 GB; failed the full-genome positive control at `locus_depth`, see
+     docs/RELEASE_AND_BUNDLE.md 6a) can be deleted;
+   - the stand-in genome HG01868 (91 GB BAM, public, re-downloadable) sits in
+     `datasets/standins/HG01868/` and in freya local scratch;
    - `/mnt/sargasso2/CxSV-old` is scheduled for deletion (nothing to rescue,
      decision 2026-10-28).
 10. **Commit identity.** Agent commits on freya use the global git identity
     (Chris Faulk). Keep it, or set a separate author name for agent commits.
+11. **Merge `validation-panel-v1.0`** (new, 2026-11-03): fix `33c075a` + docs,
+    on top of dc7f582 (`item10-graded-privacy`, merged as PR #17, `b535758`).
+    No conflicts: main differs from dc7f582 only by the merge commit. CI green.
+    The validated bundle is built from `33c075a`.
+12. **Oversized clusters (new, 2026-11-03; proposed item 13).** In the whole
+    genome, clustering at 50 kb chains real events to multi-Mb artefact records,
+    and clusters over 500 kb are dropped whole. The median panel genome loses
+    334 Mb (about 11% of the genome) this way. The positive control's *NF1*
+    event E02 is lost, and its span is inside such a cluster in 952/1,619 panel
+    genomes. A fix changes the calling fingerprint and needs a new panel release
+    (classification + aggregate only). *Recommendation:* approve item 13.
+13. **Small fixes found in the 2026-11-03 validation (new; not started).**
+    - `plot_complexity_class.R`: give the heatmap explicit factor levels, so its
+      row order no longer depends on the host locale (validation check 7).
+    - `run_cxsv.sh`: point `TMPDIR` at the run directory; the container's
+      `/tmp` is a 64 MB tmpfs.
+    - Record the image id and SIF sha256 in `release.json`.
+    - Make the patient workflow refuse or transcode CRAM 3.1 inputs, because
+      mosdepth 0.3.10 writes empty masks for them.
+    None changes the calling fingerprint. *Recommendation:* approve as one
+    small branch, then re-run the bundle validation.
 
 ---
 
@@ -65,21 +94,22 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
 | # | Item | Status | Where |
 |---|---|---|---|
 | 1 | Two workflows, one shared calling module | done 2026-10-28 | `main` |
-| 2 | Versioned panel release + offline bundle | done 2026-10-28; tag and real release pending | `main`, docs/RELEASE_AND_BUNDLE.md |
+| 2 | Versioned panel release + offline bundle | done 2026-10-28; real release panel-v1.0 tagged 2026-11-03; bundle re-validated with it 2026-11-03 | `main`, docs/RELEASE_AND_BUNDLE.md |
 | 3 | Breakpoint-level matching against the panel | done 2026-10-28 | `main`, docs/JUNCTIONS.md |
 | 4 | External SV catalogues | done 2026-10-29 | `main`, docs/EXTERNAL_CATALOGUES.md |
 | 5 | Configurable, explainable scoring + classifier fixes | done 2026-10-29; literature set open (item 11) | `main`, docs/SCORING.md |
-| 6 | Tests (unit, synthetic CI, lab positive control, bundle validation) | done; repeat bundle validation with the first tagged release | `main`, docs/POSITIVE_CONTROL.md |
+| 6 | Tests (unit, synthetic CI, lab positive control, bundle validation) | done; bundle validation repeated with panel-v1.0 and a whole-genome positive control added 2026-11-03 | `main`, `validation-panel-v1.0`, docs/POSITIVE_CONTROL.md |
 | 7 | SLURM for the lab fleet | **on hold** | – |
-| 8 | Read-level mechanism axes (PI criteria 3, 4, 6) | queued | below |
-| 9 | ClinGen region-level dosage | done 2026-10-30 (branch `item9-clingen-regions`) | below, docs/SCORING.md |
-| 10 | Graded privacy penalty for partly matched loci | done 2026-11-03 (branch `item10-graded-privacy`) | below, docs/SCORING.md section 6b |
-| 11 | Curated literature set of pathogenic CxSVs | queued, awaiting decision 5 | below |
-| 12 | Full panel build and first real release | build prepared and estimated (branch `panel-build-config`); dispatch confirmed 2026-10-30; build not yet launched; tag awaits decision 2 | below, docs/PANEL_BUILD.md |
+| 8 | Read-level mechanism axes (PI criteria 3, 4, 6) | **on hold** (decision 6) | below |
+| 9 | ClinGen region-level dosage | done 2026-10-30; merged | `main`, docs/SCORING.md |
+| 10 | Graded privacy penalty for partly matched loci | done 2026-11-03; merged (PR #17) | `main`, docs/SCORING.md section 6b |
+| 11 | Curated literature set of pathogenic CxSVs | **on hold** (decision 5) | below |
+| 12 | Full panel build and first real release | **done 2026-11-03**: release `cxsv-panel-20261102-cd7e1d194cd4`, tag `panel-v1.0`; bundle validated offline (check 7: one locale-dependent plot, data identical); positive control run against it | `main` (tag), `validation-panel-v1.0`, below |
+| 13 | Oversized-cluster blind spot (proposed) | **awaiting decision 12** | below |
 
 ---
 
-## Background panel and registry (as of 2026-10-29)
+## Background panel and registry (as of 2026-11-03)
 
 All data on `/mnt/sargasso1/CxSV/datasets`, aligned to T2T-CHM13v2 (UCSC `hs1`).
 `acquisition/build_registry.py` rebuilds `registry/` from the files on disk.
@@ -93,6 +123,10 @@ All data on `/mnt/sargasso1/CxSV/datasets`, aligned to T2T-CHM13v2 (UCSC `hs1`).
 1,619 verified files from 1,582 individuals (80.8 TB); 1,065 individuals reach
 17x in at least one file, but the panel has no coverage floor (PI, 2026-10-29). Superpopulation labels (from the 1kGP-LRSC metadata and IGSR):
 AFR 434, SAS 314, EAS 299, EUR 277, AMR 245, unlabelled 13.
+
+**Released panel:** `cxsv-panel-20261102-cd7e1d194cd4` (tag `panel-v1.0`), built from all 1,619 files
+(item 12), at `/mnt/sargasso1/CxSV/build/panel-v1.0/results/panel/release` and inside the
+validated bundle `/mnt/sargasso1/CxSV/bundles/cxsv-bundle-20261103-33c075a22071`.
 
 ---
 
@@ -183,27 +217,11 @@ panel. Details: docs/EXTERNAL_CATALOGUES.md.
 - Bundle validation recorded for both test bundles; repeat it with the first
   tagged release.
 
----
+*2026-11-03:* the bundle validation was repeated with panel-v1.0 on a whole-genome public
+stand-in (HG01868), and a whole-genome positive-control driver against a full release was
+added (`tests/lab/pos_control_full_genome.sh`, docs/POSITIVE_CONTROL.md).
 
-## Queued
-
-### 8. Read-level mechanism axes (PI criteria 3, 4, 6)
-
-Deferred by PI decision 2026-10-28. They need read-level evidence that the
-per-sample calling path does not keep. Cutoffs are the criteria document's
-operational starting points.
-
-| Criterion | Suggested cutoff | What it needs |
-|---|---|---|
-| **3. Single haplotype of origin** | all break-ends phase to one parental homolog; interspersed LOH where copy number is lost; a balanced event must still pass | read-backed SNV phasing (e.g. Clair3 + WhatsHap in the image), haplotype assignment of each junction's supporting reads; parents for parental origin |
-| **4. Reconstructability** (derivative walk) | ≥ 80% of clustered breakpoints spanned by a consistent walk (tunable); gaps only at repeats/centromeres/segdups; gated by the BFB modifier | reads or local-assembly contigs spanning several breakpoints in cis, a junction graph and a walk search |
-| **6. Junction microhomology / templated insertion** | from ±50–100 bp of read sequence: 0–6 bp microhomology leans NHEJ/chromothripsis; templated insertions from a distant donor lean MMBIR/FoSTeS | reads or consensus across each junction, alignment of inserted sequence to find donors |
-
-**Done when:** each axis is a computed feature in the score report with a
-weight in config (0 until calibrated) and a positive-control check (E06 for
-criterion 6; E09 for 3 and 4).
-
-### 9. ClinGen region-level dosage — done 2026-10-30 (branch `item9-clingen-regions`)
+### 9. ClinGen region-level dosage — done 2026-10-30, merged
 
 `ClinGen_region_curation_list_GRCh38.tsv` (header date 2026-04-28, CC0) was
 lifted to hs1 with the catalogue chain `hg38ToHs1.over.chain.gz` (md5
@@ -238,7 +256,7 @@ Open for the PI:
 - whether to plant a whole-region CMT1A or *MECP2* duplication in the control
   (item 11).
 
-### 10. Graded privacy penalty for partly matched loci — done 2026-11-03 (branch `item10-graded-privacy`)
+### 10. Graded privacy penalty for partly matched loci — done 2026-11-03, merged (PR #17)
 
 *Done:* partly matched (`shared_junctions`) loci get the public penalty
 scaled by a linear ramp of their matched junction fraction f (0 at f <= 0.55,
@@ -248,7 +266,10 @@ leave-one-family-out over all 1,619 panel genomes
 with at most +1 point chance-demotion risk for private Tier-1 events. On the
 10-background regression the EHMT1 host locus drops from Tier 1 (1.00) to
 Tier 3 (0.00); no planted event changes tier, score or privacy verdict, on the
-regression or scored against the full panel-v1.0. Partial catalogue matches
+regression or scored against the full panel-v1.0. Against the full panel, from the
+offline bundle, the whole-genome positive control has 0 Tier-1 host calls
+outside the planted events (healthy genomes 0.46 per genome), and the *EHMT1*
+host locus is public (14 carriers, Tier 3). Partial catalogue matches
 are still not penalised (they cannot be calibrated on the panel without
 leakage). Details: docs/SCORING.md section 6b.
 
@@ -258,7 +279,91 @@ full panel (item 12), not on the positive control. **Done when:** the
 *EHMT1*-region host locus and similar shared_junctions loci fall below Tier 1,
 and no planted event changes tier.
 
-### 11. Curated literature set of pathogenic CxSVs
+### 12. Full panel build and first real release — done 2026-11-03
+
+*Done.*
+- **Build:** launched 2026-10-29 22:47 CDT on freya, shadowfax, athena, betsy and
+  keurig, in the pinned SIF (sha256 `9f4e049f…`); calling fingerprint
+  `cd7e1d194cd4` unchanged throughout. betsy hung mid-build and was dropped; its
+  156 finished samples were kept after a byte-identical 4-sample spot-check.
+  The fleet runner fixes were outside the fingerprint. Details:
+  [docs/PANEL_BUILD.md](PANEL_BUILD.md).
+- **Release** `cxsv-panel-20261102-cd7e1d194cd4`, not a test release:
+  1,619 samples, 1,582 individuals (ONT-1019 1,017, LRSC 467, PacBio 135),
+  1,304,862 junction sites, 14,428 CxSV loci, a CALLABLE mask per sample, and
+  1,634 files (2.43 GB). Annotated tag `panel-v1.0` on da6cb90, recorded in
+  `release.json` (`source.git_tag`); manifest sha256 `928d721a…`.
+- **Bundle:** `cxsv-bundle-20261103-33c075a22071`, built from `33c075a` with
+  this release, validated offline on the public stand-in HG01868, a 1kGP-LRSC
+  whole genome that is not in the panel (docs/RELEASE_AND_BUNDLE.md 6a). 7 of
+  8 checks pass as scripted. Check 7 flags one plot whose row order follows the
+  host locale; all data outputs are identical, and with that plot rendered
+  under the image's locale there are 0 unexpected differences.
+- **Positive control,** whole genome against this release from the bundle
+  (docs/POSITIVE_CONTROL.md):
+  - 40/41 junctions exact, 1 partial;
+  - E01, E03-E09 private Tier 1; E10 Tier 3; E11/E12 not CxSV;
+  - **E02 not called** (oversized cluster, proposed item 13);
+  - E13 private (expected: its carriers exist only in the regression's spliced
+    backgrounds);
+  - 0 Tier-1 host calls.
+- **Found on the way:** the patient `locus_depth` rule failed on a caller's
+  off-reference BND mate contig (`chrN`). Fixed in `33c075a` with PI approval;
+  outside the fingerprint.
+
+Open, not fixed:
+- `release.json` lacks the image id and SIF sha256 (`runtime` is null;
+  the bundle records them);
+- mosdepth 0.3.10 cannot read CRAM 3.1, so a CRAM 3.1 patient gives no
+  callability-dependent output and the workflow does not stop; transcode
+  first, as `pos_control_full_genome.sh` does;
+- SVIM reads CRAMs without `--reference` (depends on the MD5 cache);
+- `plot_cxsv_venn.R` lets sample names collide.
+
+---
+
+## Queued
+
+### 13. Oversized-cluster blind spot (proposed 2026-11-03; awaiting decision 12)
+
+`bedtools cluster -d 50000` chains records into clusters; a cluster over
+`max_cluster_size` (500 kb) is dropped whole (`FILTERED_oversized_cluster`). In
+whole genomes, multi-Mb artefact records (for example a 25.7 Mb Sniffles2 DEL
+across the chr17 pericentromere) chain real events into such clusters:
+
+- the median panel genome has 12 oversized clusters covering 334 Mb (5th-95th
+  percentile 158-636 Mb; 1,616/1,619 genomes have at least one);
+- the positive control has 539 Mb, and its *NF1* event E02 is lost there;
+- E02's span is inside an oversized cluster in 952 panel genomes;
+- the 10-slice regression has only 4.4 Mb, so it could not show this.
+
+Privacy is unaffected (junction-level matching), but CxSV *detection* in these
+spans is lost in patients and panel alike. **Proposal:** keep records longer
+than `max_cluster_size` out of cluster linkage (or split clusters at them),
+check against the positive control and the panel, and rebuild classification
+and aggregate. The callers do not need to rerun, but the fingerprint changes,
+so this means a new panel release. **Done when:** E02 is called in the whole
+genome, the per-genome oversized span drops by an order of magnitude, and the
+regression and full-panel positive control pass.
+
+
+### 8. Read-level mechanism axes (PI criteria 3, 4, 6) — on hold (decision 6)
+
+Deferred by PI decision 2026-10-28. They need read-level evidence that the
+per-sample calling path does not keep. Cutoffs are the criteria document's
+operational starting points.
+
+| Criterion | Suggested cutoff | What it needs |
+|---|---|---|
+| **3. Single haplotype of origin** | all break-ends phase to one parental homolog; interspersed LOH where copy number is lost; a balanced event must still pass | read-backed SNV phasing (e.g. Clair3 + WhatsHap in the image), haplotype assignment of each junction's supporting reads; parents for parental origin |
+| **4. Reconstructability** (derivative walk) | ≥ 80% of clustered breakpoints spanned by a consistent walk (tunable); gaps only at repeats/centromeres/segdups; gated by the BFB modifier | reads or local-assembly contigs spanning several breakpoints in cis, a junction graph and a walk search |
+| **6. Junction microhomology / templated insertion** | from ±50–100 bp of read sequence: 0–6 bp microhomology leans NHEJ/chromothripsis; templated insertions from a distant donor lean MMBIR/FoSTeS | reads or consensus across each junction, alignment of inserted sequence to find donors |
+
+**Done when:** each axis is a computed feature in the score report with a
+weight in config (0 until calibrated) and a positive-control check (E06 for
+criterion 6; E09 for 3 and 4).
+
+### 11. Curated literature set of pathogenic CxSVs — on hold (decision 5)
 
 No single public, breakpoint-resolved set of pathogenic germline CxSVs is
 known to exist; one has to be assembled (sources and approach in the item's
@@ -268,30 +373,6 @@ records; mostly imprecise coordinates), and published sequence-resolved case
 series and reviews of germline complex rearrangements. **Done when:** a
 versioned junction-level table of literature CxSVs in hs1 exists, each with
 its source and phenotype, and the scorer ranks them in the top tier.
-
-### 12. Full panel build and first real release
-
-*Build preparation done (branch `panel-build-config`,
-[docs/PANEL_BUILD.md](PANEL_BUILD.md)).*
-- The coverage floor is removed.
-- The full DAG resolves for all 1,619 files (25,347 jobs).
-- Per-sample cost was measured on 5 full genomes in the pinned SIF: 0.7–1.9
-  CPU-h and 20–47 min each.
-- A fleet runner handles per-node shards, staging to local disk, ledgers and
-  pause/resume.
-- The estimate is 37.5 h on 5 nodes. The NAS sets the time: 80.8 TB at about
-  630 MB/s is a 35.6 h floor.
-- The PI confirmed "all 5 nodes now" on 2026-10-30.
-
-Next: merge, `prepare_build.sh` on the merged commit, launch, then the aggregate
-step.
-
-Build the panel over the registry with fingerprint `cd7e1d194cd4`, publish the
-first real release, tag it (PI), rebuild and re-validate the bundle with it,
-and re-run the positive-control regression against the full panel.
-**Done when:** a tagged, checksummed release with callability exists for every
-included cohort, and the offline bundle built from that tag passes
-validation.
 
 ---
 

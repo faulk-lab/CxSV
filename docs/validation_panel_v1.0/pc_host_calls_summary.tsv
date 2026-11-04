@@ -1,0 +1,6 @@
+genome	depth_x_median_flank_MAPQ20	loci	status_private	status_shared_junctions	status_public	Tier1_high_priority	Tier1_high_priority_private	Tier2	Tier2_private	Tier3	Tier3_private	Benign_likely	Benign_likely_private
+pos_control host 3559 (non-planted loci)	35.1	1054.0	1.0	121.0	932.0	0.0	0.0	4.0	0.0	25.0	0.0	1025.0	1.0
+HG01868 stand-in (all loci)	28.5	974.0	0.0	62.0	912.0	0.0	0.0	5.0	0.0	22.0	0.0	947.0	0.0
+healthy panel genomes, all (n=1,619) (per genome, LOFO)						0.4571		4.3533					
+healthy, 20-30x (n=292) (per genome, LOFO)						0.3596							
+healthy, >=30x (n=628) (per genome, LOFO)						0.8678							
