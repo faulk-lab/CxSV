@@ -84,10 +84,17 @@ done
 
 # XDG_CACHE_HOME: snakemake's source cache in the writable run directory;
 # TMPDIR/TMP/TEMP: temporary files in the run directory (/work/.tmp, also /tmp)
+# REF_PATH/REF_CACHE: htslib finds CRAM reference sequences by @SQ M5 in the
+#   bundle's MD5 cache only (never a header UR path, never a download), for
+#   every process in the container; tools that open CRAMs without --reference
+#   (SVIM 2.0.0) depend on it. The caller rules export the same values
+#   (HTS_ENV, from ref_cache in config/bundle_site.yaml).
+REF_CACHE_DIR=/bundle/reference/ref_cache
 ENVS=(CXSV_BUNDLE_ID="$CXSV_BUNDLE_ID" CXSV_COMMIT="$CXSV_COMMIT" CXSV_IMAGE_ID="$CXSV_IMAGE_ID"
       CXSV_SIF_SHA256="$CXSV_SIF_SHA256" CXSV_RUNTIME="$RUNTIME" CXSV_RUNTIME_IDS_SOURCE="bundle.env of $CXSV_BUNDLE_ID"
       XDG_CACHE_HOME=/work/.cache
-      TMPDIR=/work/.tmp TMP=/work/.tmp TEMP=/work/.tmp)
+      TMPDIR=/work/.tmp TMP=/work/.tmp TEMP=/work/.tmp
+      REF_PATH="$REF_CACHE_DIR/%2s/%2s/%s" REF_CACHE="$REF_CACHE_DIR/%2s/%2s/%s")
 
 case "$CMD" in
     patient|panel)

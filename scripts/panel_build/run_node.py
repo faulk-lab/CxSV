@@ -287,7 +287,9 @@ class Runner:
         self.attempts[key] = attempt
         ov = self.write_overlay(row)
         tmp = f"{self.cfg['tmp_dir']}/{self.tag(key)}"
-        env = dict(os.environ, CXSV_SIF=self.cfg["sif"], CXSV_EXTRA_BINDS=self.cfg["stage_dir"])
+        node_ov = json.load(open(f"{self.nd}/node.yaml"))
+        env = dict(os.environ, CXSV_SIF=self.cfg["sif"], CXSV_EXTRA_BINDS=self.cfg["stage_dir"],
+                   CXSV_REF_CACHE=node_ov.get("ref_cache", ""))  # REF_PATH/REF_CACHE in the container (lib.sh)
         cmd = (f"source '{HERE}/lib.sh' && cxsv_snakemake '{self.nd}/work' '{tmp}' '{self.cfg['code']}' "
                f"{int(self.cfg['cores_per_sample'])} '{ov}'")
         logf = open(f"{self.nd}/logs/{self.tag(key)}.attempt{attempt}.log", "w")

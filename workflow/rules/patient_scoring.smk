@@ -171,6 +171,7 @@ rule score_cxsv:
         svim      = f"{S}/callers/svim_filtered.vcf",
         depth     = f"{S}/scoring/locus_depth.tsv",
         params    = f"{S}/scoring/scoring_params.json",
+        svim_ok   = f"{S}/qc/svim_check.tsv",       # rules/caller_checks.smk: no report from a cut SVIM call set
         genes     = config["annotation"]["genes_bed"],
         exons     = config["annotation"]["exons_bed"],
         repeats   = config["annotation"]["repeats_bed"],

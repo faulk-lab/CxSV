@@ -20,6 +20,10 @@
 #       and are covered by its MANIFEST.sha256), else the SIF's sha256 is
 #       computed once and cached under ${XDG_CACHE_HOME:-~/.cache}/cxsv (keyed
 #       by path, size and mtime); a SIF outside a bundle has no Docker image id.
+#       With CXSV_REF_CACHE set (htslib MD5 cache directory), REF_PATH and
+#       REF_CACHE point at it inside the container, for every process (the
+#       caller rules export the same, HTS_ENV; SVIM reads CRAMs without
+#       --reference and depends on it).
 #   CXSV_EXTRA_BINDS  space-separated host directories also bound at the same
 #       path (e.g. the node-local staging directory holding alignment copies)
 #   cxsv_snakemake WORKDIR LOCAL_TMP CODE CORES CONFIG... -- [snakemake args]
@@ -79,6 +83,8 @@ cxsv_container() {
     local envs=(--env TMPDIR=/tmp --env XDG_CACHE_HOME="$wd/.cache" --env CXSV_SIF_SHA256="$CXSV_SIF_SHA256"
                 --env CXSV_RUNTIME_IDS_SOURCE="$CXSV_RUNTIME_IDS_SOURCE")
     [ -n "${CXSV_IMAGE_ID:-}" ] && envs+=(--env CXSV_IMAGE_ID="$CXSV_IMAGE_ID")
+    [ -n "${CXSV_REF_CACHE:-}" ] && envs+=(--env REF_PATH="$CXSV_REF_CACHE/%2s/%2s/%s"
+                                          --env REF_CACHE="$CXSV_REF_CACHE/%2s/%2s/%s")
     "$rt" exec --containall --cleanenv "${binds[@]}" --pwd "$wd" "${envs[@]}" \
         "$CXSV_SIF" "$@"
 }

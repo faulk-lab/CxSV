@@ -43,6 +43,7 @@ SHARD_TARGETS = (
     "callers/sniffles.snf",
     "junctions/junctions.tsv",
     "callability/callable.bed.gz",
+    "qc/svim_check.tsv",
 )
 COST_RECORD = "panel_build/cost.tsv"
 
