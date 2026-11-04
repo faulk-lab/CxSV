@@ -12,12 +12,14 @@
 #       not by the commit.
 #
 #   scripts/make_bundle.sh bundle --commit REV --release DIR [--out ROOT]
-#           [--bundle-id ID] [--refs DIR] [--resources DIR] [--catalogues DIR]
+#           [--bundle-id ID] [--refs DIR] [--resources DIR] [--catalogues DIR] [--literature DIR]
 #       assemble ROOT/<bundle id>/: repo at the commit (git archive + git
 #       bundle), the image (SIF + Docker archive), hs1 + .fai + MD5 cache,
 #       annotation + scoring resources (verified against resources_manifest.tsv),
 #       the panel release DIR (must verify), the external
 #       catalogue junction-site tables with their manifests (each verified),
+#       the curated literature set (item 11; newest <resources>/literature/<version>/ or
+#       --literature DIR, verified against its MANIFEST.tsv; annotation only),
 #       run_cxsv.sh, config/bundle_site.yaml, README.md, bundle.json and a
 #       checksum manifest over everything (MANIFEST.sha256, sha256sum -c format;
 #       bundle_manifest.tsv with sizes and components).
@@ -36,12 +38,14 @@ MODE="${1:-}"; shift || true
 COMMIT_REV=""; RELEASE=""; OUT=/mnt/sargasso1/CxSV/bundles; BUNDLE_ID=""
 REFS=/mnt/sargasso1/CxSV/refs; RESOURCES=/mnt/sargasso1/CxSV/resources
 CATALOGUES=/mnt/sargasso1/CxSV/datasets/external_catalogues
+LITERATURE=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --commit) COMMIT_REV="$2"; shift 2 ;;   --release) RELEASE="$2"; shift 2 ;;
         --out) OUT="$2"; shift 2 ;;             --bundle-id) BUNDLE_ID="$2"; shift 2 ;;
         --refs) REFS="$2"; shift 2 ;;           --resources) RESOURCES="$2"; shift 2 ;;
         --catalogues) CATALOGUES="$2"; shift 2 ;;
+        --literature) LITERATURE="$2"; shift 2 ;;
         *) echo "unknown option $1"; sed -n '4,30p' "$0"; exit 1 ;;
     esac
 done
@@ -163,6 +167,22 @@ for man in "$CATALOGUES"/*/*/*.manifest.tsv; do
 done
 step catalogues "$t"
 
+# literature set (roadmap item 11): newest <resources>/literature/<version> unless --literature
+if [ -z "$LITERATURE" ] && [ -d "$RESOURCES/literature" ]; then
+    LITERATURE=$(ls -d "$RESOURCES"/literature/lit-v* 2>/dev/null | sort -V | tail -1 || true)
+fi
+LIT_YAML=""
+if [ -n "$LITERATURE" ] && [ -f "$LITERATURE/MANIFEST.tsv" ]; then
+    LIT_VER=$(basename "$LITERATURE")
+    awk -F'\t' 'NR>1 {print $3"  "$1}' "$LITERATURE/MANIFEST.tsv" | (cd "$LITERATURE" && sha256sum --quiet -c -) \
+        || { echo "literature set $LITERATURE does not match its MANIFEST.tsv"; exit 1; }
+    mkdir -p "$STAGE/resources/literature/$LIT_VER"
+    rsync -a "$LITERATURE/" "$STAGE/resources/literature/$LIT_VER/"
+    LIT_YAML="literature_set:
+  root: \"/bundle/resources/literature/$LIT_VER\""
+    log "literature set $LIT_VER verified against its MANIFEST.tsv"
+fi
+
 # ─── run entry point, site config, metadata, README ─────────────────────────
 cp "$EXPORT/container/run_cxsv.sh" "$STAGE/run_cxsv.sh"; chmod +x "$STAGE/run_cxsv.sh"
 cat > "$STAGE/config/bundle_site.yaml" <<EOF
@@ -188,6 +208,7 @@ scoring_resources:
   omim_genemap2:   null
 external_catalogues:
   root: "/bundle/catalogues"
+$LIT_YAML
 patient_results_root: "/work/results/patient"
 panel_results_root:   "/work/results/panel"
 EOF

@@ -171,6 +171,8 @@ def main():
     ap.add_argument("--caller-vcf", action="append", default=[], help="CALLER=path (Sniffles2, cuteSV, SVIM)")
     ap.add_argument("--parent", action="append", default=[], help="ROLE=junctions.tsv of a sequenced parent")
     ap.add_argument("--catalogue-check", default=None)
+    ap.add_argument("--literature-hits", default=None,
+                    help="private/cxsv_literature_hits.tsv (match_literature.py): annotation columns, no points")
     ap.add_argument("--sample", default="patient")
     a = ap.parse_args()
 
@@ -380,8 +382,11 @@ def main():
         x["tier"] = sc.tier_of(x["total"], P["tiers"])
         x["q"] = q
 
+    lit = {r["Locus_ID"]: r for r in read_tsv(a.literature_hits)} if a.literature_hits else None
+    for x in loci:
+        x["lit"] = (lit or {}).get(x["L"], {})
     loci.sort(key=lambda x: (-x["total"], x["L"]))
-    write_outputs(a, P, loci, cat_names, sex_note)
+    write_outputs(a, P, loci, cat_names, sex_note, lit is not None)
 
 
 def top3(feats):
@@ -389,12 +394,16 @@ def top3(feats):
     return "; ".join(f"{f.name} {f.points:+.2f}" for f in nz[:3]) or "none"
 
 
-def write_outputs(a, P, loci, cat_names, sex_note):
+LIT_COLS = ("Literature_Match", "Literature_Events")
+
+
+def write_outputs(a, P, loci, cat_names, sex_note, with_literature=False):
     base = ["Rank", "Locus_ID", "Chr", "Start", "End", "Size", "Cmplx_Class", "SV_Types", "CxSV_Criteria",
             "Complexity_Tier", "N_Junctions", "N_Breakends", "Max_Interleaved", "Panel_Status", "Panel_Carriers",
             "Panel_Callable", "Panel_Individuals", "Catalogues_Containing", "Catalogue_Max_AF"]
     cats = [f"{n}_{s}" for n in cat_names for s in ("Junctions_Matched", "Max_AF")]
-    cols = base + cats + ["Genes_Affected", "Total_Score", "Tier", "Chromothripsis_Points", "Top_Features"]
+    cols = base + cats + (list(LIT_COLS) if with_literature else []) + \
+        ["Genes_Affected", "Total_Score", "Tier", "Chromothripsis_Points", "Top_Features"]
     cols += [f"{n}_{k}" for n in sc.FEATURE_ORDER for k in ("value", "points")]
     with open(a.out_tsv, "w", newline="") as fh, open(a.out_features, "w", newline="") as ff:
         w = csv.writer(fh, delimiter="\t", lineterminator="\n")
@@ -409,6 +418,7 @@ def write_outputs(a, P, loci, cat_names, sex_note):
             out["Catalogues_Containing"] = x["cat"].get("Catalogues_Containing", "NA")
             out["Catalogue_Max_AF"] = x["cat"].get("Catalogue_Max_AF", "NA")
             out.update({c: x["cat"].get(c, "NA") for c in cats})
+            out.update({c: x["lit"].get(c, "NA") for c in LIT_COLS})
             out["Genes_Affected"] = ",".join(f"{g}:{m}" for g, m in sorted(x["affected"].items())) or "none"
             out["Total_Score"] = f"{x['total']:.2f}"
             out["Tier"] = x["tier"]
@@ -462,6 +472,9 @@ def write_report(a, P, loci, sex_note):
                  f"types {r.get('SV_Types', 'NA')}, criteria {r.get('CxSV_Criteria', 'NA')}")
         L.append("- genes: " + (", ".join(f"{g} ({m})" for g, m in sorted(x["affected"].items())) or "none")
                  + f"; exons disrupted: {x['n_exons']}")
+        if x.get("lit"):
+            L.append(f"- literature (annotation, no points): {x['lit'].get('Literature_Match', 'NA')} "
+                     f"{x['lit'].get('Literature_Events', '.')}")
         if x["segs"]:
             L.append("- copy number: " + "; ".join(f"{c}:{s:,}-{e:,} CN {cn:.2f}" + (" (changed)" if ch else "")
                                                    for c, s, e, cn, st, pl, ch in x["segs"]))

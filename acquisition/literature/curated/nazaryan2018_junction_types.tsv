@@ -1,0 +1,94 @@
+# Nazaryan-Petersen et al. 2018 (PLoS Genet 14:e1007780), S2 Table: junction type per breakpoint junction.
+# S2 Table gives both sides (GRCh37) and, for split-read junctions, a +/- per side. Equal signs = a direct
+# (non-inverting) join, opposite signs = an inverting join; whether a direct join is deletion-like or
+# duplication-like, and which inverting joins are head-to-head (+,+) or tail-to-tail (-,-), is curated here
+# from the Table 1 HGVS description and the CMA copy-number segments of the same case.
+# side1/side2 use the CxSV convention (workflow/lib/cxsv_scoring.record_orientation): '+' = the sequence
+# ENDING at the breakpoint is retained, '-' = the sequence STARTING at it. DEL-like (+,-), DUP-like (-,+),
+# inversion-type (+,+)/(-,-). basis: hgvs = derived from the Table 1 derivative; cn = direct join typed by
+# the CMA segments flanking it; sign = inverting join from the S2 signs, head/tail assigned by alternation
+# (not resolvable from the tables; affects only the fold-back/join-balance features).
+case	junction	svtype	side1	side2	basis
+P2109_190	1	INV	+	+	hgvs
+P2109_190	2	INV	-	-	hgvs
+P72	1	INV	+	+	hgvs
+P72	2	INV	-	-	hgvs
+P2109_302	1	INV	+	+	hgvs
+P2109_302	2	INV	-	-	hgvs
+P2109_123	1	INV	+	+	hgvs
+P2109_123	2	INV	-	-	hgvs
+P2109_188	1	INV	+	+	hgvs
+P2109_188	2	DEL	+	-	sign;hgvs_conflict
+P2109_188	3	DEL	+	-	hgvs
+P81	1	DEL	+	-	hgvs
+P81	2	INV	+	+	hgvs
+P81	3	INV	-	-	hgvs
+P81	4	DEL	+	-	hgvs
+P2046_133	1	DEL	+	-	cn
+P2046_133	2	INV	+	+	sign
+P2046_133	3	INV	-	-	sign
+P2046_133	4	DEL	+	-	cn
+P2046_133	5	INV	+	+	sign
+P2046_133	6	DEL	+	-	cn
+P2046_133	7	DEL	+	-	cn
+P00	1	INV	+	+	sign
+P00	2	INV	-	-	sign
+P00	3	INV	+	+	sign
+P00	4	DEL	+	-	cn
+P00	5	DUP	-	+	hgvs
+P00	6	DEL	+	-	cn
+P00	7	INV	-	-	sign
+P06	1	DUP	-	+	hgvs
+P06	2	DEL	+	-	hgvs
+P4855_511	1	DUP	-	+	hgvs
+P4855_511	2	DEL	+	-	hgvs
+P2109_150	1	DUP	-	+	hgvs
+P2109_150	2	DEL	+	-	hgvs
+P2109_151	1	INV	-	-	hgvs
+P2109_151	2	INV	+	+	hgvs
+P74	1	DUP	-	+	cn
+P74	2	DEL	+	-	cn
+P4855_512	1	INV	+	+	sign
+P4855_512	2	INV	-	-	sign
+P4855_512	3	DUP	-	+	hgvs
+P5513_206	1	INV	-	-	hgvs
+P5513_206	2	INV	+	+	hgvs
+P5513_206	3	DEL	+	-	hgvs
+P5513_206	4	INV	-	-	hgvs
+P5513_206	5	INV	+	+	hgvs
+P2109_162	1	DEL	+	-	cn
+P2109_162	2	INV	+	+	sign
+P2109_162	3	DEL	+	-	cn
+P2109_162	4	INV	-	-	sign
+P5513_116	1	DEL	+	-	hgvs
+P5513_116	2	INV	+	+	hgvs
+P5371_204	1	INV	+	+	sign
+P5371_204	2	INV	-	-	sign
+P5371_204	3	DEL	+	-	cn
+P5371_204	4	DUP	-	+	hgvs
+P2109_185	1	INV	+	+	sign
+P2109_185	2	DEL	+	-	cn
+P2109_185	3	INV	-	-	sign
+P2109_185	4	INV	+	+	sign
+P2109_176	1	INV	+	+	hgvs
+P2109_176	2	INV	-	-	sign
+P2109_176	3	INV	+	+	sign
+P2109_176	4	DEL	+	-	cn;approximate
+P2109_176	5	INV	-	-	hgvs
+P2109_176	6	INV	+	+	sign
+P2109_176	7	DUP	-	+	hgvs
+P2109_176	8	DEL	+	-	hgvs
+P1426_301	1	DEL	+	-	cn
+P1426_301	2	INV	+	+	sign
+P1426_301	3	INV	-	-	sign
+P1426_301	4	DEL	+	-	cn
+P1426_301	5	INV	+	+	sign
+P1426_301	6	DEL	+	-	cn
+P1426_301	7	DEL	+	-	cn;approximate
+P1426_301	8	DEL	+	-	cn
+P1426_301	9	DEL	+	-	cn
+P1426_301	10	DEL	+	-	cn
+P1426_301	11	DEL	+	-	cn;approximate
+P1426_301	12	.	.	.	one_sided
+P1426_301	13	.	.	.	one_sided
+P1426_301	14	.	.	.	one_sided
