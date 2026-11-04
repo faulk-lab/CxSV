@@ -31,6 +31,9 @@ jobs:
       - name: run panel + patient on the synthetic dataset and check results
         shell: bash -el {0}
         run: CORES=4 bash tests/synthetic/run_synthetic.sh "$RUNNER_TEMP/synth"
+      - name: plot scripts (locale-independent output, per-sample call ids)
+        shell: bash -el {0}
+        run: bash tests/synthetic/check_plot_scripts.sh "$RUNNER_TEMP/plots"
       - name: sharded panel build (two local nodes) must reproduce the unsharded panel
         shell: bash -el {0}
         run: CORES=4 bash tests/synthetic/run_panel_build_synthetic.sh "$RUNNER_TEMP/synth"
