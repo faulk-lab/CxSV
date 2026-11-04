@@ -233,7 +233,8 @@ chr6:104,464,782–104,490,439, matches COL17_TL010 J51, the common deletion
 above; it is `public`. The first version of the region level matched 386 loci
 genome-wide on bare overlap, because large published regions (for example the
 143 Mb EIS24_P8.1) overlap many loci. The region level now requires reciprocal
-overlap of at least `region_min_overlap` (0.5).
+overlap of at least `region_min_overlap` (0.5). Re-run on the same loci, the
+annotation gives 3 event, 14 junction, 0 region and 1,241 none (1,258 loci).
 
 ## 4. Long-span exclusion: answer to the lead's question
 
