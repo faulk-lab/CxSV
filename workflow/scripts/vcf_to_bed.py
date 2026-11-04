@@ -24,6 +24,20 @@ BND records
   represented in the clustering step so inter-chromosomal CxSV loci
   are captured.
 
+Long span records (roadmap item 13)
+-----------------------------------
+  A DEL/DUP/INV whose interval is longer than --span-link-max bp is written as
+  its two breakends (POS and END, each +- --window bp; the END row's ID gets the
+  suffix "_end"), like a BND, instead of as one interval. Written as one
+  interval, such a record joins every SV it spans into one cluster: a 25.7 Mb
+  record across the chr17 pericentromere put 224 records into one 25.8 Mb
+  cluster, which classify_cxsv.py then drops whole as oversized. As two
+  breakends it links only to SVs near its own breakpoints. The record is still
+  one junction of the locus (classify_cxsv.py strips "_end" like "_mate").
+  The value equals cxsv_params.max_cluster_size: a record longer than that
+  would make any cluster containing it oversized on its own, so clusters that
+  are not oversized are unchanged. 0 disables.
+
 TRA records
 -----------
   Some callers (e.g. SVIM) emit TRA with CHR2 and END2 in INFO rather
@@ -41,7 +55,7 @@ Output columns
 
 Usage
 -----
-  python vcf_to_bed.py --vcf input.vcf --out output.bed [--window 1]
+  python vcf_to_bed.py --vcf input.vcf --out output.bed [--window 1] [--span-link-max 500000]
 """
 
 import argparse
@@ -121,10 +135,11 @@ def emit_records(chrom, start, end, svtype, vid, is_inter="intra"):
     yield f"{chrom}\t{start}\t{end}\t{svtype}\t{vid}\t{is_inter}"
 
 
-def process_vcf(vcf_path: str, window: int):
+def process_vcf(vcf_path: str, window: int, span_link_max: int = 0, counts: dict = None):
     """
     Generator: yield BED lines for each VCF record.
-    BND/TRA yield 2 lines each (both breakend positions).
+    BND/TRA, and DEL/DUP/INV longer than span_link_max (> 0), yield 2 lines
+    each (both breakend positions). counts["split"] counts the latter.
     """
     with open(vcf_path) as fh:
         for line in fh:
@@ -154,6 +169,13 @@ def process_vcf(vcf_path: str, window: int):
                     )
                     continue
                 start, end = coords
+                if span_link_max > 0 and svtype != "INS" and end - start > span_link_max:
+                    if counts is not None:
+                        counts["split"] = counts.get("split", 0) + 1
+                    yield from emit_records(chrom, max(0, start - window), start + window, svtype, vid, "intra")
+                    yield from emit_records(chrom, max(0, end - window), end + window, svtype,
+                                            f"{vid}_end", "intra")
+                    continue
                 yield from emit_records(chrom, start, end, svtype, vid, "intra")
 
             # ── BND records ────────────────────────────────────────────────
@@ -227,15 +249,21 @@ def main():
     parser.add_argument("--out",    required=True, help="Output BED")
     parser.add_argument("--window", type=int, default=DEFAULT_WINDOW,
                         help=f"bp window around BND/TRA breakpoints (default: {DEFAULT_WINDOW})")
+    parser.add_argument("--span-link-max", type=int, default=0,
+                        help="DEL/DUP/INV longer than this many bp are written as their two "
+                             "breakends instead of one interval (cxsv_params.span_link_max; 0 = off)")
     args = parser.parse_args()
 
     n_written = 0
+    counts = {}
     with open(args.out, "w") as out_fh:
-        for bed_line in process_vcf(args.vcf, args.window):
+        for bed_line in process_vcf(args.vcf, args.window, args.span_link_max, counts):
             out_fh.write(bed_line + "\n")
             n_written += 1
 
     print(f"vcf_to_bed: wrote {n_written} BED records to {args.out}", file=sys.stderr)
+    print(f"vcf_to_bed: {counts.get('split', 0)} DEL/DUP/INV records longer than {args.span_link_max} bp "
+          f"written as two breakends", file=sys.stderr)
 
 
 if __name__ == "__main__":

@@ -263,8 +263,9 @@ def collapse(junctions, distance, order, ins_len_ratio=0.5):
 
 # ─── CxSV locus membership ───────────────────────────────────────────────────
 def canonical_id(vid):
-    """Strip the _mate/_dest suffixes vcf_to_bed.py adds to breakend rows."""
-    for suf in ("_mate", "_dest"):
+    """Strip the _mate/_dest/_end suffixes vcf_to_bed.py adds to breakend rows
+    (_end: the END breakend of a DEL/DUP/INV longer than span_link_max)."""
+    for suf in ("_mate", "_dest", "_end"):
         if vid.endswith(suf):
             return vid[: -len(suf)]
     return vid

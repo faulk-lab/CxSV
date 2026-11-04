@@ -24,6 +24,9 @@ Inputs
 ------
 --bed   clusters.bed (bedtools cluster on merged_sv.bed):
         CHROM START END SVTYPE ID IS_INTER CLUSTER_ID  (cluster membership; locus span)
+        Breakend rows carry ID suffixes _mate / _dest (BND, TRA) or _end (the END of
+        a DEL/DUP/INV longer than cxsv_params.span_link_max, roadmap item 13); they
+        are stripped, so such a record is one junction of each cluster it touches.
 --vcf   merged_sv.vcf (the records' junctions and SUPP_VEC, cxsv_junctions.parse_vcf)
 --fai   reference .fai (contig order of junction ends)
 
@@ -97,7 +100,10 @@ def main():
     p.add_argument("--max-cluster-size", type=int, default=500000,
                    help=("Clusters spanning more than this many bp come from bedtools chaining "
                          "(SV A -> B -> C ... over Mb), not from one localised rearrangement; "
-                         "they are written with IsCxSV=NO. 0 disables the filter."))
+                         "they are written with IsCxSV=NO. 0 disables the filter. Since roadmap "
+                         "item 13 records longer than this are clustered at their breakends "
+                         "(vcf_to_bed.py --span-link-max), so what remains oversized are dense "
+                         "runs of short SVs."))
     a = p.parse_args()
     params = {"collapse_distance": a.collapse_distance, "ins_len_ratio": a.ins_len_ratio,
               "composite_fraction": a.composite_fraction, "min_breakpoints": a.min_bp,

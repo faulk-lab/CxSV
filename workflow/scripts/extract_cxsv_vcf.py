@@ -5,12 +5,23 @@ extract_cxsv_vcf.py
 Extract records from a merged VCF that overlap CxSV loci defined in
 cxsv_summary.tsv (output of the classify_cxsv Snakemake rule).
 
+A record is normally extracted when its interval POS..END overlaps a locus.
+Two kinds of record are not one interval on their chromosome and are extracted
+only when one of their breakends lies in a locus (roadmap item 13): a
+DEL/DUP/INV longer than --span-link-max bp (vcf_to_bed.py clusters it at its
+two breakends only, so the loci inside its interval are not its loci), and a
+record whose second end is on another chromosome (CHR2; END is then a position
+on CHR2, not on CHROM). Every record of a locus has a breakend in the locus,
+so no locus loses one of its own records. Both apply when --span-link-max > 0;
+with 0 every record is extracted by interval overlap (the rule before item 13).
+
 Usage
 -----
 python extract_cxsv_vcf.py \
     --vcf results/final/long_read_filtered.vcf \
     --summary results/final/cxsv_summary.tsv \
-    --output results/final/cxsv_only.vcf
+    --output results/final/cxsv_only.vcf \
+    [--span-link-max 500000]
 """
 
 import argparse
@@ -79,6 +90,9 @@ def main():
     parser.add_argument("--vcf",     required=True, help="Input VCF file")
     parser.add_argument("--summary", required=True, help="cxsv_summary.tsv")
     parser.add_argument("--output",  required=True, help="Output CxSV-only VCF")
+    parser.add_argument("--span-link-max", type=int, default=0,
+                        help="DEL/DUP/INV longer than this are extracted only when a breakend lies in a "
+                             "locus (cxsv_params.span_link_max; 0 = interval overlap for every record)")
     args = parser.parse_args()
 
     regions = load_cxsv_regions(args.summary)
@@ -117,7 +131,22 @@ def main():
                             pass
                         break
 
-            if overlaps(chrom, pos, end, regions):
+            chr2 = chrom
+            for field in info.split(";"):
+                if field.startswith("CHR2="):
+                    chr2 = field[5:]
+                    break
+            svtype = ""
+            for field in info.split(";"):
+                if field.startswith("SVTYPE="):
+                    svtype = field[7:]
+                    break
+            if args.span_link_max > 0 and (chr2 != chrom or (svtype in ("DEL", "DUP", "INV")
+                                                             and abs(end - pos) > args.span_link_max)):
+                keep = overlaps(chrom, pos, pos, regions) or overlaps(chr2, end, end, regions)
+            else:
+                keep = overlaps(chrom, pos, end, regions)
+            if keep:
                 vcf_out.write(line)
                 n_written += 1
 

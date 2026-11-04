@@ -72,15 +72,22 @@ rule merge_sv_callers:
 
 
 rule sample_vcf_to_bed:
-    """Merged VCF -> BED for clustering; each BND/TRA emits both ends."""
+    """
+    Merged VCF -> BED for clustering. Each BND/TRA emits both ends; so does
+    each DEL/DUP/INV longer than cxsv_params.span_link_max (roadmap item 13),
+    which otherwise chains every SV it spans into one oversized cluster.
+    """
     input:
         vcf    = f"{S}/merged_sv.vcf",
         script = f"{SCRIPTS}/vcf_to_bed.py"
     output: f"{S}/cxsv/merged_sv.bed"
-    params: window = config["cxsv_params"]["bnd_window"]
+    params:
+        window   = config["cxsv_params"]["bnd_window"],
+        link_max = config["cxsv_params"]["span_link_max"]
     log:    f"{S}/logs/vcf_to_bed.log"
     shell:
-        "python {input.script} --vcf {input.vcf} --out {output} --window {params.window} 2> {log}"
+        "python {input.script} --vcf {input.vcf} --out {output} --window {params.window} "
+        "--span-link-max {params.link_max} 2> {log}"
 
 
 rule sample_cluster_sv:
@@ -156,10 +163,11 @@ rule sample_extract_cxsv_vcf:
         vcf     = f"{S}/merged_sv.vcf",
         summary = f"{S}/cxsv/cxsv_summary.tsv"
     output: f"{S}/cxsv/cxsv_only.vcf"
+    params: link_max = config["cxsv_params"]["span_link_max"]
     log:    f"{S}/logs/extract_cxsv_vcf.log"
     shell:
         "python {SCRIPTS}/extract_cxsv_vcf.py --vcf {input.vcf} --summary {input.summary} "
-        "--output {output} > {log} 2>&1"
+        "--span-link-max {params.link_max} --output {output} > {log} 2>&1"
 
 
 rule sample_annotate_cxsv:
