@@ -41,6 +41,7 @@ t0=$(date +%s)
 [ -s "$CAL_ROOT/locus_callable.tsv.gz" ] || $X python "$CODE/calibration/graded_privacy/locus_callability.py" \
    --sample-manifest "$SAMPLE_MANIFEST" --samples-root "$SAMPLES_ROOT" --callability-dir "$RELEASE/callability" \
    --flank "$flank" --families "$CAL_ROOT/families.tsv" --threads 16 --out "$CAL_ROOT/locus_callable.tsv.gz" \
+   ${LOCUS_CALLABILITY_EXTRA:-} \
    2> "$CAL_ROOT/logs/locus_callability.log" || exit 1
 echo "locus callability wall_s $(( $(date +%s) - t0 ))"; t0=$(date +%s)
 [ -f "$CAL_ROOT/leaveout.ok" ] || { $X python "$CODE/calibration/graded_privacy/leaveout_status.py" --release-dir "$RELEASE" \

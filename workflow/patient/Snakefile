@@ -24,6 +24,7 @@ Config (later files override earlier ones; nested keys merge):
     config/calling.yaml   shared + fingerprinted calling/discovery parameters
     config/patient.yaml   patient runs, panel release, matching settings
     config/scoring.yaml   catalogues, scoring resources, weights, tiers, patient info
+    config/library_qc.yaml  library QC calibration and conservative-mode switch (not fingerprinted)
     --configfile ...      site overlay: paths, patient sample sheet
 """
 
@@ -36,6 +37,7 @@ PROJECT_DIR = os.path.abspath(os.path.join(workflow.basedir, "..", ".."))
 configfile: os.path.join(PROJECT_DIR, "config", "calling.yaml")
 configfile: os.path.join(PROJECT_DIR, "config", "patient.yaml")
 configfile: os.path.join(PROJECT_DIR, "config", "scoring.yaml")
+configfile: os.path.join(PROJECT_DIR, "config", "library_qc.yaml")
 
 WORKFLOW_NAME = "patient"
 COHORT_SPECS  = config.get("patient_runs") or {}
@@ -49,6 +51,7 @@ include: "../rules/junctions.smk"
 include: "../rules/sample_report.smk"
 include: "../rules/fingerprint.smk"
 include: "../rules/caller_checks.smk"
+include: "../rules/library_qc.smk"
 include: "../rules/patient_private.smk"
 include: "../rules/patient_scoring.smk"
 
@@ -59,6 +62,7 @@ rule all:
         f"{RESULTS_ROOT}/panel_compatibility.txt",
         per_sample(f"{S}/sv_summary.txt"),
         per_sample(f"{S}/qc/svim_check.tsv"),
+        per_sample(f"{S}/qc/library_qc.tsv"),
         per_sample(f"{S}/private/cxsv_panel_status.tsv"),
         per_sample(f"{S}/private/private_cxsv_master_table.tsv"),
         per_sample(f"{S}/private/private_cxsv.vcf"),

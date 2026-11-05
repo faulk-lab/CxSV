@@ -1,0 +1,16 @@
+metric	value
+junction_sites_old	1290034
+junction_sites_new	1100554
+sites_removed	181556
+sites_shifted	85230
+sites_carriers_dropped	129080
+removed_sites_with_1_carrier	179248
+cxsv_loci_old	13488
+cxsv_loci_new	11382
+loci_absent_in_new	5027
+loci_new_in_new	2921
+cxsv_calls_old	1733409
+cxsv_calls_of_flagged_libraries	37485
+truth_hits_removed	1
+truth_hits_shifted	0
+truth_hits_carriers_dropped	3

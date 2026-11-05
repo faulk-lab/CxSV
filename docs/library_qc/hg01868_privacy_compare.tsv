@@ -1,0 +1,3 @@
+Locus_ID	event	Cmplx_Class	Panel_Status_a	Panel_Status_b	Panel_Carriers_a	Panel_Carriers_b	privacy_points_a	privacy_points_b	Total_a	Total_b	Tier_a	Tier_b
+chr14:3596327-3667875	.	Multi_breakpoint_cluster	public	shared_junctions	1	0	-1.00	-1.00	-1.25	-1.25	Benign_likely	Benign_likely
+chr8:45565576-45670975	.	Multi_breakpoint_cluster	shared_junctions	public	0	1	-1.00	-1.00	-1.30	-1.30	Benign_likely	Benign_likely

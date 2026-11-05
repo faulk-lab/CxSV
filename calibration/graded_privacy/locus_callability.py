@@ -108,6 +108,9 @@ def main():
     ap.add_argument("--families", required=True)
     ap.add_argument("--threads", type=int, default=8)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--skip-individuals-without-mask", action="store_true",
+                    help="count only individuals with a mask in --callability-dir as panel individuals "
+                         "(scoring genomes left out of the release, docs/LIBRARY_QC.md)")
     a = ap.parse_args()
     t0 = time.time()
     fams = load_families(a.families)
@@ -162,9 +165,11 @@ def main():
     for s in samples:
         masks[s["individual_id"]].append(s["mask"])
     missing = [i for i in ind_ids if i not in masks]
-    if missing:
+    if missing and not a.skip_individuals_without_mask:
         sys.exit(f"individuals without a callability mask: {missing[:10]}")
-    tasks = [(ind_code[i], masks[i], fam_code[i], ind_code[i]) for i in ind_ids]
+    if missing:
+        print(f"{len(missing)} individuals without a mask are not panel individuals here", file=sys.stderr)
+    tasks = [(ind_code[i], masks[i], fam_code[i], ind_code[i]) for i in ind_ids if i in masks]
     chunks = [tasks[k::a.threads * 4] for k in range(a.threads * 4)]
     tot = [np.zeros(len(loci_with), dtype=np.int32) for _ in range(3)]
     with mp.get_context("fork").Pool(a.threads) as pool:

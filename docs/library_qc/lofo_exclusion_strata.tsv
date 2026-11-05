@@ -1,0 +1,8 @@
+stratum	n	T1_r2	T1_excl_panel	T1_r2_conservative_flagged	T2_r2	T2_excl_panel
+all 1,619	1619	0.251	0.252	0.182	3.33	3.34
+24 flagged	24	7.0	7.042	2.292	38.42	39.12
+1,595 not flagged	1595	0.15	0.15	0.15	2.8	2.8
+ONT LRSC R10	247	0.32	0.32	0.215	4.31	4.3
+ONT LRSC R9	220	0.141	0.141	0.132	3.69	3.69
+ONT 1kGP-1019	1017	0.275	0.276	0.192	3.09	3.11
+PacBio HiFi	135	0.126	0.126	0.126	2.73	2.75
