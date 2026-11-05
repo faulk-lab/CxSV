@@ -1,0 +1,5 @@
+arm	PC_E01_E09	PC_E02	PC_E07	PC_E10	PC_E11_E12	PC_E13	PC_host_loci	PC_host_Tier1	PC_host_Tier2	HG01868_loci	HG01868_Tier1	HG01868_Tier2	testA_called_of_63	testA_Tier1
+panel-v1.1 as built (bundle 65ef970)	9/9 Tier1 PASS	private Complex_inversion Tier1 1.95	BND_cluster Tier1 1.55	Tier3 0.26 PASS	not CxSV PASS	private Tier3 0.08 (expected FAIL vs real panel)	1234	0	4	1087	0	5	8	7
+v1.1 + svim_lowq	9/9 Tier1 PASS	private Complex_inversion Tier1 1.95	BND_cluster Tier1 1.55	Tier3 0.26 PASS	not CxSV PASS	private Tier3 0.08	1208	0	4	1076	0	4	8 (unchanged by construction)	7
+v1.1 + svim_lowq_any	9/9 Tier1 PASS	private Complex_inversion Tier1 1.95	BND_cluster Tier1 1.55	Tier3 0.26 PASS	not CxSV PASS	private Tier3 0.08	1160	0	4	1016	0	4	8 (unchanged by construction)	7
+v1.1 + single_bnd	8/9 (E07 FAIL: not called)	private Complex_inversion Tier1 1.95	not called (its SVIM-only QUAL-13 junction is excluded)	Tier3 0.26 PASS	not CxSV PASS	private Tier3 0.08	1173	0	4	1065	0	4	8 (unchanged by construction)	7

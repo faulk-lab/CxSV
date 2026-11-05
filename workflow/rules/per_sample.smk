@@ -83,15 +83,22 @@ rule sample_vcf_to_bed:
         script = f"{SCRIPTS}/vcf_to_bed.py"
     output:
         bed  = f"{S}/cxsv/merged_sv.bed",
-        long = f"{S}/cxsv/long_span_records.tsv"
+        long = f"{S}/cxsv/long_span_records.tsv",
+        single = f"{S}/cxsv/single_caller_filtered.tsv"
     params:
         window   = config["cxsv_params"]["bnd_window"],
         link_max = config["cxsv_params"]["span_link_max"],
-        rule     = config["cxsv_params"]["long_span_rule"]
+        rule     = config["cxsv_params"]["long_span_rule"],
+        # R10-excess diagnosis (not deployed): single-caller breakend records left out of
+        # discovery (scripts/vcf_to_bed.py --single-caller-bnd-rule); default keep = main
+        single   = config["cxsv_params"].get("single_caller_bnd_rule", "keep"),
+        svim_q   = config["cxsv_params"].get("svim_min_qual_discovery", 10)
     log:    f"{S}/logs/vcf_to_bed.log"
     shell:
         "python {input.script} --vcf {input.vcf} --out {output.bed} --window {params.window} "
-        "--span-link-max {params.link_max} --long-span-rule {params.rule} --long-out {output.long} 2> {log}"
+        "--span-link-max {params.link_max} --long-span-rule {params.rule} --long-out {output.long} "
+        "--single-caller-bnd-rule {params.single} --svim-min-qual {params.svim_q} "
+        "--filtered-out {output.single} 2> {log}"
 
 
 rule sample_cluster_sv:

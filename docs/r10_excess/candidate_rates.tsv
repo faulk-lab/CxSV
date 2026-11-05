@@ -1,0 +1,6 @@
+arm	T1/genome all	T1/genome R10	T1/genome R9	T1/genome ONT-1019	T1/genome PacBio	T1/genome 1,608 others	T1/genome 11 noisy	T2/genome all	share genomes T1	CxSV loci/genome
+panel-v1.0	0.457	1.591	0.273	0.265	0.126	0.2	38.091	4.353	0.154	979.698
+panel-v1.1 as built	0.851	3.911	0.382	0.304	0.141	0.248	89.0	6.502	0.162	1092.03
+v1.1 + svim_lowq	0.251	0.32	0.141	0.275	0.126	0.179	10.818	3.326	0.139	1070.666
+v1.1 + svim_lowq_any	0.17	0.316	0.15	0.149	0.096	0.147	3.636	2.622	0.116	1001.088
+v1.1 + single_bnd	0.218	0.174	0.136	0.264	0.089	0.147	10.636	3.183	0.13	1054.371

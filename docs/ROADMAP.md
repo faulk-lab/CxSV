@@ -116,7 +116,7 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
 | 10 | Graded privacy penalty for partly matched loci | done 2026-11-03; merged (PR #17) | `main`, docs/SCORING.md section 6b |
 | 11 | Curated literature set of pathogenic CxSVs | **done 2026-11-04**: `lit-v1.0` (154 events, 315 junctions on hs1), tests A and B; "top tier" not met on main (7/63 Tier 1), proposals for item 13 | PR #19, `item11-literature-set-2`, docs/LITERATURE_SET.md |
 | 12 | Full panel build and first real release | **done 2026-11-03**: release `cxsv-panel-20261102-cd7e1d194cd4`, tag `panel-v1.0`; bundle validated offline (check 7: one locale-dependent plot, data identical); positive control run against it | `main` (tag), `validation-panel-v1.0`, below |
-| 13 | Oversized-cluster blind spot | **done 2026-11-04** (fix + panel evaluation); panel rebuild awaits decision 14 | `main` (`de23a0e`), `item13-oversized-clusters-2`, docs/OVERSIZED_CLUSTERS.md |
+| 13 | Oversized-cluster blind spot | **done 2026-11-04** (fix + panel evaluation); panel-v1.1 rebuilt and validated, **on hold** (healthy Tier 1 +86%, docs/R10_EXCESS.md) | `main` (`de23a0e`), `item13-oversized-clusters-2`, docs/OVERSIZED_CLUSTERS.md |
 | – | Small fixes 2026-11 (8 fixes from the panel-v1.0 validation) | done 2026-11-04; awaiting merge | `small-fixes-2026-11`, below |
 
 ---
@@ -408,6 +408,19 @@ their breakends instead; that rule raised healthy Tier 1 to 0.371 and gave the
 host 3 Tier-1 calls, and is replaced (kept as `long_span_rule: breakends`).
 Also fixed: `calling_fingerprint` was not re-made after a code change in an
 existing build tree.
+
+**panel-v1.1 candidate (2026-11-04; docs/PANEL_BUILD.md, docs/R10_EXCESS.md).**
+Rebuilt downstream-only from `main` 65ef970 as `cxsv-panel-20261104-64e10c1b1363`:
+VERIFIED, junction sites identical to v1.0, CxSV loci 14,428 -> 17,578, blind span
+334 -> 1.40 Mb median per genome. Its bundle passed offline validation (8/8) and the
+positive control (E02 Tier 1, host 0 Tier 1). Full-panel healthy LOFO Tier 1 rose
+0.457 -> 0.851 per genome (stop rule +50%), so the release is **on hold, not tagged**.
+Diagnosis: 88% of the added Tier-1 calls are in 11 genomes already noisy in v1.0,
+seven LRSC R10 genomes carrying 3,753-14,258 SVIM-only translocation records at
+SVIM's quality floor that cluster with real deletions. Candidate discovery rule
+`single_caller_bnd_rule: svim_lowq` (branch `r10-excess-diagnosis`, not merged)
+gives 0.251 per genome (R10 0.320), with every positive-control event, the host,
+HG01868 and literature test A unchanged; awaiting the PI's decision.
 
 
 ### 8. Read-level mechanism axes (PI criteria 3, 4, 6) — on hold (decision 6)

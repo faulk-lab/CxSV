@@ -552,3 +552,72 @@ are the build ledger and per-node cost summary for the release.
 - **(b)** Projected hours of the per-sample step for each dispatch option
   (make_shards.py, measured cost model). The dashed line is the NAS read floor:
   80.8 TB at 630 MB/s.
+
+## Downstream-only rebuild (panel-v1.1 candidate, 2026-11-04)
+
+When a change touches only the rules after `merge_sv_callers` (item 13: CxSV
+discovery), a panel is rebuilt from an existing build's upstream outputs
+instead of re-calling 1,619 genomes. `scripts/panel_build/rebuild_downstream.sh`
+does it; panel-v1.1 (`cxsv-panel-20261104-64e10c1b1363`, from `main` 65ef970)
+was built this way from panel-v1.0. **That release is on hold**
+(docs/R10_EXCESS.md).
+
+1. **New build root**, e.g. `/mnt/sargasso1/CxSV/build/panel-v1.1`. The release
+   path is `<results>/release`, so a rebuild inside the old root would
+   overwrite the old release.
+   - `NEW/code`: `git archive` of the release commit, plus `COMMIT`. The driver
+     also writes `code/workflow/COMMIT`, which release.json's `source.commit`
+     reads.
+   - `NEW/aggregate.yaml`: `make_aggregate_yaml.py` writes it from the old one,
+     with the new results root and the release description, which records the
+     reuse provenance.
+2. **Identity of the held outputs.** Callers, filters, merge,
+   `check_cram_reference`, `tool_versions`, `callable_mask`,
+   `panel_callability_masks` and `panel_sniffles_population` are not re-run.
+   - Check that their rules, their config and the image are unchanged since the
+     old build (`git diff`).
+   - Where a script changed, re-run it on a sample: `check_callable_identity.sh`
+     ran small-fixes' `callable_mask.sh` on 6 genomes (CRAM 3.0, CRAM 3.1, R10,
+     R9, PacBio), and all 6 masks were byte-identical.
+3. **Reuse by hard links.** The NAS (CIFS) has no symlinks. `link_upstream.py`
+   hard-links every old file except:
+   - `release/`;
+   - `logs/` and `benchmarks/`, except `--include-log svim.log`, which
+     `check_svim_output` reads;
+   - every output, log and benchmark that the new code's dry run (against the old
+     tree) plans.
+
+   So no job ever writes to a shared inode. The inventory
+   (`provenance/reused_upstream.tsv`: 58,646 files, 1.41 TB, no copy) is
+   re-checked after the build with `--verify`.
+4. **Run.** `CXSV_SIF=… CXSV_REBUILD_WORKDIR=<node-local dir> bash
+   scripts/panel_build/rebuild_downstream.sh OLD NEW CORES`.
+   - It uses `--forcerun sample_vcf_to_bed calling_fingerprint`; the work
+     directory has no per-sample metadata.
+   - `--allowed-rules` is every rule except the held ones.
+   - The dry run must plan no held-rule job and no hard-linked output.
+   - Afterwards it greps the worker-error logs, verifies the inventory and
+     verifies the release.
+   - `--resume` continues a partial run.
+5. **Measured for panel-v1.1** (freya, 20 cores):
+   - 12,909 jobs (12,975 planned; 66 `check_svim_output` outputs kept from a
+     first attempt).
+   - The per-sample stage took 2.5 h, limited by the Snakemake scheduler
+     (about 84 short jobs/min).
+   - The aggregate took 1.4 h (`build_panel_sites` 41 min, Sniffles2 sites
+     33 min). Total 3 h 53 min.
+   - A first attempt with `.snakemake` on the NAS ran at about 50 jobs/min and
+     was stopped.
+   - The release VERIFIED: 1,634 files, manifest `6f6a3431…`. Junction sites
+     are identical to v1.0 apart from the version column; CxSV loci went from
+     14,428 to 17,578; the blind span fell from 334 to 1.40 Mb median per
+     genome.
+
+| file | role |
+|---|---|
+| `scripts/panel_build/rebuild_downstream.sh` | driver (dry-run checks, run, post-run checks; `--dry-run`, `--resume`) |
+| `scripts/panel_build/link_upstream.py` | hard-link farm, provenance inventory, `--verify` |
+| `scripts/panel_build/make_aggregate_yaml.py` | new build's aggregate config |
+| `scripts/panel_build/check_callable_identity.sh` | held callability masks against the new code |
+| `scripts/panel_build/compare_builds.py` | per-genome loci, blind span, junction identity, old vs new |
+| `tests/unit/test_link_upstream.py` | link selection, verify, refusal (4 tests) |
