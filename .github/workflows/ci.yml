@@ -40,6 +40,9 @@ jobs:
       - name: sharded panel build (two local nodes) must reproduce the unsharded panel
         shell: bash -el {0}
         run: CORES=4 bash tests/synthetic/run_panel_build_synthetic.sh "$RUNNER_TEMP/synth"
+      - name: reuse of caller outputs under a newer bundle (snakemake --touch, tests/lab/lib/reuse_callers.sh)
+        shell: bash -el {0}
+        run: bash tests/synthetic/check_rerun_touch.sh "$RUNNER_TEMP/rerun_touch"
       - name: keep logs on failure
         if: failure()
         uses: actions/upload-artifact@v4

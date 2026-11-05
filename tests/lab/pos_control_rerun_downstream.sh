@@ -24,9 +24,19 @@
 #                 still junction-level against the bundle's panel release, whose
 #                 loci were made with the bundle's code (exploratory use only)
 #   4. scoring    CODE's score_pos_control.py against the same truth (+ ADDONS)
+#   1b. reference  when BUNDLE is not the bundle of the source run (SRC_BUNDLE, default:
+#                 the bundle named in SRC_WORKDIR/pos_control_full_genome.log, next to
+#                 BUNDLE), both ref_cache/md5_manifest.tsv must be byte-identical; then
+#                 the reference check, callers, filters and merge are marked up to date
+#                 with `snakemake --touch merged_sv.vcf` (tests/lab/lib/reuse_callers.sh). Their
+#                 outputs are not re-made; without this, the newer cache's mtimes would
+#                 re-run every caller and the step-2 guard would stop the run. A
+#                 differing manifest stops the rerun: use pos_control_full_genome.sh
 # ADDONS / EVENTS as for pos_control_full_genome.sh. LITERATURE=DIR (a literature
 # set, acquisition/literature) also turns on the literature_match annotation.
 # DRY_ONLY=1 stops after step 2.
+# STRICT_FINGERPRINT=1 writes allow_fingerprint_mismatch: false (the run stops unless
+# CODE's calling fingerprint equals the bundle's panel release).
 # =============================================================================
 set -euo pipefail
 BUNDLE="$(cd "$1" && pwd)"; SRCW="$(cd "$2" && pwd)"; W="$(mkdir -p "$3" && cd "$3" && pwd)"
@@ -39,6 +49,8 @@ SIF="$BUNDLE/container/cxsv-pipeline.sif"
 RT=$(command -v singularity || command -v apptainer)
 S_REL=results/patient/samples/pos_control/pos_control
 hdr() { echo; echo "== $* ($(date '+%F %T'))"; }
+# shellcheck source=tests/lab/lib/reuse_callers.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib/reuse_callers.sh"
 
 COMMIT=$(git -C "$CODE" rev-parse HEAD 2>/dev/null || echo unknown)
 echo "bundle $CXSV_BUNDLE_ID (SIF $CXSV_SIF_SHA256), code $CODE at $COMMIT"
@@ -56,7 +68,7 @@ if [ -n "${LITERATURE:-}" ]; then
 fi
 cat > "$W/run/config/rerun_downstream.yaml" <<YAML
 # written by tests/lab/pos_control_rerun_downstream.sh
-allow_fingerprint_mismatch: true
+allow_fingerprint_mismatch: $([ "${STRICT_FINGERPRINT:-0}" = 1 ] && echo false || echo true)
 $LITCFG
 YAML
 
@@ -66,10 +78,28 @@ X=("$RT" exec --containall --net --network none --pwd /work
    --env "CXSV_BUNDLE_ID=$CXSV_BUNDLE_ID,CXSV_COMMIT=$COMMIT,CXSV_IMAGE_ID=$CXSV_IMAGE_ID"
    --env "CXSV_SIF_SHA256=$CXSV_SIF_SHA256,CXSV_RUNTIME=$(basename "$RT"),XDG_CACHE_HOME=/work/.cache,TMPDIR=/work/tmp"
    "$SIF")
-SM=(snakemake -s /code/workflow/patient/Snakefile --directory /work --cores "$CORES" --keep-going
-    --printshellcmds --rerun-triggers mtime --forcerun sample_vcf_to_bed calling_fingerprint
-    --configfile /bundle/config/bundle_site.yaml /work/config/pos_control_full.yaml
-                 /work/config/rerun_downstream.yaml)
+SM_BASE=(snakemake -s /code/workflow/patient/Snakefile --directory /work --cores "$CORES"
+         --rerun-triggers mtime --configfile /bundle/config/bundle_site.yaml
+         /work/config/pos_control_full.yaml /work/config/rerun_downstream.yaml)
+SM=("${SM_BASE[@]}" --keep-going --printshellcmds --forcerun sample_vcf_to_bed calling_fingerprint)
+
+hdr "1b. reference of the source run"
+SRC_ID=$(awk '$1=="bundle"{print $2; exit}' "$SRCW/pos_control_full_genome.log" 2>/dev/null || true)
+SRC_BUNDLE="${SRC_BUNDLE:-${SRC_ID:+$(dirname "$BUNDLE")/$SRC_ID}}"
+MANIFEST_REL=reference/ref_cache/md5_manifest.tsv
+if [ -z "$SRC_BUNDLE" ] || [ ! -d "$SRC_BUNDLE" ]; then
+    echo "source bundle unknown (set SRC_BUNDLE); nothing touched, the step-2 guard decides"
+elif [ "$(cd "$SRC_BUNDLE" && pwd)" = "$BUNDLE" ]; then
+    echo "source run used this bundle; nothing to touch"
+elif same_reference_manifest "$SRC_BUNDLE/$MANIFEST_REL" "$BUNDLE/$MANIFEST_REL"; then
+    echo "md5_manifest.tsv identical in $SRC_BUNDLE and $BUNDLE ($(sha256sum < "$BUNDLE/$MANIFEST_REL" | cut -c1-12)):"
+    echo "marking ${CXSV_UPSTREAM_RULES[*]} up to date (snakemake --touch)"
+    touch_upstream "/work/$S_REL/merged_sv.vcf" "${X[@]}" "${SM_BASE[@]}" > "$W/touch_upstream.txt" 2>&1 || { tail -30 "$W/touch_upstream.txt"; exit 1; }
+    echo "  touched: $(sed -nE 's/^(local)?rule ([A-Za-z0-9_]+):$/\2/p' "$W/touch_upstream.txt" | sort -u | tr '\n' ' ')"
+else
+    echo "md5_manifest.tsv differs between $SRC_BUNDLE and $BUNDLE: the callers must re-run;"
+    echo "use tests/lab/pos_control_full_genome.sh instead"; exit 1
+fi
 
 hdr "2. dry run"
 "${X[@]}" "${SM[@]}" -n > "$W/dryrun.txt" 2>&1 || { tail -30 "$W/dryrun.txt"; exit 1; }
