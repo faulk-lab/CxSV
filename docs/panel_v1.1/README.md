@@ -118,30 +118,49 @@ genomes.
 
 ## 4. Bundle and offline validation
 
-Bundle `cxsv-bundle-20261105-8fc5bef725bd` (`/mnt/sargasso1/CxSV/bundles/`):
-8fc5bef plus this release, 2,011 files, 10,556,543,879 bytes, built in 260 s.
+**Bundle `cxsv-bundle-20261105-8fc5bef725bd` (`/mnt/sargasso1/CxSV/bundles/`), rebuilt
+2026-11-05 from the tag `panel-v1.1` (commit 8fc5bef) and the finalised release**
+(PI decision 2026-11-05; `scripts/make_bundle.sh bundle --commit panel-v1.1 --release
+/mnt/sargasso1/CxSV/build/panel-v1.1-r2/results/panel/release`, freya, 2,502 s).
 
-Validation (`tests/lab/validate_bundle.sh`, stand-in HG01868, 12 cores, 9,289 s):
-**all 8 checks PASS, 0 failures** ([r2_bundle_validation.log](r2_bundle_validation.log)).
-
-| check | result |
+| | |
 |---|---|
-| 1 bundle integrity | PASS (303 s) |
-| 2 release integrity | PASS |
-| 3 network off (Singularity, Docker; with controls) | PASS |
-| 4 offline Singularity run | PASS (3,105 s) |
-| 5 offline Docker run | PASS (2,752 s) |
-| 6 normal run (repository + conda + lab paths) | PASS (2,575 s) |
-| 7 outputs identical (both offline runs vs normal) | PASS, no unexpected difference |
-| 8 tampered release refused (byte, extra file) | PASS |
+| bundle id | `cxsv-bundle-20261105-8fc5bef725bd` (the default id; the commit is unchanged, so the id equals the pre-tag bundle's) |
+| size | 10,556,544,623 bytes, 2,011 files |
+| `MANIFEST.sha256` sha256 | `02da76d481bdcc3ad89e88b7f9ec5b145965bf4abed89251d34eda86820201d4` |
+| embedded `release.json` | byte-identical to the finalised release's: `source.git_tag` `panel-v1.1`, `git_tag_object` `efea4fc09451…`, `finalised_utc` 2026-11-05T16:32:13Z |
+| embedded `release_manifest.tsv` | sha256 `09d3e32e8610463408a29d49e73ea660434184e1076ab5c139ff3064a412393b`, 1,634 files (2,452,335,302 bytes) verified |
+| image | unchanged: SIF sha256 `9f4e049fe5c5…`, reused from `_images/img-ba820f7b2bd3` |
+
+**Pre-tag bundle, kept pending deletion approval.** The bundle first built for this release
+(before `finalise`, embedded `release.json` without `git_tag`; 10,556,543,879 bytes,
+`MANIFEST.sha256` sha256 `675e59f95966…`) was renamed, not deleted, to
+`/mnt/sargasso1/CxSV/bundles/cxsv-bundle-20261105-8fc5bef725bd.pretag`. Deleting it needs
+the PI's approval. Its validation record is [r2_bundle_validation.log](r2_bundle_validation.log).
+
+Validation of the tagged bundle (`tests/lab/validate_bundle.sh`, stand-in HG01868, 12 cores,
+freya, 11,279 s): **all 8 checks PASS, 0 failures** ([tag_bundle_validation.log](tag_bundle_validation.log)).
+
+| check | tagged bundle | pre-tag bundle |
+|---|---|---|
+| 1 bundle integrity | PASS (431 s) | PASS (303 s) |
+| 2 release integrity | PASS | PASS |
+| 3 network off (Singularity, Docker; with controls) | PASS | PASS |
+| 4 offline Singularity run | PASS (4,864 s) | PASS (3,105 s) |
+| 5 offline Docker run | PASS (2,792 s) | PASS (2,752 s) |
+| 6 normal run (repository + conda + lab paths) | PASS (2,803 s) | PASS (2,575 s) |
+| 7 outputs identical (both offline runs vs normal) | PASS, no unexpected difference | PASS |
+| 8 tampered release refused (byte, extra file) | PASS | PASS |
 
 HG01868 (not in the panel): 1,076 CxSV loci, 0 private, **0 Tier 1**, 4 Tier 2,
-25 Tier 3. The result is identical in all three runs (v1.1 candidate: 1,087 loci,
-0 / 5).
+25 Tier 3, in all three runs. `cxsv_scores.tsv` is byte-identical across the three runs
+and to the pre-tag bundle's three runs (md5 `375ab309e298…`); so are both `compare_*.tsv`.
+(v1.1 candidate: 1,087 loci, 0 / 5.) Run times are longer than for the pre-tag bundle
+because the NAS was slow that afternoon (the bundle build also took 2,502 s against 260 s).
 
 ## 5. Positive control (full genome, from the bundle)
 
-`tests/lab/pos_control_full_genome.sh` (bundle copy, 10 cores, 7,799 s; patient
+`tests/lab/pos_control_full_genome.sh` (bundle copy, pre-tag bundle, 10 cores, 7,799 s; patient
 run 6,245 s; fingerprint COMPATIBLE with the release;
 [pc_r2_score_events.tsv](pc_r2_score_events.tsv), [pc_r2_score.txt](pc_r2_score.txt)):
 
@@ -168,6 +187,19 @@ run 6,245 s; fingerprint COMPATIBLE with the release;
 - These scores equal the `svim_lowq` candidate rerun (docs/R10_EXCESS.md) and,
   for every event, the v1.1 candidate.
 
+**Tagged bundle, with the literature add-ons.** `pos_control_full_genome.sh` from the tagged
+bundle with `ADDONS="E13 L01 L02 L03 L04"` and `EVENTS=…/addons/events_E01-E13+L01-L04.yaml`
+(keurig, 12 cores, patient run 7,505 s; fingerprint COMPATIBLE; release VERIFIED
+afterwards; [tag_pc_L_score_events.tsv](tag_pc_L_score_events.tsv), [tag_pc_L_score.txt](tag_pc_L_score.txt)).
+The events above are unchanged. The add-ons give: L01 not called (2/2 junctions exact),
+L02 Tier 1 1.04, L03 Tier 1 1.04 (40/40 exact; split into 19 loci, verdict FAIL as
+before), L04 Tier 1 1.74. Junctions: 86 exact, 1 partial, 0 missed of 87. Host: 0 Tier 1
+(all 15 Tier-1 loci are at planted events). Every scorer output (`score.events.tsv`,
+`score.junctions.tsv`, `score.offtarget.tsv`), `cxsv_scores.tsv`,
+`single_caller_filtered.tsv` (88 `svim_lowq` records, none at a planted event) and the
+merged VCF body (30,294 records) are byte-identical to the same run from the pre-tag
+bundle (freya), and every event result equals 65ef970's.
+
 Literature test A (63 events) does not change by construction: all of its records
 are `SUPP_VEC` 111. Its result against 8fc5bef + the v1.1 candidate was 8 called,
 7 Tier 1; it was not rerun against this release.
@@ -183,7 +215,9 @@ are `SUPP_VEC` 111. Its result against 8fc5bef + the v1.1 candidate was 8 called
 | [lofo_r2_residual_noisy.tsv](lofo_r2_residual_noisy.tsv), [lofo_r2_noisy11.tsv](lofo_r2_noisy11.tsv) | residual and formerly noisy genomes | `report_r2.py` |
 | [compare_v10_r2.tsv](compare_v10_r2.tsv), [compare_v11_r2.tsv](compare_v11_r2.tsv) | per genome: loci, oversized clusters, blind span, junction identity (columns `*_v1.1` = this release) | `scripts/panel_build/compare_builds.py` |
 | [callable_identity.tsv](callable_identity.tsv), [release_description.txt](release_description.txt) | build provenance (copies of `provenance/`) | `check_callable_identity.sh` |
-| [r2_bundle_validation.log](r2_bundle_validation.log) | full validation log | `tests/lab/validate_bundle.sh` |
+| [r2_bundle_validation.log](r2_bundle_validation.log) | full validation log (pre-tag bundle) | `tests/lab/validate_bundle.sh` |
+| [tag_bundle_validation.log](tag_bundle_validation.log) | full validation log (tagged bundle) | `tests/lab/validate_bundle.sh` |
+| [tag_pc_L_score_events.tsv](tag_pc_L_score_events.tsv), [tag_pc_L_score.txt](tag_pc_L_score.txt) | positive control + E13/L01-L04 add-ons, tagged bundle | `tests/lab/pos_control_full_genome.sh` |
 | [pc_r2_score_events.tsv](pc_r2_score_events.tsv), [pc_r2_score.txt](pc_r2_score.txt) | positive-control scoring | `tests/lab/pos_control_full_genome.sh` |
 | `../figures/panel_v1.1/fig_panel_v11_r2.png` | the figure | `report_r2.py` |
 
@@ -205,9 +239,11 @@ python3 $NEW/code/calibration/oversized_clusters/panel_rates_collect.py \
   --old-scores /mnt/sargasso1/CxSV/calibration/item10/loci_scores_graded.tsv.gz \
   --manifest $NEW/results/panel/panel/sample_manifest.tsv --cal CAL/lofo --out-prefix CAL/lofo_r2
 # bundle, validation, positive control (from a worktree at 8fc5bef)
-bash scripts/make_bundle.sh bundle --commit 8fc5bef --release $NEW/results/panel/release
+bash scripts/make_bundle.sh bundle --commit panel-v1.1 --release $NEW/results/panel/release   # after finalise (git_tag)
 CORES=12 STANDIN_RUN=standin_HG01868 bash tests/lab/validate_bundle.sh BUNDLE OUT STANDIN_DIR $NEW/results/panel/release
 bash BUNDLE/repo/tests/lab/pos_control_full_genome.sh BUNDLE WORKDIR 10
+ADDONS="$A/E13 $A/L01 $A/L02 $A/L03 $A/L04" EVENTS=$A/events_E01-E13+L01-L04.yaml \
+  bash BUNDLE/repo/tests/lab/pos_control_full_genome.sh BUNDLE WORKDIR 12   # A=datasets/pos_control/addons
 # tables + figure
 python calibration/panel_v1.1/report_r2.py --per-genome CAL/lofo_r2_per_genome.tsv --compare compare_v10_r2.tsv \
   --candidate-rates docs/r10_excess/candidate_rates.tsv --noisy docs/r10_excess/noisy_genomes.tsv --out-dir OUT
