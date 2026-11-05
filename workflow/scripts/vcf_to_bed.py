@@ -42,6 +42,22 @@ Long span records (roadmap item 13)
   Either way the record is listed in --long-out (ID CHROM POS END SVTYPE LENGTH
   SUPP_VEC RULE). --span-link-max 0 restores the interval rule for every record.
 
+Single-caller breakend filter (cxsv_params.single_caller_bnd_rule, docs/R10_EXCESS.md)
+--------------------------------------------------------------------------------------
+  A few panel genomes carry thousands of SVIM-only translocation records at
+  SVIM's quality floor (QUAL 5): 3,753-14,258 in 7 LRSC R10 genomes against a
+  median of 64 in the other R10 genomes. Clustered with real SVs they make
+  BND_cluster / CN_plus_orientation_change loci out of simple deletions.
+  --single-caller-bnd-rule decides which merged records take no part in CxSV
+  discovery (they stay junctions and merged calls, like long-span records):
+    keep            none (command-line default; discovery as in panel-v1.0)
+    svim_lowq       SVIM-only (SUPP_VEC 010) BND/TRA records with QUAL < --svim-min-qual
+                    (the pipeline default since 2026-11-05, config/calling.yaml)
+    svim_lowq_any   SVIM-only records of any type with QUAL < --svim-min-qual
+    single_bnd      every single-caller BND/TRA record, whatever its quality
+  SUPP_VEC order is the SURVIVOR file order: cuteSV, SVIM, Sniffles2.
+  Excluded records are listed in --filtered-out.
+
 TRA records
 -----------
   Some callers (e.g. SVIM) emit TRA with CHR2 and END2 in INFO rather
@@ -141,10 +157,28 @@ def emit_records(chrom, start, end, svtype, vid, is_inter="intra"):
 
 
 LONG_RULES = ("exclude", "breakends")
+SINGLE_BND_RULES = ("keep", "svim_lowq", "svim_lowq_any", "single_bnd")
+SVIM_ONLY = "010"          # SURVIVOR file order: cuteSV, SVIM, Sniffles2
+
+
+def single_caller_excluded(rule, svtype, supp_vec, qual, svim_min_qual):
+    """True when --single-caller-bnd-rule leaves this merged record out of discovery."""
+    if rule == "keep":
+        return False
+    bndlike = svtype in ("BND", "TRA")
+    if rule == "single_bnd":
+        return bndlike and supp_vec.count("1") == 1
+    lowq = qual is not None and qual < svim_min_qual
+    if rule == "svim_lowq":
+        return bndlike and supp_vec == SVIM_ONLY and lowq
+    if rule == "svim_lowq_any":
+        return supp_vec == SVIM_ONLY and lowq
+    raise ValueError(f"single-caller rule must be one of {SINGLE_BND_RULES}, not {rule!r}")
 
 
 def process_vcf(vcf_path: str, window: int, span_link_max: int = 0, counts: dict = None,
-                long_rule: str = "breakends", long_rows: list = None):
+                long_rule: str = "breakends", long_rows: list = None,
+                single_rule: str = "keep", svim_min_qual: float = 10, filtered_rows: list = None):
     """
     Generator: yield BED lines for each VCF record.
     BND/TRA yield 2 lines each (both breakend positions). A DEL/DUP/INV longer
@@ -172,6 +206,18 @@ def process_vcf(vcf_path: str, window: int, span_link_max: int = 0, counts: dict
             pos  = int(pos_str)
             info = parse_info(info_str)
             svtype = info.get("SVTYPE", "UNK").upper()
+            if single_rule != "keep":
+                try:
+                    qual = float(parts[5])
+                except ValueError:
+                    qual = None
+                supp_vec = str(info.get("SUPP_VEC", ""))
+                if single_caller_excluded(single_rule, svtype, supp_vec, qual, svim_min_qual):
+                    if counts is not None:
+                        counts["single_caller_filtered"] = counts.get("single_caller_filtered", 0) + 1
+                    if filtered_rows is not None:
+                        filtered_rows.append((vid, chrom, pos, svtype, supp_vec, parts[5], single_rule))
+                    continue
 
             # ── Standard SV types ──────────────────────────────────────────
             if svtype in ("DEL", "DUP", "INV", "INS"):
@@ -275,13 +321,21 @@ def main():
                              "their two breakends (cxsv_params.long_span_rule)")
     parser.add_argument("--long-out", default=None,
                         help="TSV listing the records longer than --span-link-max and the rule applied")
+    parser.add_argument("--single-caller-bnd-rule", choices=SINGLE_BND_RULES, default="keep",
+                        help="single-caller breakend records left out of discovery (see the module docstring; the pipeline passes cxsv_params.single_caller_bnd_rule, default svim_lowq)")
+    parser.add_argument("--svim-min-qual", type=float, default=10,
+                        help="QUAL below which an SVIM-only record is low quality (svim_lowq rules)")
+    parser.add_argument("--filtered-out", default=None,
+                        help="TSV listing the records left out by --single-caller-bnd-rule")
     args = parser.parse_args()
 
     n_written = 0
     counts, long_rows = {}, []
     with open(args.out, "w") as out_fh:
+        filtered_rows = []
         for bed_line in process_vcf(args.vcf, args.window, args.span_link_max, counts,
-                                    args.long_span_rule, long_rows):
+                                    args.long_span_rule, long_rows, args.single_caller_bnd_rule,
+                                    args.svim_min_qual, filtered_rows):
             out_fh.write(bed_line + "\n")
             n_written += 1
     if args.long_out:
@@ -290,7 +344,14 @@ def main():
             for r in long_rows:
                 fh.write("\t".join(map(str, r)) + "\n")
 
+    if args.filtered_out:
+        with open(args.filtered_out, "w") as fh:
+            fh.write("ID\tCHROM\tPOS\tSVTYPE\tSUPP_VEC\tQUAL\tRULE\n")
+            for r in filtered_rows:
+                fh.write("\t".join(map(str, r)) + "\n")
     print(f"vcf_to_bed: wrote {n_written} BED records to {args.out}", file=sys.stderr)
+    print(f"vcf_to_bed: {len(filtered_rows)} records left out of discovery by the single-caller rule "
+          f"{args.single_caller_bnd_rule}", file=sys.stderr)
     print(f"vcf_to_bed: {len(long_rows)} DEL/DUP/INV records longer than {args.span_link_max} bp "
           f"({args.long_span_rule})", file=sys.stderr)
 

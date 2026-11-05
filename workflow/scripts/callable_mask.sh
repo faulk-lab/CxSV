@@ -78,7 +78,8 @@ zcat "$PREFIX.quantized.bed.gz" \
     | awk -F'\t' -v OFS='\t' '$4 == "CALLABLE" {print $1, $2, $3}' \
     | gzip -n > "$MASK.tmp"
 rm -f "$PREFIX.quantized.bed.gz" "$PREFIX.quantized.bed.gz.csi"
-bp=$(zcat "$MASK.tmp" | awk -F'\t' '{s += $3 - $2} END {printf "%d\n", s}')
+# %.0f, not %d: mawk's %d stops at 2^31-1 (2147483647), and a genome mask is ~3 Gb
+bp=$(zcat "$MASK.tmp" | awk -F'\t' '{s += $3 - $2} END {printf "%.0f\n", s}')
 if [ "$bp" -le 0 ]; then
     say "ERROR: the mask has 0 callable bp (depth >= $MIN_DEPTH at MAPQ >= $MAPQ nowhere);" \
         "an empty mask would make every junction uncallable in this sample" >&2

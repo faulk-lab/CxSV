@@ -1,7 +1,12 @@
 # Oversized clusters: the long-record blind spot (roadmap item 13)
 
-Status 2026-11-04: implemented and evaluated on panel-v1.0 data; **the panel
-has not been rebuilt** (needs the PI's tag decision, proposed `panel-v1.1`).
+Status 2026-11-04: implemented and evaluated on panel-v1.0 data. *Update
+2026-11-05:* the panel was rebuilt with this rule as panel-v1.1
+(`…64e10c1b1363`); healthy Tier 1 rose to 0.851 per genome, mostly from SVIM-only
+low-quality breakend records in 11 noisy genomes that this rule had exposed
+(they were hidden inside oversized clusters before). That build is superseded;
+panel-v1.1 is re-released with `single_caller_bnd_rule: svim_lowq` from a new
+build root `panel-v1.1-r2` (docs/R10_EXCESS.md).
 History: the first version (`de23a0e`, merged into `main` as PR #20 before the
 evaluation finished) clustered long records at their breakends. The evaluation
 below replaced that with leaving them out of discovery; the follow-up is branch
@@ -186,7 +191,7 @@ tier and score; E13 stays private (panel composition, as before). Host genome:
 Tier-1 host calls, each at an end of a > 500 kb record). Junctions 40/41 exact.
 1,246 loci scored (1,065 before).
 
-## 5. Rebuild plan (not started; needs the PI's tag decision)
+## 5. Rebuild plan (as proposed 2026-11-04; as done: docs/PANEL_BUILD.md, "Downstream-only rebuild")
 
 The panel can be rebuilt from the panel-v1.0 caller outputs by re-running only
 downstream per-sample rules and the aggregate.
