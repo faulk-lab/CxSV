@@ -617,6 +617,13 @@ downstream-only rebuild applies; `callable_mask.sh` changed only in its log line
      are identical to v1.0 apart from the version column; CxSV loci went from
      14,428 to 17,578; the blind span fell from 334 to 1.40 Mb median per
      genome.
+6. **Measured for panel-v1.1 r2** (`cxsv-panel-20261105-c31ecc9f8fa2`, from `main` 8fc5bef, OLD =
+   panel-v1.0; docs/panel_v1.1/README.md):
+   - 12,975 jobs in 4 h 01 min (freya, 20 cores, node-local work directory).
+   - Both dry runs planned no held-rule job and no hard-linked output.
+   - 58,646 reused files (1.41 TB) were verified unchanged.
+   - The 6 callable masks re-checked with the new `callable_mask.sh` are byte-identical.
+   - The release VERIFIED: 1,634 files, manifest `e8b7b800…`.
 
 | file | role |
 |---|---|

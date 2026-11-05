@@ -6,7 +6,8 @@ Status 2026-11-04: implemented and evaluated on panel-v1.0 data. *Update
 low-quality breakend records in 11 noisy genomes that this rule had exposed
 (they were hidden inside oversized clusters before). That build is superseded;
 panel-v1.1 is re-released with `single_caller_bnd_rule: svim_lowq` from a new
-build root `panel-v1.1-r2` (docs/R10_EXCESS.md).
+build root `panel-v1.1-r2` (docs/R10_EXCESS.md). Released 2026-11-05 as `cxsv-panel-20261105-c31ecc9f8fa2`
+(docs/panel_v1.1/README.md).
 History: the first version (`de23a0e`, merged into `main` as PR #20 before the
 evaluation finished) clustered long records at their breakends. The evaluation
 below replaced that with leaving them out of discovery; the follow-up is branch

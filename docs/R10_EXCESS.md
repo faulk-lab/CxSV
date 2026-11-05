@@ -11,6 +11,10 @@ is kept untouched as provenance. Branch `r10-excess-diagnosis` (off `main`
 downstream-only rebuild scripts. Sections 1-6 are the diagnosis as reported on
 2026-11-04; section 7 is the change.
 
+**Released 2026-11-05** as `cxsv-panel-20261105-c31ecc9f8fa2` (docs/panel_v1.1/README.md). Its per-sample
+discovery outputs and its per-genome healthy rates equal the `svim_lowq` candidate
+here in all 1,619 genomes: LOFO Tier 1 0.251 per genome, R10 0.320.
+
 ## 1. Question
 
 panel-v1.1 is `cxsv-panel-20261104-64e10c1b1363`, built from `main` 65ef970 with
