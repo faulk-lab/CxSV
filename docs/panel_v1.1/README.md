@@ -3,7 +3,7 @@
 **Release `cxsv-panel-20261105-c31ecc9f8fa2`: VERIFIED, validated offline, positive
 control passed.**
 
-git tag: panel-v1.1 (pending)
+git tag: panel-v1.1 (annotated tag efea4fc on 8fc5bef, created 2026-11-05)
 
 It is panel-v1.0 (`cxsv-panel-20261102-cd7e1d194cd4`) rebuilt downstream-only with
 `main` 8fc5bef. 8fc5bef carries two discovery changes:
