@@ -59,11 +59,11 @@ def write_config(path, cal, k, n):
          f"  eps: {EPS:g}",
          "  # calibration group of a patient: sample-sheet column qc_group, else by platform",
          "  default_group: {ONT: ONT_1kGP_1019, PACBIO: PacBio_HiFi}",
-         "  # conservative mode for FLAGged libraries (default off until the PI decides): a",
+         "  # conservative mode for FLAGged libraries (on by default, PI decision 2026-11-05): a",
          "  # Tier-1 locus stays Tier 1 only with > min_multi_caller_fraction of its junctions",
          "  # called by >= 2 callers or >= min_cn_changed copy-number-changed segments;",
          "  # otherwise it is reported as Tier 2 (score and points unchanged)",
-         "  conservative_mode: false",
+         "  conservative_mode: true",
          "  conservative: {min_multi_caller_fraction: 0.5, min_cn_changed: 1, demote_to: Tier2}",
          "  groups:"]
     for g, ms in cal.items():

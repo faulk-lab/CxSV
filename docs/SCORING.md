@@ -506,6 +506,27 @@ literature junctions. The label and the matched events appear in
 Score, tier and status do not change. Bundles built with
 `make_bundle.sh --literature` turn it on. The root is null otherwise.
 
+## 6d. Library QC and conservative mode (roadmap item 14)
+
+Every patient run checks the library before scoring (docs/LIBRARY_QC.md). The check
+does not depend on CxSV discovery or scores and is not part of the calling
+fingerprint.
+- **Flag.** SVIM-only BND/TRA and SVIM-only records per Gb of sequence (from
+  `merged_sv.vcf`) are compared with the healthy panel genomes of the same platform
+  group after a coverage adjustment. FLAG when either robust z > 6
+  (`config/library_qc.yaml`). The supplementary-alignment fractions of reads over 20
+  fixed windows are reported with it.
+- **Report.** The flag and metrics head every score report.
+- **Conservative mode** (default on, PI decision 2026-11-05) acts only on a FLAGged
+  library. A Tier-1 locus stays Tier 1 when more than half of its junctions are
+  called by >= 2 callers or at least one copy-number segment changed; otherwise it
+  is reported as Tier 2. Points and the total are unchanged, and column
+  `Library_QC_Gate` says why.
+- **Demotions are explicit.** The report says how many loci were demoted and lists
+  them in "Library QC: loci demoted by conservative mode".
+- **Effect.** On the 24 flagged panel genomes, Tier 1 went from 168 to 55. Every
+  positive-control event stays Tier 1 with the mode forced on.
+
 ## 7. Known limitations and open findings
 
 - **The ClinGen gene list underserves duplications here.** The 2026-10-28 file

@@ -404,6 +404,7 @@ def apply_library_qc_gate(loci, qc, P):
     top = max(P["tiers"], key=lambda t: t["min"])["name"]
     for x in loci:
         x["qc_gate"] = "not_applied"
+        x["tier_before_qc"] = x["tier"]
         if not on or x["tier"] != top:
             continue
         multi = sum(1 for j in x["kept"] if j.supp_vec.count("1") >= 2)
@@ -412,6 +413,55 @@ def apply_library_qc_gate(loci, qc, P):
         x["qc_gate"] = ("kept: " if keep else "demoted: ") + why
         if not keep:
             x["tier"] = LQ["conservative"].get("demote_to", "Tier2")
+
+
+def library_qc_report(qc, P, loci):
+    """(summary lines, section lines) of the library QC for the score report.
+
+    The summary says the flag, the metrics and what conservative mode did; when it
+    demoted loci, the section lists every one (tier before and after, reason)."""
+    if not qc:
+        return [], []
+    LQ = P.get("library_qc") or {}
+    flag, mode = qc.get("qc_flag", "NA"), bool(LQ.get("conservative_mode"))
+    w = LQ.get("conservative") or {}
+    rule = (f"a Tier-1 locus needs more than {w.get('min_multi_caller_fraction', 'NA')} of its junctions "
+            f"called by >= 2 callers or >= {w.get('min_cn_changed', 'NA')} copy-number-changed segment(s); "
+            f"otherwise it is reported as {w.get('demote_to', 'Tier2')} with its points unchanged")
+    demoted = [x for x in loci if str(x.get("qc_gate", "")).startswith("demoted")]
+    kept = [x for x in loci if str(x.get("qc_gate", "")).startswith("kept")]
+    S = [f"- library QC (docs/LIBRARY_QC.md): **{flag}** (group {qc.get('qc_group', 'NA')}; "
+         f"{qc.get('qc_reason', 'NA')}); reads with a supplementary alignment {qc.get('frac_sa', 'NA')}, to "
+         f"another chromosome {qc.get('frac_sa_interchrom', 'NA')}; SVIM-only BND/TRA per Gb "
+         f"{qc.get('svim_only_bnd_per_gb', 'NA')} (z {qc.get('z_svim_only_bnd_per_gb', 'NA')}), SVIM-only "
+         f"records per Gb {qc.get('svim_only_any_per_gb', 'NA')} (z {qc.get('z_svim_only_any_per_gb', 'NA')})"]
+    if flag == "FLAG":
+        S.append("  - **This library is an outlier for single-caller breakend calls; treat Tier-1 loci "
+                 "supported by one caller only with caution.**")
+        if mode and demoted:
+            S.append(f"  - **Conservative mode DEMOTED {len(demoted)} Tier-1 locus/loci** ({rule}); "
+                     f"{len(kept)} Tier-1 locus/loci kept. The demoted loci are listed under "
+                     "\"Library QC: loci demoted by conservative mode\".")
+        elif mode:
+            S.append(f"  - Conservative mode is on and demoted no locus: all {len(kept)} Tier-1 loci "
+                     "have multi-caller or copy-number support.")
+        else:
+            S.append("  - Conservative mode is OFF (library_qc.conservative_mode false): Tier-1 loci are not gated.")
+    elif flag == "PASS":
+        S.append("  - Conservative mode " + ("on; it applies only to FLAGged libraries, so it did not act here."
+                                          if mode else "off."))
+    else:
+        S.append("  - The library could not be assessed (NA); conservative mode did not act.")
+    X = []
+    if demoted:
+        X.append("\n## Library QC: loci demoted by conservative mode\n")
+        X.append(f"FLAGged library, conservative mode on: {rule}.\n")
+        X.append("| Rank | Locus | Class | Total | Tier before | Tier reported | Reason |")
+        X.append("|---:|---|---|---:|---|---|---|")
+        for x in demoted:
+            X.append(f"| {x.get('rank', 'NA')} | {x['L']} | {x['row']['Cmplx_Class']} | {x['total']:.2f} | "
+                     f"{x['tier_before_qc']} | {x['tier']} | {x['qc_gate'][len('demoted: '):]} |")
+    return S, X
 
 
 QC_FIELDS = ("qc_group", "qc_flag", "qc_reason", "frac_sa", "frac_sa_interchrom", "svim_only_bnd_per_gb",
@@ -486,22 +536,10 @@ def write_report(a, P, loci, sex_note, qc=None):
     tiers = defaultdict(int)
     for x in loci:
         tiers[x["tier"]] += 1
-    qc = qc or {}
-    LQ = P.get("library_qc") or {}
-    if qc:
-        demoted = sum(1 for x in loci if str(x.get("qc_gate", "")).startswith("demoted"))
-        L.append(f"- library QC (docs/LIBRARY_QC.md): **{qc.get('qc_flag', 'NA')}** "
-                 f"(group {qc.get('qc_group', 'NA')}; {qc.get('qc_reason', 'NA')}); reads with a supplementary "
-                 f"alignment {qc.get('frac_sa', 'NA')}, to another chromosome {qc.get('frac_sa_interchrom', 'NA')}; "
-                 f"SVIM-only BND/TRA per Gb {qc.get('svim_only_bnd_per_gb', 'NA')} "
-                 f"(z {qc.get('z_svim_only_bnd_per_gb', 'NA')}), SVIM-only records per Gb "
-                 f"{qc.get('svim_only_any_per_gb', 'NA')} (z {qc.get('z_svim_only_any_per_gb', 'NA')}); "
-                 f"conservative mode {'on' if LQ.get('conservative_mode') else 'off'}"
-                 + (f", {demoted} Tier-1 locus/loci demoted" if LQ.get("conservative_mode") else ""))
-        if qc.get("qc_flag") == "FLAG":
-            L.append("  - **This library is an outlier for single-caller breakend calls; treat Tier-1 loci "
-                     "supported by one caller only with caution.**")
+    qc_summary, qc_section = library_qc_report(qc or {}, P, loci)
+    L.extend(qc_summary)
     L.append("- tiers: " + ", ".join(f"{t['name']} {tiers[t['name']]}" for t in P["tiers"]) + "\n")
+    L.extend(qc_section)
     L.append("## Ranking\n")
     L.append("| Rank | Locus | Class | Panel | Genes | Total | Tier | Top contributions |")
     L.append("|---:|---|---|---|---|---:|---|---|")
