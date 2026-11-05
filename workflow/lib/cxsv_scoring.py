@@ -761,3 +761,19 @@ def f_inheritance(parent_results, parents_affected, w):
                        "ClinGen 5A-like")
     return Feature("inheritance", "inheritance", f"absent in {','.join(parent_results)}; other parent not sequenced",
                    0.0, "de novo status needs both parents")
+
+
+def library_qc_gate(n_multi, n_junctions, n_cn_changed, w):
+    """Conservative Tier-1 gate for a FLAGged library (docs/LIBRARY_QC.md).
+
+    A Tier-1 locus stays Tier 1 when more than w["min_multi_caller_fraction"] of its
+    junctions are called by >= 2 callers, or when at least w["min_cn_changed"] of its
+    copy-number segments changed; otherwise it is demoted (points unchanged).
+    Returns (keep, reason)."""
+    frac = n_multi / n_junctions if n_junctions else 0.0
+    if n_junctions and frac > float(w["min_multi_caller_fraction"]):
+        return True, f"{n_multi}/{n_junctions} junctions with >= 2 callers"
+    if n_cn_changed >= int(w["min_cn_changed"]):
+        return True, f"{n_cn_changed} copy-number-changed segment(s)"
+    return False, (f"{n_multi}/{n_junctions} junctions with >= 2 callers, "
+                   f"{n_cn_changed} copy-number-changed segment(s)")

@@ -1,0 +1,5 @@
+change	chrom1	pos1	chrom2	pos2	svtype	n_carriers_old	n_carriers_new	truth
+removed	chr6	127049983	chr6	127054889	DEL	1	0	lit-v1.0:COL17_TL010
+carriers_dropped	chr6	104464782	chr6	104490191	DEL	1121	1106	lit-v1.0:COL17_TL010
+carriers_dropped	chr6	127050587	chr6	127054879	DEL	627	617	lit-v1.0:COL17_TL010
+carriers_dropped	chr6	130191563	chr6	130197619	DEL	710	703	lit-v1.0:COL17_TL010

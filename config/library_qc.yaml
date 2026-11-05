@@ -1,0 +1,30 @@
+# Library QC (docs/LIBRARY_QC.md). NOT fingerprinted: QC never changes which loci
+# a genome has. Calibration written by calibration/library_qc/calibrate.py from the
+# panel-v1.1 genomes (1619); z = (log10(m + eps) - (a + b log10(coverage_est)) - r0) / mad.
+library_qc:
+  enabled: true
+  windows: config/library_qc_windows.hs1.bed
+  min_mapq: 20
+  k: 6
+  eps: 0.001
+  # calibration group of a patient: sample-sheet column qc_group, else by platform
+  default_group: {ONT: ONT_1kGP_1019, PACBIO: PacBio_HiFi}
+  # conservative mode for FLAGged libraries (default off until the PI decides): a
+  # Tier-1 locus stays Tier 1 only with > min_multi_caller_fraction of its junctions
+  # called by >= 2 callers or >= min_cn_changed copy-number-changed segments;
+  # otherwise it is reported as Tier 2 (score and points unchanged)
+  conservative_mode: false
+  conservative: {min_multi_caller_fraction: 0.5, min_cn_changed: 1, demote_to: Tier2}
+  groups:
+    ONT_1kGP_1019:
+      svim_only_bnd_per_gb: {a: -2.208174, b: 1.351281, r0: -0.0, mad: 0.286969}
+      svim_only_any_per_gb: {a: 1.495233, b: 0.064655, r0: 0.0, mad: 0.051243}
+    ONT_LRSC_R10:
+      svim_only_bnd_per_gb: {a: -1.814915, b: 1.049984, r0: 0.0, mad: 0.133951}
+      svim_only_any_per_gb: {a: 1.836623, b: -0.203407, r0: 0.0, mad: 0.032914}
+    ONT_LRSC_R9:
+      svim_only_bnd_per_gb: {a: -1.54309, b: 0.750255, r0: 0.0, mad: 0.140496}
+      svim_only_any_per_gb: {a: 1.797526, b: -0.155683, r0: -0.0, mad: 0.061082}
+    PacBio_HiFi:
+      svim_only_bnd_per_gb: {a: -1.140861, b: 0.74909, r0: 0.0, mad: 0.074915}
+      svim_only_any_per_gb: {a: 1.530714, b: -0.099038, r0: 0.0, mad: 0.031823}

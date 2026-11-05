@@ -1,0 +1,25 @@
+group	metric	n	spearman_vs_coverage
+ONT 1kGP-1019	svim_only_bnd_per_gb	1017	0.619
+ONT 1kGP-1019	svim_only_any_per_gb	1017	0.17
+ONT 1kGP-1019	frac_sa	1017	-0.162
+ONT 1kGP-1019	frac_sa_interchrom	1017	0.115
+ONT 1kGP-1019	z_svim_only_bnd_per_gb	1017	0.011
+ONT 1kGP-1019	z_svim_only_any_per_gb	1017	0.01
+ONT LRSC R10	svim_only_bnd_per_gb	247	0.518
+ONT LRSC R10	svim_only_any_per_gb	247	-0.385
+ONT LRSC R10	frac_sa	247	0.114
+ONT LRSC R10	frac_sa_interchrom	247	0.163
+ONT LRSC R10	z_svim_only_bnd_per_gb	247	0.006
+ONT LRSC R10	z_svim_only_any_per_gb	247	0.002
+ONT LRSC R9	svim_only_bnd_per_gb	220	0.454
+ONT LRSC R9	svim_only_any_per_gb	220	-0.108
+ONT LRSC R9	frac_sa	220	0.121
+ONT LRSC R9	frac_sa_interchrom	220	0.108
+ONT LRSC R9	z_svim_only_bnd_per_gb	220	0.003
+ONT LRSC R9	z_svim_only_any_per_gb	220	0.021
+PacBio HiFi	svim_only_bnd_per_gb	135	0.49
+PacBio HiFi	svim_only_any_per_gb	135	-0.171
+PacBio HiFi	frac_sa	135	-0.293
+PacBio HiFi	frac_sa_interchrom	135	-0.311
+PacBio HiFi	z_svim_only_bnd_per_gb	135	0.0
+PacBio HiFi	z_svim_only_any_per_gb	135	-0.002

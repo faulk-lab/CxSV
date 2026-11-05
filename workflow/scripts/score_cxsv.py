@@ -173,6 +173,9 @@ def main():
     ap.add_argument("--catalogue-check", default=None)
     ap.add_argument("--literature-hits", default=None,
                     help="private/cxsv_literature_hits.tsv (match_literature.py): annotation columns, no points")
+    ap.add_argument("--library-qc", default=None,
+                    help="qc/library_qc.tsv (library_qc.py): reported; conservative Tier-1 gate when FLAG "
+                         "and library_qc.conservative_mode")
     ap.add_argument("--sample", default="patient")
     a = ap.parse_args()
 
@@ -382,11 +385,38 @@ def main():
         x["tier"] = sc.tier_of(x["total"], P["tiers"])
         x["q"] = q
 
+    qc = (read_tsv(a.library_qc) or [{}])[0] if a.library_qc else {}
+    apply_library_qc_gate(loci, qc, P)
+
     lit = {r["Locus_ID"]: r for r in read_tsv(a.literature_hits)} if a.literature_hits else None
     for x in loci:
         x["lit"] = (lit or {}).get(x["L"], {})
     loci.sort(key=lambda x: (-x["total"], x["L"]))
-    write_outputs(a, P, loci, cat_names, sex_note, lit is not None)
+    write_outputs(a, P, loci, cat_names, sex_note, lit is not None, qc)
+
+
+def apply_library_qc_gate(loci, qc, P):
+    """Conservative mode (docs/LIBRARY_QC.md): for a FLAGged library with
+    library_qc.conservative_mode true, a Tier-1 locus without multi-caller or depth
+    support is reported at library_qc.conservative.demote_to. Points are unchanged."""
+    LQ = P.get("library_qc") or {}
+    on = bool(LQ.get("conservative_mode")) and qc.get("qc_flag") == "FLAG"
+    top = max(P["tiers"], key=lambda t: t["min"])["name"]
+    for x in loci:
+        x["qc_gate"] = "not_applied"
+        if not on or x["tier"] != top:
+            continue
+        multi = sum(1 for j in x["kept"] if j.supp_vec.count("1") >= 2)
+        changed = sum(1 for s in x["segs"] if s[6]) if x["segs"] else 0
+        keep, why = sc.library_qc_gate(multi, len(x["kept"]), changed, LQ["conservative"])
+        x["qc_gate"] = ("kept: " if keep else "demoted: ") + why
+        if not keep:
+            x["tier"] = LQ["conservative"].get("demote_to", "Tier2")
+
+
+QC_FIELDS = ("qc_group", "qc_flag", "qc_reason", "frac_sa", "frac_sa_interchrom", "svim_only_bnd_per_gb",
+             "svim_only_any_per_gb", "z_svim_only_bnd_per_gb", "z_svim_only_any_per_gb", "coverage_est",
+             "reads_sampled")
 
 
 def top3(feats):
@@ -397,13 +427,13 @@ def top3(feats):
 LIT_COLS = ("Literature_Match", "Literature_Events")
 
 
-def write_outputs(a, P, loci, cat_names, sex_note, with_literature=False):
+def write_outputs(a, P, loci, cat_names, sex_note, with_literature=False, qc=None):
     base = ["Rank", "Locus_ID", "Chr", "Start", "End", "Size", "Cmplx_Class", "SV_Types", "CxSV_Criteria",
             "Complexity_Tier", "N_Junctions", "N_Breakends", "Max_Interleaved", "Panel_Status", "Panel_Carriers",
             "Panel_Callable", "Panel_Individuals", "Catalogues_Containing", "Catalogue_Max_AF"]
     cats = [f"{n}_{s}" for n in cat_names for s in ("Junctions_Matched", "Max_AF")]
     cols = base + cats + (list(LIT_COLS) if with_literature else []) + \
-        ["Genes_Affected", "Total_Score", "Tier", "Chromothripsis_Points", "Top_Features"]
+        ["Genes_Affected", "Total_Score", "Tier", "Library_QC_Gate", "Chromothripsis_Points", "Top_Features"]
     cols += [f"{n}_{k}" for n in sc.FEATURE_ORDER for k in ("value", "points")]
     with open(a.out_tsv, "w", newline="") as fh, open(a.out_features, "w", newline="") as ff:
         w = csv.writer(fh, delimiter="\t", lineterminator="\n")
@@ -422,6 +452,7 @@ def write_outputs(a, P, loci, cat_names, sex_note, with_literature=False):
             out["Genes_Affected"] = ",".join(f"{g}:{m}" for g, m in sorted(x["affected"].items())) or "none"
             out["Total_Score"] = f"{x['total']:.2f}"
             out["Tier"] = x["tier"]
+            out["Library_QC_Gate"] = x.get("qc_gate", "not_applied")
             out["Chromothripsis_Points"] = f"{x['ct']:.2f}"
             out["Top_Features"] = top3(x["feats"])
             for n in sc.FEATURE_ORDER:
@@ -431,10 +462,10 @@ def write_outputs(a, P, loci, cat_names, sex_note, with_literature=False):
             for n in sc.FEATURE_ORDER:
                 f = fm[n]
                 wf.writerow([x["L"], rank, f.name, f.group, f.value, f"{f.points:.2f}", f.rule])
-    write_report(a, P, loci, sex_note)
+    write_report(a, P, loci, sex_note, qc or {})
 
 
-def write_report(a, P, loci, sex_note):
+def write_report(a, P, loci, sex_note, qc=None):
     L = []
     L.append(f"# CxSV score report: {a.sample}\n")
     L.append("Explicit points system modelled on ACMG/ClinGen CNV scoring plus computed chromothripsis "
@@ -455,6 +486,21 @@ def write_report(a, P, loci, sex_note):
     tiers = defaultdict(int)
     for x in loci:
         tiers[x["tier"]] += 1
+    qc = qc or {}
+    LQ = P.get("library_qc") or {}
+    if qc:
+        demoted = sum(1 for x in loci if str(x.get("qc_gate", "")).startswith("demoted"))
+        L.append(f"- library QC (docs/LIBRARY_QC.md): **{qc.get('qc_flag', 'NA')}** "
+                 f"(group {qc.get('qc_group', 'NA')}; {qc.get('qc_reason', 'NA')}); reads with a supplementary "
+                 f"alignment {qc.get('frac_sa', 'NA')}, to another chromosome {qc.get('frac_sa_interchrom', 'NA')}; "
+                 f"SVIM-only BND/TRA per Gb {qc.get('svim_only_bnd_per_gb', 'NA')} "
+                 f"(z {qc.get('z_svim_only_bnd_per_gb', 'NA')}), SVIM-only records per Gb "
+                 f"{qc.get('svim_only_any_per_gb', 'NA')} (z {qc.get('z_svim_only_any_per_gb', 'NA')}); "
+                 f"conservative mode {'on' if LQ.get('conservative_mode') else 'off'}"
+                 + (f", {demoted} Tier-1 locus/loci demoted" if LQ.get("conservative_mode") else ""))
+        if qc.get("qc_flag") == "FLAG":
+            L.append("  - **This library is an outlier for single-caller breakend calls; treat Tier-1 loci "
+                     "supported by one caller only with caution.**")
     L.append("- tiers: " + ", ".join(f"{t['name']} {tiers[t['name']]}" for t in P["tiers"]) + "\n")
     L.append("## Ranking\n")
     L.append("| Rank | Locus | Class | Panel | Genes | Total | Tier | Top contributions |")
@@ -467,6 +513,8 @@ def write_report(a, P, loci, sex_note):
     for x in loci:
         r = x["row"]
         L.append(f"\n## {x['rank']}. {x['L']}: {r['Cmplx_Class']}, total {x['total']:.2f} ({x['tier']})\n")
+        if x.get("qc_gate", "not_applied") != "not_applied":
+            L.append(f"- library QC gate: {x['qc_gate']}")
         L.append(f"- junctions {r.get('N_Junctions', 'NA')} ({len(x['comp'])} composite records not counted), "
                  f"breakends {r.get('N_Breakends', 'NA')} ({r.get('Complexity_Tier', 'NA')}), "
                  f"types {r.get('SV_Types', 'NA')}, criteria {r.get('CxSV_Criteria', 'NA')}")
