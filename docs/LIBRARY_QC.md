@@ -179,7 +179,7 @@ panel-v1.1 arm reproduces the deployed runs exactly):
 | | effect of exclusion |
 |---|---|
 | positive-control events E01-E10, E13 | status unchanged (all private), tiers unchanged; privacy points change by at most 0.01 (callable fraction) |
-| host 3559 | 4 benign loci change public ↔ shared_junctions; 0 tier changes |
+| host 3559 | 4 benign loci change public ↔ shared_junctions (privacy points unchanged at −1.00); one shared_junctions locus (chr13:2,872,188-2,922,438, Nested_SV) moves from −0.78 to 0.00 privacy points as its seen-junction fraction falls (total −1.43 → −0.65, still Benign_likely); 0 tier changes |
 | HG01868 | 2 benign loci change status; 0 privacy or tier changes |
 
 ([pc_privacy_compare.tsv](library_qc/pc_privacy_compare.tsv),
