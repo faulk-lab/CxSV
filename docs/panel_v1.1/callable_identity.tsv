@@ -1,0 +1,7 @@
+cohort	sample	input	callable_bed_gz	mosdepth_summary	wall_s	sha256_16
+1kGP_ONT_1019_CHM13	HG01992	CRAM3.0	identical	identical	82	f43d9fb6676ecd04
+1kGP_ONT_1019_CHM13	HG03109	CRAM3.0	identical	identical	75	3f64a92d8a0c310a
+1kGP_ONT_1019_CHM13	HG02081	CRAM3.1	identical	identical	279	b94eff451d62b120
+1kGP_LRSC_ONT_CHM13	HG00155	BAM	identical	identical	459	ec80da7825241b81
+1kGP_LRSC_ONT_CHM13	HG02479	BAM	identical	identical	473	7485b9cce77c2570
+1kGP_PacBio_CHM13	HG02727	BAM	identical	identical	260	b37fbf6cff7bcf46

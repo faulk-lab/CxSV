@@ -91,6 +91,7 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
     svim_lowq` as the default and re-release panel-v1.1 from the merge commit
     into `/mnt/sargasso1/CxSV/build/panel-v1.1-r2`; the 64e10c1b1363 build is
     superseded (build root kept as provenance, never tagged).*
+    *Done 2026-11-05: `cxsv-panel-20261105-c31ecc9f8fa2` (docs/panel_v1.1/README.md).*
 13. **Small fixes found in the 2026-11-03 validation.** *Approved 2026-11-04;
     done on branch `small-fixes-2026-11` (section "Small fixes 2026-11"
     below), awaiting merge.* As proposed:
@@ -122,7 +123,7 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
 | 10 | Graded privacy penalty for partly matched loci | done 2026-11-03; merged (PR #17) | `main`, docs/SCORING.md section 6b |
 | 11 | Curated literature set of pathogenic CxSVs | **done 2026-11-04**: `lit-v1.0` (154 events, 315 junctions on hs1), tests A and B; "top tier" not met on main (7/63 Tier 1), proposals for item 13 | PR #19, `item11-literature-set-2`, docs/LITERATURE_SET.md |
 | 12 | Full panel build and first real release | **done 2026-11-03**: release `cxsv-panel-20261102-cd7e1d194cd4`, tag `panel-v1.0`; bundle validated offline (check 7: one locale-dependent plot, data identical); positive control run against it | `main` (tag), `validation-panel-v1.0`, below |
-| 13 | Oversized-cluster blind spot | **done 2026-11-04** (fix + panel evaluation); first panel-v1.1 build held (healthy Tier 1 +86%) and superseded; fix `svim_lowq` adopted 2026-11-05, rebuild as panel-v1.1 (r2) pending (docs/R10_EXCESS.md) | `main` (`de23a0e`), `item13-oversized-clusters-2`, docs/OVERSIZED_CLUSTERS.md |
+| 13 | Oversized-cluster blind spot | **done 2026-11-04** (fix + panel evaluation); first panel-v1.1 build held (healthy Tier 1 +86%) and superseded; fix `svim_lowq` adopted 2026-11-05; panel-v1.1 released 2026-11-05 as `cxsv-panel-20261105-c31ecc9f8fa2` (healthy Tier 1 0.251, bundle validated, tag pending; docs/panel_v1.1/README.md) | `main` (`de23a0e`), `item13-oversized-clusters-2`, docs/OVERSIZED_CLUSTERS.md |
 | – | Small fixes 2026-11 (8 fixes from the panel-v1.0 validation) | done 2026-11-04; awaiting merge | `small-fixes-2026-11`, below |
 
 ---
@@ -431,6 +432,23 @@ HG01868 and literature test A unchanged; awaiting the PI's decision.
 is superseded and panel-v1.1 is re-released from the merge commit into
 `/mnt/sargasso1/CxSV/build/panel-v1.1-r2` (stop rule: healthy Tier 1 must not
 exceed v1.0's 0.457 per genome).*
+
+**panel-v1.1 released (2026-11-05; docs/panel_v1.1/README.md).** `cxsv-panel-20261105-c31ecc9f8fa2`,
+built downstream-only from `main` 8fc5bef into `/mnt/sargasso1/CxSV/build/panel-v1.1-r2`:
+VERIFIED, junction sites identical to v1.0, 13,488 CxSV loci, blind span 1.40 Mb
+median per genome. Full-panel healthy LOFO Tier 1 is 0.251 per genome (v1.0 0.457;
+R10 0.320). The bundle `cxsv-bundle-20261105-8fc5bef725bd` passed offline validation
+(8/8; HG01868 0 Tier 1), and the positive control passed (E02 and E07 Tier 1, host
+0 Tier 1). Tag `panel-v1.1` pending.
+
+**Follow-up: residual healthy-genome noise (new, 2026-11-05).** Three genomes keep
+>= 10 Tier-1 calls under `svim_lowq` (147 of the panel's 407; without them, 0.160 per genome):
+- HG01879 (ONT-1019, 73; v1.0 52) and HG00268 (ONT-1019, 42; v1.0 37): noisy
+  before item 13; SVIM-only DEL at QUAL < 10 and single-caller INV, not BND/TRA.
+- HG01867 (LRSC R10, 32; v1.0 5), newly noisy: it carries 2,642 SVIM-only TRA records
+  at QUAL >= 10, above the `svim_lowq` cut, which v1.0 hid inside 2.29 Gb of oversized clusters.
+Candidates: library-chimerism QC (supplementary-alignment rate) or coverage-relative
+support; neither is tested (docs/R10_EXCESS.md).
 
 
 ### 8. Read-level mechanism axes (PI criteria 3, 4, 6) — on hold (decision 6)
