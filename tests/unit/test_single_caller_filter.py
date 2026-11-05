@@ -1,5 +1,6 @@
-"""R10-excess diagnosis: the candidate single-caller breakend rule of
-workflow/scripts/vcf_to_bed.py (--single-caller-bnd-rule; default keep = main).
+"""The single-caller breakend rule of workflow/scripts/vcf_to_bed.py
+(--single-caller-bnd-rule; command-line default keep = panel-v1.0 discovery;
+pipeline default svim_lowq, config/calling.yaml, adopted 2026-11-05).
 
 Seven LRSC R10 panel genomes carry 3,753-14,258 SVIM-only translocation records at
 SVIM's quality floor (QUAL 5); clustered with real SVs they make BND_cluster loci
@@ -75,3 +76,12 @@ def test_keep_is_main(tmp_path):
 def test_unknown_rule():
     with pytest.raises(ValueError):
         v2b.single_caller_excluded("bogus", "TRA", "010", 5, 10)
+
+
+def test_calling_yaml_default_is_svim_lowq():
+    """The pipeline default (config/calling.yaml) is svim_lowq at QUAL 10 (docs/R10_EXCESS.md)."""
+    import yaml
+    cp = yaml.safe_load((REPO / "config" / "calling.yaml").read_text())["cxsv_params"]
+    assert cp["single_caller_bnd_rule"] == "svim_lowq"
+    assert cp["svim_min_qual_discovery"] == 10
+    assert cp["single_caller_bnd_rule"] in v2b.SINGLE_BND_RULES

@@ -174,7 +174,9 @@ def run_event(task):
     link_max = cp.get("span_link_max", 0) if slm is None else slm
     rule = cp.get("long_span_rule", "breakends") if rule is None else rule
     sh(f"python {W}/vcf_to_bed.py --vcf {S}/merged_sv.vcf --out {S}/cxsv/merged_sv.bed --window {cp['bnd_window']} "
-       f"--span-link-max {link_max} --long-span-rule {rule} --long-out {S}/cxsv/long_span_records.tsv", log)
+       f"--span-link-max {link_max} --long-span-rule {rule} --long-out {S}/cxsv/long_span_records.tsv "
+       f"--single-caller-bnd-rule {cp.get('single_caller_bnd_rule', 'keep')} "
+       f"--svim-min-qual {cp.get('svim_min_qual_discovery', 10)} --filtered-out {S}/cxsv/single_caller_filtered.tsv", log)
     sh(f"bedtools sort -i {S}/cxsv/merged_sv.bed > {S}/cxsv/merged_sv_sorted.bed && "
        f"bedtools cluster -d {cp['cluster_distance']} -i {S}/cxsv/merged_sv_sorted.bed > {S}/cxsv/clusters.bed", log)
     sh(f"python {W}/classify_cxsv.py --bed {S}/cxsv/clusters.bed --vcf {S}/merged_sv.vcf --fai {a.fai} "

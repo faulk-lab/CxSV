@@ -92,6 +92,17 @@ survivor_params:
 #                          (FILTERED_oversized_cluster); after item 13 these are
 #                          dense runs of SVs in satellite / acrocentric / subtelomeric
 #                          sequence (median 1.6 Mb per panel genome)
+#   single_caller_bnd_rule merged records left out of CxSV discovery (they stay
+#                          junctions and merged calls; listed in
+#                          cxsv/single_caller_filtered.tsv). svim_lowq (adopted
+#                          2026-11-05, docs/R10_EXCESS.md) = SVIM-only (SUPP_VEC 010)
+#                          BND/TRA records with QUAL < svim_min_qual_discovery. A few
+#                          panel genomes (chimeric libraries) carry thousands at
+#                          SVIM's QUAL floor; clustered with real deletions they made
+#                          BND_cluster loci (healthy Tier 1 0.851 -> 0.251 per genome).
+#                          keep = none left out (panel-v1.0, panel-v1.1 build
+#                          64e10c1b1363); svim_lowq_any, single_bnd = diagnosis only.
+#   svim_min_qual_discovery QUAL threshold of the svim_lowq rules
 # These are operational, cohort-specific choices, not validated cutoffs.
 cxsv_params:
   cluster_distance:  50000
@@ -108,6 +119,8 @@ cxsv_params:
   interleave_alt_min_intra:  3
   interleave_alt_min_inter:  4
   composite_fraction:     0.25
+  single_caller_bnd_rule: svim_lowq
+  svim_min_qual_discovery:  10
 
 # ─── [FINGERPRINTED] Junction tables (per sample; rules/junctions.smk) ──────
 # Every merged SV call becomes a breakpoint junction (docs/JUNCTIONS.md).

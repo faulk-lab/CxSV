@@ -559,8 +559,13 @@ When a change touches only the rules after `merge_sv_callers` (item 13: CxSV
 discovery), a panel is rebuilt from an existing build's upstream outputs
 instead of re-calling 1,619 genomes. `scripts/panel_build/rebuild_downstream.sh`
 does it; panel-v1.1 (`cxsv-panel-20261104-64e10c1b1363`, from `main` 65ef970)
-was built this way from panel-v1.0. **That release is on hold**
-(docs/R10_EXCESS.md).
+was built this way from panel-v1.0. **That release was held and is superseded**
+(docs/R10_EXCESS.md); panel-v1.1 is re-released the same way, with
+`single_caller_bnd_rule: svim_lowq`, into `/mnt/sargasso1/CxSV/build/panel-v1.1-r2`
+(OLD = panel-v1.0; the first v1.1 root stays untouched). The rule acts in
+`sample_vcf_to_bed`, which is downstream of `merge_sv_callers`, so the
+downstream-only rebuild applies; `callable_mask.sh` changed only in its log line
+(`%.0f`), and `check_callable_identity.sh` re-checks the held masks.
 
 1. **New build root**, e.g. `/mnt/sargasso1/CxSV/build/panel-v1.1`. The release
    path is `<results>/release`, so a rebuild inside the old root would

@@ -551,6 +551,14 @@ Score, tier and status do not change. Bundles built with
   Tier 1 from 0.196 to 0.371 per genome, against 0.237 with the records left out.
   Scoring long junctions by their breakends only would be needed before they can
   be let back in.
+- **SVIM-only low-quality breakend records are not part of any locus**
+  (`single_caller_bnd_rule: svim_lowq`, 2026-11-05, docs/R10_EXCESS.md). With
+  the item-13 rule alone, healthy Tier 1 on the full panel rose to 0.851 per
+  genome (R10 3.91): genomes with chimeric libraries carry thousands of SVIM-only
+  BND/TRA records at QUAL 5 that clustered with real deletions into BND_cluster
+  loci. Leaving out SVIM-only BND/TRA with QUAL < 10 gives 0.251 (R10 0.320)
+  with the scoring weights unchanged. Three genomes stay noisy (HG01879, HG00268,
+  HG01867; not addressed).
 
 ## 8. Changing the scoring
 

@@ -42,16 +42,17 @@ Long span records (roadmap item 13)
   Either way the record is listed in --long-out (ID CHROM POS END SVTYPE LENGTH
   SUPP_VEC RULE). --span-link-max 0 restores the interval rule for every record.
 
-Single-caller breakend filter (R10 excess diagnosis, not deployed)
-------------------------------------------------------------------
+Single-caller breakend filter (cxsv_params.single_caller_bnd_rule, docs/R10_EXCESS.md)
+--------------------------------------------------------------------------------------
   A few panel genomes carry thousands of SVIM-only translocation records at
   SVIM's quality floor (QUAL 5): 3,753-14,258 in 7 LRSC R10 genomes against a
   median of 64 in the other R10 genomes. Clustered with real SVs they make
   BND_cluster / CN_plus_orientation_change loci out of simple deletions.
   --single-caller-bnd-rule decides which merged records take no part in CxSV
   discovery (they stay junctions and merged calls, like long-span records):
-    keep            none (default; discovery as on main)
+    keep            none (command-line default; discovery as in panel-v1.0)
     svim_lowq       SVIM-only (SUPP_VEC 010) BND/TRA records with QUAL < --svim-min-qual
+                    (the pipeline default since 2026-11-05, config/calling.yaml)
     svim_lowq_any   SVIM-only records of any type with QUAL < --svim-min-qual
     single_bnd      every single-caller BND/TRA record, whatever its quality
   SUPP_VEC order is the SURVIVOR file order: cuteSV, SVIM, Sniffles2.
@@ -321,7 +322,7 @@ def main():
     parser.add_argument("--long-out", default=None,
                         help="TSV listing the records longer than --span-link-max and the rule applied")
     parser.add_argument("--single-caller-bnd-rule", choices=SINGLE_BND_RULES, default="keep",
-                        help="single-caller breakend records left out of discovery (see the module docstring)")
+                        help="single-caller breakend records left out of discovery (see the module docstring; the pipeline passes cxsv_params.single_caller_bnd_rule, default svim_lowq)")
     parser.add_argument("--svim-min-qual", type=float, default=10,
                         help="QUAL below which an SVIM-only record is low quality (svim_lowq rules)")
     parser.add_argument("--filtered-out", default=None,

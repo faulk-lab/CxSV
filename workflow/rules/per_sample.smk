@@ -89,10 +89,10 @@ rule sample_vcf_to_bed:
         window   = config["cxsv_params"]["bnd_window"],
         link_max = config["cxsv_params"]["span_link_max"],
         rule     = config["cxsv_params"]["long_span_rule"],
-        # R10-excess diagnosis (not deployed): single-caller breakend records left out of
-        # discovery (scripts/vcf_to_bed.py --single-caller-bnd-rule); default keep = main
-        single   = config["cxsv_params"].get("single_caller_bnd_rule", "keep"),
-        svim_q   = config["cxsv_params"].get("svim_min_qual_discovery", 10)
+        # single-caller breakend records left out of discovery (docs/R10_EXCESS.md;
+        # scripts/vcf_to_bed.py --single-caller-bnd-rule; config default svim_lowq)
+        single   = config["cxsv_params"]["single_caller_bnd_rule"],
+        svim_q   = config["cxsv_params"]["svim_min_qual_discovery"]
     log:    f"{S}/logs/vcf_to_bed.log"
     shell:
         "python {input.script} --vcf {input.vcf} --out {output.bed} --window {params.window} "

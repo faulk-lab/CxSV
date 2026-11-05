@@ -1,10 +1,15 @@
-# Healthy Tier-1 excess in panel-v1.1: diagnosis and candidate fixes
+# Healthy Tier-1 excess in panel-v1.1: diagnosis and the adopted fix
 
-**Status (2026-11-04): panel-v1.1 is on hold. Nothing is tagged or merged.**
-This branch (`r10-excess-diagnosis`, off `main` 8aba785) holds the analysis
-code, the tables and figures, and the downstream-only rebuild scripts. The
-candidate rule is implemented behind an option whose default (`keep`) is
-`main`'s discovery.
+**Status (2026-11-05): `svim_lowq` adopted by the PI as the default**
+(`cxsv_params.single_caller_bnd_rule: svim_lowq`, `svim_min_qual_discovery: 10`
+in config/calling.yaml). panel-v1.1 will be re-released from the merge commit,
+downstream-only, into a new build root `/mnt/sargasso1/CxSV/build/panel-v1.1-r2`.
+The first panel-v1.1 build (`cxsv-panel-20261104-64e10c1b1363`, below) is
+**superseded and never tagged**; its build root `/mnt/sargasso1/CxSV/build/panel-v1.1`
+is kept untouched as provenance. Branch `r10-excess-diagnosis` (off `main`
+8aba785) holds the rule, the analysis code, the tables and figures and the
+downstream-only rebuild scripts. Sections 1-6 are the diagnosis as reported on
+2026-11-04; section 7 is the change.
 
 ## 1. Question
 
@@ -161,7 +166,7 @@ and v1.1 with each candidate rule.
 
 ## 5. Recommendation
 
-**Adopt v1.1 + `svim_lowq` and rebuild downstream-only.**
+**Adopt v1.1 + `svim_lowq` and rebuild downstream-only.** *(Adopted 2026-11-05.)*
 
 - It is the narrowest rule that removes the excess. It leaves out 120,279 SVIM
   records at the quality floor, 0.28% of the panel's 43,288,964 merged records,
@@ -218,12 +223,38 @@ python calibration/r10_excess/figures_r10.py --diag-genomes … --diag-loci … 
 
 | file | role |
 |---|---|
-| `workflow/scripts/vcf_to_bed.py` | `--single-caller-bnd-rule keep, svim_lowq, svim_lowq_any or single_bnd` (default keep) |
-| `workflow/rules/per_sample.smk` | `cxsv_params.single_caller_bnd_rule`, `svim_min_qual_discovery` (defaults keep, 10; not in config/calling.yaml) |
+| `workflow/scripts/vcf_to_bed.py` | `--single-caller-bnd-rule keep, svim_lowq, svim_lowq_any or single_bnd` (command-line default keep) |
+| `config/calling.yaml`, `workflow/rules/per_sample.smk` | `cxsv_params.single_caller_bnd_rule: svim_lowq`, `svim_min_qual_discovery: 10` (pipeline default; required keys) |
 | `calibration/r10_excess/diag_added_t1.py` | per added Tier-1 locus and per genome diagnosis |
 | `calibration/r10_excess/read_profile.py` | supplementary-alignment rate, read length, MAPQ |
 | `calibration/r10_excess/rerun_discovery.py` | discovery rerun under a rule into a separate tree |
 | `calibration/r10_excess/patient_rerun_downstream.sh`, `score_patient_runs.sh` | patient runs under a rule |
 | `calibration/r10_excess/figures_r10.py` | figures |
 | `calibration/oversized_clusters/panel_rates.sh`, `panel_rates_collect.py` | full-panel LOFO healthy rates |
-| `tests/unit/test_single_caller_filter.py` | the rule (6 tests) |
+| `tests/unit/test_single_caller_filter.py` | the rule and the config default (7 tests) |
+
+## 7. Adopted change (2026-11-05)
+
+- **Default.** `config/calling.yaml` `cxsv_params` gains
+  `single_caller_bnd_rule: svim_lowq` and `svim_min_qual_discovery: 10`;
+  `per_sample.smk` reads both keys from the config without a fallback. The
+  `vcf_to_bed.py` command-line default stays `keep` (panel-v1.0 discovery), as
+  `--long-span-rule` keeps its own command-line default.
+- **What it changes.** Only CxSV discovery: the excluded records are still
+  merged calls, junctions and panel junction sites, and are listed per sample in
+  `cxsv/single_caller_filtered.tsv`. Literature test A passes the configured
+  rule to `vcf_to_bed.py` (its records are all `SUPP_VEC` 111, so its result
+  does not change).
+- **Fingerprint.** `cxsv_params` and two fingerprinted files changed, so the
+  calling fingerprint is new (reported in the branch's commit message and the
+  rebuild's release id). A patient run with this code is refused by the
+  panel-v1.0 release and by `…64e10c1b1363`; it needs the r2 release.
+- **Rebuild (next round, after the merge).** From the merge commit into
+  `/mnt/sargasso1/CxSV/build/panel-v1.1-r2`, upstream hard-linked from
+  panel-v1.0 (docs/PANEL_BUILD.md, "Downstream-only rebuild"); release;
+  full-panel LOFO with the stop rule *healthy Tier 1 must not exceed v1.0's 0.457
+  per genome*; bundle; 8-check offline validation; positive control; docs branch.
+- **Also on this branch.** `callable_mask.sh` logs `callable_bp` with `%.0f`
+  (mawk's `%d` printed 2147483647 for every genome). The file is not
+  fingerprinted, the mask itself is unchanged and the rule is held in a
+  downstream-only rebuild.
