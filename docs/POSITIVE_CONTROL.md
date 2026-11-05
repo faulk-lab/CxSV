@@ -387,7 +387,20 @@ ADDONS=... EVENTS=... LITERATURE=/mnt/sargasso1/CxSV/resources/literature/lit-v1
 `pos_control_rerun_downstream.sh` copies the finished run and re-makes only the
 downstream rules with another checkout, inside the bundle's SIF. Its dry run
 must plan no caller, filter or merge rule, and the caller VCFs are checksummed
-before and after. The fingerprint is recomputed and a mismatch is allowed.
+before and after. The fingerprint is recomputed and a mismatch is allowed
+(`STRICT_FINGERPRINT=1` refuses it).
+
+When BUNDLE is newer than the bundle of the source run (`SRC_BUNDLE`, by default
+the one named in the source run's log), its reference MD5 cache has newer mtimes.
+Under `--rerun-triggers mtime` that alone would re-run the reference check and
+then every caller. Step 1b therefore requires the two `md5_manifest.tsv` files to
+be byte-identical, and then marks the reference check, callers, filters and merge
+as up to date with `snakemake --touch <merged_sv.vcf>`
+(`tests/lab/lib/reuse_callers.sh`; the touch plan may hold only those rules).
+Differing manifests stop the rerun. Touching `refcheck.ok` instead does not work,
+because it is an input of every caller rule. CI tests this on a toy workflow
+(`tests/synthetic/check_rerun_touch.sh`). The script is not part of the calling
+fingerprint.
 
 | Event | Junctions | Bundle 33c075a | Main 65ef970 (long spans excluded) |
 |---|---|---|---|

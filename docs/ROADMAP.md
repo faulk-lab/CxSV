@@ -54,13 +54,17 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
 7. **ON HOLD.** **For the restricted environment's IT** (item 2): which workflow engine and
    container runtime are allowed. The bundle assumes Snakemake plus
    Apptainer/Singularity and also ships a Docker archive.
-8. **ON HOLD.** **SLURM for the lab fleet** (item 7): held for a separate discussion.
+8. **ABANDONED 2026-11-05 (PI).** **SLURM for the lab fleet** (item 7): not pursued;
+   fleet dispatch stays ssh-based (`scripts/panel_build/`).
 9. **Housekeeping on the NAS:**
    - the sargasso1 `#recycle` bin holds superseded test bundles (~24 GB) and
      earlier deletions, and frees space only when emptied;
    - `/mnt/sargasso1/CxSV/bundles/cxsv-bundle-20261103-dc7f582c01cc.SUPERSEDED`
      (10.5 GB; failed the full-genome positive control at `locus_depth`, see
      docs/RELEASE_AND_BUNDLE.md 6a): **deleted 2026-11-04** (PI-approved);
+   - `cxsv-bundle-20261104-65ef970509da` (9.9 GB; bundle of the superseded
+     64e10c1b1363 candidate): **deleted 2026-11-05** (PI-approved; its manifests
+     are kept in `build/panel-v1.1/provenance/`);
    - the stand-in genome HG01868 (91 GB BAM, public, re-downloadable) sits in
      `datasets/standins/HG01868/` and in freya local scratch;
    - `/mnt/sargasso2/CxSV-old` is scheduled for deletion (nothing to rescue,
@@ -94,7 +98,7 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
     *Done 2026-11-05: `cxsv-panel-20261105-c31ecc9f8fa2` (docs/panel_v1.1/README.md).*
 13. **Small fixes found in the 2026-11-03 validation.** *Approved 2026-11-04;
     done on branch `small-fixes-2026-11` (section "Small fixes 2026-11"
-    below), awaiting merge.* As proposed:
+    below), merged (PR #21).* As proposed:
     - `plot_complexity_class.R`: give the heatmap explicit factor levels, so its
       row order no longer depends on the host locale (validation check 7).
     - `run_cxsv.sh`: point `TMPDIR` at the run directory; the container's
@@ -104,6 +108,23 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
       mosdepth 0.3.10 writes empty masks for them.
     None changes the calling fingerprint. *Recommendation:* approve as one
     small branch, then re-run the bundle validation.
+15. **Bundle carrying the panel-v1.1 tag (new, 2026-11-05).** The validated
+    bundle `cxsv-bundle-20261105-8fc5bef725bd` embeds the release as it was
+    before the tag was recorded (`source.git_tag` null). *Decided 2026-11-05:
+    rebuild the bundle from tag `panel-v1.1` with the finalised release, then
+    re-run the 8-check validation.*
+16. **Alternatives to the long-span exclude rule (2026-11-05).** *Decided
+    2026-11-05: the breakends rule and its scoring-side variant are
+    abandoned* (24/63 literature events for +57% healthy Tier 1). Paired-breakend
+    linkage was not adopted (docs on branch `item13-paired-linkage`, kept
+    unmerged for the record). The sensitivity gap goes to item 15 instead.
+17. **Library-chimerism QC (item 14, new 2026-11-05).** *Decided 2026-11-05:
+    add it.* Open: whether QC-failed genomes are also excluded from the panel.
+    That will be decided after item 14 reports how many genomes are flagged and
+    what they contribute to the panel.
+18. **Large duplication–triplication events (item 15, new 2026-11-05).**
+    Plan: [docs/DUP_TRP_PLAN.md](DUP_TRP_PLAN.md) (proposed). Phase 1 and the
+    decisions in its section 6 wait on the PI.
 
 ---
 
@@ -117,14 +138,16 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
 | 4 | External SV catalogues | done 2026-10-29 | `main`, docs/EXTERNAL_CATALOGUES.md |
 | 5 | Configurable, explainable scoring + classifier fixes | done 2026-10-29; literature set open (item 11) | `main`, docs/SCORING.md |
 | 6 | Tests (unit, synthetic CI, lab positive control, bundle validation) | done; bundle validation repeated with panel-v1.0 and a whole-genome positive control added 2026-11-03 | `main`, `validation-panel-v1.0`, docs/POSITIVE_CONTROL.md |
-| 7 | SLURM for the lab fleet | **on hold** | – |
+| 7 | SLURM for the lab fleet | **abandoned** 2026-11-05 (PI) | – |
 | 8 | Read-level mechanism axes (PI criteria 3, 4, 6) | **on hold** (decision 6) | below |
 | 9 | ClinGen region-level dosage | done 2026-10-30; merged | `main`, docs/SCORING.md |
 | 10 | Graded privacy penalty for partly matched loci | done 2026-11-03; merged (PR #17) | `main`, docs/SCORING.md section 6b |
 | 11 | Curated literature set of pathogenic CxSVs | **done 2026-11-04**: `lit-v1.0` (154 events, 315 junctions on hs1), tests A and B; "top tier" not met on main (7/63 Tier 1), proposals for item 13 | PR #19, `item11-literature-set-2`, docs/LITERATURE_SET.md |
 | 12 | Full panel build and first real release | **done 2026-11-03**: release `cxsv-panel-20261102-cd7e1d194cd4`, tag `panel-v1.0`; bundle validated offline (check 7: one locale-dependent plot, data identical); positive control run against it | `main` (tag), `validation-panel-v1.0`, below |
 | 13 | Oversized-cluster blind spot | **done 2026-11-04** (fix + panel evaluation); first panel-v1.1 build held (healthy Tier 1 +86%) and superseded; fix `svim_lowq` adopted 2026-11-05; panel-v1.1 released 2026-11-05 as `cxsv-panel-20261105-c31ecc9f8fa2` (healthy Tier 1 0.251, bundle validated, tag pending; docs/panel_v1.1/README.md) | `main` (`de23a0e`), `item13-oversized-clusters-2`, docs/OVERSIZED_CLUSTERS.md |
-| – | Small fixes 2026-11 (8 fixes from the panel-v1.0 validation) | done 2026-11-04; awaiting merge | `small-fixes-2026-11`, below |
+| – | Small fixes 2026-11 (8 fixes from the panel-v1.0 validation) | done 2026-11-04; merged (PR #21) | `main`, below |
+| 14 | Library-chimerism QC (panel and patient) | **in progress** 2026-11-05 (decision 17) | below |
+| 15 | Copy-number-anchored detection of large DUP-TRP/INV-DUP and other CN-linked events | **planned** (decision 18) | docs/DUP_TRP_PLAN.md |
 
 ---
 
@@ -412,7 +435,8 @@ carry most of the increase), provisional until the rebuild. Positive control:
 E02 private Tier 1; every other planted event and the host's 0 Tier-1 calls
 unchanged. The first version merged in `de23a0e` clustered such records at
 their breakends instead; that rule raised healthy Tier 1 to 0.371 and gave the
-host 3 Tier-1 calls, and is replaced (kept as `long_span_rule: breakends`).
+host 3 Tier-1 calls, and is replaced (kept as `long_span_rule: breakends`;
+abandoned 2026-11-05 by the PI, decision 16).
 Also fixed: `calling_fingerprint` was not re-made after a code change in an
 existing build tree.
 
@@ -508,11 +532,34 @@ Details are in docs/LITERATURE_SET.md.
 
 ---
 
-## On hold
+### 14. Library-chimerism QC — in progress (decision 17)
 
-### 7. A cluster scheduler (SLURM) for the lab fleet
+In 11 panel genomes (7 LRSC R10, 1 R9, 3 ONT-1019), thousands of SVIM-only
+low-QUAL TRA/BND records and an elevated supplementary-alignment fraction point
+to chimeric libraries (docs/R10_EXCESS.md). `svim_lowq` removes most of their
+Tier-1 noise. Three residual genomes (HG01879, HG00268, HG01867) still hold 36%
+of healthy Tier 1. Plan:
+1. Define a per-library chimerism metric from the alignments and the call set,
+   independent of scoring.
+2. Calibrate it per platform on the panel.
+3. Report it in every patient run, with a conservative scoring mode for
+   flagged libraries.
+4. Measure what flagged genomes contribute to the panel before deciding on
+   exclusion.
 
-Held for a separate discussion about deploying SLURM across the lab nodes.
+### 15. Copy-number-anchored detection of large DUP-TRP/INV-DUP — planned (decision 18)
+
+None of the 26 published DUP-TRP/INV-DUP events (MECP2, PLP1; 0.42–7.4 Mb) is
+called today: their junctions are > 500 kb or > 50 kb apart, and copy number is
+not used in discovery. Plan: [docs/DUP_TRP_PLAN.md](DUP_TRP_PLAN.md).
+
+---
+
+## Abandoned
+
+### 7. A cluster scheduler (SLURM) for the lab fleet — abandoned 2026-11-05 (PI)
+
+Not pursued; fleet dispatch stays ssh-based. Original note: held for a separate discussion about deploying SLURM across the lab nodes.
 Most of this round's operational failures came from hand-built ssh dispatch
 (claim collisions, stale handles, crash recovery); a scheduler would let
 Snakemake place jobs itself and retire `acquisition/orchestrate_alignment.py`.
