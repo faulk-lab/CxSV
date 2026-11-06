@@ -78,7 +78,11 @@ def fig_d(path, genomes, out):
     ax.set_ylabel("Tier 1 per healthy genome (LOFO)")
     ax.set_xlim(-0.6, len(S) + 0.2); ax.set_ylim(0, max(1.0, S.new.max() * 1.2))
     d = S.new.iloc[-1] - S.old.iloc[-1]
-    ax.set_title(f"CN linkage adds {d:+.2f} Tier 1 per healthy genome", loc="left")
+    per = S.iloc[:-1].assign(delta=lambda t: t.new - t.old)
+    top = per.loc[per.delta.idxmax()]
+    note = (f"\n{top.stratum} {top.delta:+.2f} = {int(round(top.delta * top.n))} locus in {int(top.n)} genomes"
+            if top.delta > d else "")
+    ax.set_title(f"CN linkage adds {d:+.2f} Tier 1 per healthy genome overall{note}", loc="left")
     ax.legend(frameon=False, loc="upper left", fontsize=6)
     fig.tight_layout(); fig.savefig(f"{out}/fig_testD_healthy.png", dpi=300)
 

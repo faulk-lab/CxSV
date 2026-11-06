@@ -219,6 +219,7 @@ Method: the item-10 / item-13 LOFO chain (locus callability, leave-out status, d
 ![Healthy Tier 1](cn_linkage/fig_testD_healthy.png)
 
 - **Tier 1 per healthy genome:** 0.56 → 0.57 (+0.01), against a stop rule of +0.05.
+- **Per stratum:** LRSC R9 +0.05 (0.10 → 0.15). That is the single new Tier 1 below (HG00136): one locus in 20 genomes moves a stratum by 0.05. LRSC R10, ONT-1019 and PacBio are +0.00. The stop rule is a panel-wide per-genome rate, so R9 sits at the threshold only because n = 20. Phase 2 should report per-stratum rates on the full panel.
 - **Score stability:** 0 existing loci changed score or tier across 112,224 loci.
 - **New loci:** 107 added: 89 benign, 9 Tier 3, 8 Tier 2, 1 Tier 1.
 - **The one new Tier 1:** HG00136 (R9), chr2:230,331,120–230,521,261, DUP-TRP_INV-DUP, private, 1.41, driven by gene dosage.
