@@ -2,13 +2,13 @@
 """Panel-of-normals of the copy-number track, one per platform stratum (rule
 panel_cn_pon, workflow/rules/cn.smk; docs/CN_LINKAGE.md).
 
-  cn_pon.py --members members.tsv [--par par.bed] --exclude flagged.tsv --params cn_params.json (rule cn_params_json; its cn_params.segmentation block) \\
+  cn_pon.py --members members.tsv [--par par.bed] [--exclude flagged.tsv] --params cn_params.json (rule cn_params_json; its cn_params.segmentation block) \\
       --out-dir DIR [--threads N]
 
 members.tsv: key (cohort/sample), individual_id, stratum, depth (1 kb regions.bed.gz).
 Every member is read once: genome median of its 10 kb bins and sex from the chrX ratio
-(cxsv_cn.infer_sex). Libraries listed in --exclude (cohort, sample_id; the library-QC
-flag list) do not enter the PoN. Per stratum, DIR/<stratum>.npz holds the per-bin
+(cxsv_cn.infer_sex). Libraries in cn_params.pon_exclude (cohort/sample_id; the library-QC
+flag list) or in --exclude (TSV cohort, sample_id) do not enter the PoN. Per stratum, DIR/<stratum>.npz holds the per-bin
 median, relative MAD and genome count of normalised depth (cxsv_cn.Pon; chrX pools
 both sexes, chrY males only). DIR/pon_members.tsv lists every library with its sex,
 chrX ratio, genome median and whether it is in the PoN (and why not).
@@ -45,7 +45,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--members", required=True)
     ap.add_argument("--par", default=None, help="PAR BED; default cn_params.par of --params")
-    ap.add_argument("--exclude", default="")
+    ap.add_argument("--exclude", default="", help="TSV cohort, sample_id; default cn_params.pon_exclude of --params")
     ap.add_argument("--params", required=True)
     ap.add_argument("--out-dir", required=True)
     ap.add_argument("--threads", type=int, default=4)
@@ -54,7 +54,7 @@ def main():
     params = {**cn.DEFAULTS, **cnp["segmentation"]}
     par = cn.read_par(a.par) if a.par else cn.par_from_params(cnp.get("par"))
     members = list(csv.DictReader(open(a.members), delimiter="\t"))
-    excl = set()
+    excl = set(cnp.get("pon_exclude") or [])
     if a.exclude and a.exclude != "none":
         for r in csv.DictReader([l for l in open(a.exclude) if not l.startswith("#")], delimiter="\t"):
             excl.add(f"{r['cohort']}/{r['sample_id']}")

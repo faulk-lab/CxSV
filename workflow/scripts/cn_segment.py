@@ -84,7 +84,7 @@ def main():
                 v = s.get(c, False if c == "nested" else 0)
                 vals.append(str(round(v, 4)) if isinstance(v, float) else str(v))
             fh.write("\t".join(vals) + "\n")
-    stats = dict(stratum=stratum, stratum_source=source, sex=sex, x_ratio=ratio, pon_genomes=pon.meta.get("genomes"),
+    stats = dict(stratum=stratum, stratum_source=source, sex=sex, x_ratio=ratio if ratio == ratio else None, pon_genomes=pon.meta.get("genomes"),
                  genome_median=round(st["genome_median"], 3), sigma=round(st["sigma"], 4) if st["sigma"] == st["sigma"] else None,
                  masked_fraction=round(st["masked_fraction"], 4) if st["masked_fraction"] == st["masked_fraction"] else None,
                  segments=len(segs))

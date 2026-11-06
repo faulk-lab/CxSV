@@ -143,7 +143,9 @@ junction_params:
 #   par               T2T-CHM13v2 pseudo-autosomal regions, 0-based half-open (UCSC hs1
 #                     PAR1/PAR2; same as resources/scoring/par.bed): ploidy 2 on a male
 #                     chrX, 0 on chrY (counted on chrX)
-#   pon_exclude       libraries kept out of the PoN (library-QC flags, item 14)
+#   pon_exclude       libraries (cohort/sample_id) kept out of the PoN: the 24 library-QC
+#                     flags of item 14 (calibration/library_qc/flagged_v1.1.tsv), listed
+#                     here so the PoN membership is part of the fingerprint
 #   default_stratum / chemistry_stratum   PoN stratum when the sample sheet has no
 #                     cn_stratum / qc_group column (rules/cn.smk, cn_stratum_of)
 #   segmentation      cxsv_cn.DEFAULTS: PoN masking, HMM, refinement, nested scan
@@ -154,7 +156,31 @@ cn_params:
   par:
     chrX: [[0, 2394410], [153925834, 154259566]]
     chrY: [[0, 2458320], [62122809, 62460029]]
-  pon_exclude: calibration/library_qc/flagged_v1.1.tsv
+  pon_exclude:
+    - 1kGP_ONT_1019_CHM13/HG00268
+    - 1kGP_ONT_1019_CHM13/HG01879
+    - 1kGP_ONT_1019_CHM13/NA18980
+    - 1kGP_ONT_1019_CHM13/NA19238
+    - 1kGP_LRSC_ONT_CHM13/HG01303
+    - 1kGP_LRSC_ONT_CHM13/HG01860
+    - 1kGP_LRSC_ONT_CHM13/HG01867
+    - 1kGP_LRSC_ONT_CHM13/HG02301
+    - 1kGP_LRSC_ONT_CHM13/HG02321
+    - 1kGP_LRSC_ONT_CHM13/HG03224
+    - 1kGP_LRSC_ONT_CHM13/HG03514
+    - 1kGP_LRSC_ONT_CHM13/HG03680
+    - 1kGP_LRSC_ONT_CHM13/HG03788
+    - 1kGP_LRSC_ONT_CHM13/HG04107
+    - 1kGP_LRSC_ONT_CHM13/HG04176
+    - 1kGP_LRSC_ONT_CHM13/NA20847
+    - 1kGP_LRSC_ONT_CHM13/HG00126
+    - 1kGP_LRSC_ONT_CHM13/HG01459
+    - 1kGP_LRSC_ONT_CHM13/HG01511
+    - 1kGP_LRSC_ONT_CHM13/HG01522
+    - 1kGP_LRSC_ONT_CHM13/HG02190
+    - 1kGP_LRSC_ONT_CHM13/HG02215
+    - 1kGP_LRSC_ONT_CHM13/HG02379
+    - 1kGP_LRSC_ONT_CHM13/HG02623
   default_stratum: {ONT: ONT_1kGP_1019, PACBIO: PacBio_HiFi}
   chemistry_stratum: {R9: ONT_LRSC_R9, R10: ONT_LRSC_R10}
   segmentation:

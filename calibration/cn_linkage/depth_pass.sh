@@ -11,7 +11,8 @@
 # CRAM 3.1 is rewritten as CRAM 3.0 into OUTDIR/tmp first (the transcode path of
 # workflow/scripts/callable_mask.sh, record counts checked), then deleted.
 # Outputs in OUTDIR: depth.regions.bed.gz (+ .csi), depth.mosdepth.summary.txt,
-# timing.tsv (host, bytes, seconds per step, MB/s = input bytes / total seconds), depth.ok.
+# timing.tsv (host, bytes, seconds per step, MB/s = input bytes / total seconds),
+# depth.sha256 (sha256 of depth.regions.bed.gz), depth.ok.
 # Checks: no decode error in mosdepth's log; one bin per BIN bp of every contig
 # in the .fai (count compared), or the step fails.
 # =============================================================================
@@ -49,4 +50,5 @@ tot=$(( $(date +%s) - t0 ))
 printf 'host\taln\tbytes\tcram_version\ttranscode_s\tmosdepth_s\ttotal_s\tMB_per_s\tbins\tthreads\n%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
     "$(hostname -s)" "$ALN" "$bytes" "${V:-none}" "$t_tr" "$t_md" "$tot" \
     "$(awk -v b="$bytes" -v t="$tot" 'BEGIN{printf "%.1f", b/1e6/(t>0?t:1)}')" "$got" "$T" > "$OUT/timing.tsv"
+sha256sum "$OUT/depth.regions.bed.gz" | awk '{print $1}' > "$OUT/depth.sha256"
 touch "$OUT/depth.ok"

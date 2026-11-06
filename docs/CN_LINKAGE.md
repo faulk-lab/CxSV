@@ -75,9 +75,9 @@ written again (`cn/cn_loci.tsv`, `written`).
 One PoN per stratum; the stratum names are the library-QC groups of item 14:
 `ONT_1kGP_1019`, `ONT_LRSC_R9`, `ONT_LRSC_R10`, `PacBio_HiFi`.
 
-- **Members:** every panel library of the stratum except the library-QC flag list
-  (`cn_params.pon_exclude` = `calibration/library_qc/flagged_v1.1.tsv`, 24
-  libraries). `pon_members.tsv` lists every library with sex, chrX ratio, genome
+- **Members:** every panel library of the stratum except the 24 library-QC flags
+  (`cn_params.pon_exclude`, the list of `calibration/library_qc/flagged_v1.1.tsv`
+  written into `config/calling.yaml`, so the PoN membership is fingerprinted). `pon_members.tsv` lists every library with sex, chrX ratio, genome
   median and `in_pon`.
 - **chrX** pools both sexes after ploidy normalisation; **chrY** uses males only.
 - **Content:** per-bin median, relative MAD and genome count only (no per-genome
@@ -133,7 +133,8 @@ release file.
 ## 5. Panel builds
 
 - **Sharded build** (`workflow/panel_build`): shards stop at
-  `cxsv/junction_summary.tsv` and `cn/depth.regions.bed.gz`, because everything
+  `cxsv/junction_summary.tsv`, `cxsv/junction_only.vcf` and `cn/depth.regions.bed.gz` (`sv_summary.txt`
+  moves to the aggregate run), because everything
   after the linkage needs the aggregate PoN. The aggregate run builds the PoNs,
   segments every library and runs the linkage, the junction tables and the
   aggregation.

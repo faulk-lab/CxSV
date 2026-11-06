@@ -111,12 +111,16 @@ def cn_stratum(wildcards):
 CN_STRATA = sorted({cn_stratum_of(c, s) for c, s in KEYS}) if WORKFLOW_NAME == "panel" else []
 
 
+def cn_params_body():
+    return _cn_json.dumps({"cn_params": CNP, "cxsv_params": config["cxsv_params"],
+                           "junction_params": config["junction_params"]}, sort_keys=True)
+
+
 rule cn_params_json:
     """The fingerprinted cn_params block plus the discovery parameters the linkage
     step re-uses (one file, so a change re-runs the track)."""
     output: f"{RESULTS_ROOT}/cn_params.json"
-    params: body = lambda wc: _cn_json.dumps({"cn_params": CNP, "cxsv_params": config["cxsv_params"],
-                                               "junction_params": config["junction_params"]}, sort_keys=True)
+    params: body = lambda wc: cn_params_body()
     run:
         with open(output[0], "w") as fh:
             fh.write(params.body + "\n")
@@ -178,7 +182,6 @@ if WORKFLOW_NAME == "panel":
         input:
             depth   = per_sample(f"{S}/cn/depth.regions.bed.gz"),
             params  = f"{RESULTS_ROOT}/cn_params.json",
-            exclude = _cn_path(CNP["pon_exclude"]),
             script  = f"{SCRIPTS}/cn_pon.py"
         output:
             pons    = [f"{RESULTS_ROOT}/panel/cn/pon/{s}.npz" for s in CN_STRATA],
@@ -192,7 +195,7 @@ if WORKFLOW_NAME == "panel":
                 for c, s in KEYS:
                     fh.write(f"{c}/{s}\t{SAMPLE_TABLE[(c, s)].individual_id}\t{cn_stratum_of(c, s)}\t"
                              f"{SAMPLES_ROOT}/{c}/{s}/cn/depth.regions.bed.gz\n")
-            shell("python {input.script} --members {output.table} --exclude {input.exclude} "
+            shell("python {input.script} --members {output.table} "
                   "--params {input.params} --out-dir {RESULTS_ROOT}/panel/cn/pon --threads {threads} 2> {log}")
 
 

@@ -60,7 +60,10 @@ def test_defaults_match_fingerprinted_config():
     assert c["segmentation"] == cn.DEFAULTS
     assert c["linkage"] == {k: v for k, v in cnl.CN_DEFAULTS.items() if k != "span_link_max"}
     assert c["depth"] == {"bin_bp": 1000, "min_mapq": 20}
-    assert (ROOT / c["pon_exclude"]).exists()
+    import csv
+    with open(ROOT / "calibration" / "library_qc" / "flagged_v1.1.tsv", newline="") as fh:
+        flagged = sorted(f"{r['cohort']}/{r['sample_id']}" for r in csv.DictReader(fh, delimiter="\t"))
+    assert sorted(c["pon_exclude"]) == flagged and len(flagged) == 24
     par = cn.par_from_params(c["par"])
     assert par["chrX"] == [(0, 2394410), (153925834, 154259566)] and len(par["chrY"]) == 2
 
@@ -123,13 +126,14 @@ def test_pon_and_segment_scripts(tmp_path):
         rows.append(f"c/n{i}\tI{i}\tT\t{p}")
     (tmp_path / "members.tsv").write_text("\n".join(rows) + "\n")
     (tmp_path / "flag.tsv").write_text("cohort\tsample_id\tgroup\nc\tn5\tT\n")
-    params = {"cn_params": {"segmentation": dict(cn.DEFAULTS), "par": {"chrX": [[0, 200000]]}}}
+    params = {"cn_params": {"segmentation": dict(cn.DEFAULTS), "par": {"chrX": [[0, 200000]]},
+                            "pon_exclude": ["c/n4"]}}
     (tmp_path / "p.json").write_text(json.dumps(params))
     S = ROOT / "workflow" / "scripts"
     subprocess.run([sys.executable, S / "cn_pon.py", "--members", tmp_path / "members.tsv", "--exclude", tmp_path / "flag.tsv", "--params", tmp_path / "p.json",
                     "--out-dir", tmp_path / "pon", "--threads", "1"], check=True)
     pon = cn.Pon.load(tmp_path / "pon" / "T.npz")
-    assert pon.meta["genomes"] == 5                     # n5 flagged
+    assert pon.meta["genomes"] == 4                     # n4 (params) and n5 (--exclude) left out
     mem = (tmp_path / "pon" / "pon_members.tsv").read_text()
     assert "c/n5\tI5\tT\tmale" in mem and "no: library-QC flag" in mem
     case = tmp_path / "case.bed.gz"

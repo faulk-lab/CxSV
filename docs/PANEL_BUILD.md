@@ -414,8 +414,11 @@ different commit, or if the fingerprint is not `expected_fingerprint`
 (`cd7e1d194cd4`). It never overwrites a plan.
 
 **What `aggregate.sh` checks.** It stops unless every planned sample is done,
-and unless its dry run schedules no per-sample job. That second check catches a
-stale or incomplete shard.
+and unless its dry run schedules no per-sample job of the shard stage. That
+second check catches a stale or incomplete shard. From panel-v1.2 the per-sample
+rules after the copy-number PoN (`cn_segment`, `sample_cn_linkage`,
+`sample_annotate_cxsv`, `sample_junctions`, `sample_sv_summary`) run in the
+aggregate step and are not counted.
 
 ### Pause, resume, stop
 
