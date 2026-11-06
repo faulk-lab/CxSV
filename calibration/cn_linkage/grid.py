@@ -363,7 +363,7 @@ def main():
     ap.add_argument("--models", default="")
     ap.add_argument("--pc-code", default="")
     ap.add_argument("--code", default="")
-    ap.add_argument("--bundle", default="/mnt/sargasso1/CxSV/bundles/cxsv-bundle-20261105-8fc5bef725bd")
+    ap.add_argument("--bundle", default="/mnt/sargasso1/CxSV/bundles/cxsv-bundle-20261105-95126e14f036")
     ap.add_argument("--release", default="/mnt/sargasso1/CxSV/build/panel-v1.1-r2/results/panel/release")
     ap.add_argument("--sheets", default="/mnt/sargasso1/CxSV/datasets/registry/sample_sheets")
     ap.add_argument("--depth-root", default="/mnt/sargasso1/CxSV/calibration/cn_linkage/depth")

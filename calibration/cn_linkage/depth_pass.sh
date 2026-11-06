@@ -17,7 +17,7 @@
 # =============================================================================
 set -euo pipefail
 ALN=$1; OUT=$2; T=${3:-4}; BIN=${4:-1000}
-SIF=${SIF:-/mnt/sargasso1/CxSV/bundles/cxsv-bundle-20261105-8fc5bef725bd/container/cxsv-pipeline.sif}
+SIF=${SIF:-/mnt/sargasso1/CxSV/bundles/cxsv-bundle-20261105-95126e14f036/container/cxsv-pipeline.sif}
 REF=${REF:-/mnt/sargasso1/CxSV/refs/hs1.fa}
 CACHE=${CACHE:-/mnt/sargasso1/CxSV/refs/ref_cache}
 RT=$(command -v singularity || command -v apptainer)

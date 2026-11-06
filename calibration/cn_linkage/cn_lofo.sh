@@ -22,7 +22,7 @@ export REUSE_CAL=${REUSE_CAL:-/mnt/sargasso1/CxSV/calibration/panel_v11_r2/lofo}
 NEWB=/mnt/sargasso1/CxSV/build/panel-v1.1-r2
 export BUILD=$NEWB RELEASE=$NEWB/results/panel/release
 export SAMPLES_ROOT=$AUG/samples SAMPLE_MANIFEST=$AUG/subset_manifest.tsv
-export SIF=${SIF:-/mnt/sargasso1/CxSV/bundles/cxsv-bundle-20261105-8fc5bef725bd/container/cxsv-pipeline.sif}
+export SIF=${SIF:-/mnt/sargasso1/CxSV/bundles/cxsv-bundle-20261105-95126e14f036/container/cxsv-pipeline.sif}
 source "$CODE/calibration/graded_privacy/config.sh"
 MAN=$NEWB/results/panel/panel/sample_manifest.tsv
 mkdir -p "$CAL_ROOT/logs"

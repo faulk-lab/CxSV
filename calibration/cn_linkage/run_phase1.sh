@@ -14,7 +14,7 @@ set -euo pipefail
 OUT=$1; STAGES=${2:-12345}
 HERE="$(cd "$(dirname "$0")" && pwd)"; CODE=$(cd "$HERE/../.." && pwd)
 B=/mnt/sargasso1/CxSV/calibration/cn_linkage
-SIF=${SIF:-/mnt/sargasso1/CxSV/bundles/cxsv-bundle-20261105-8fc5bef725bd/container/cxsv-pipeline.sif}
+SIF=${SIF:-/mnt/sargasso1/CxSV/bundles/cxsv-bundle-20261105-95126e14f036/container/cxsv-pipeline.sif}
 X=${X:-singularity exec -B /mnt/sargasso1 -B /home/minknow/scratch $SIF}
 R2=/mnt/sargasso1/CxSV/build/panel-v1.1-r2/results/panel
 FAM=/mnt/sargasso1/CxSV/calibration/item10/families.tsv

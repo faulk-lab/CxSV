@@ -16,6 +16,8 @@ Code base: main `b60559f`, run from `/mnt/sargasso1/CxSV/calibration/cn_linkage/
 - panel release `cxsv-panel-20261105-c31ecc9f8fa2` (panel-v1.1-r2);
 - pipeline image of bundle `cxsv-bundle-20261105-8fc5bef725bd`.
 
+Bundle `8fc5bef725bd` has since been deleted, superseded by `cxsv-bundle-20261105-95126e14f036` (same SIF, sha256 9f4e049f…, same panel-v1.1 release). The script defaults now point to the new bundle.
+
 This branch is based on main `95126e1`, which turned library-QC conservative mode on by default (PR #29). Every Phase 1 number below was computed before that change, and Phase 2 re-measures under it.
 
 ## Verdict: GO for Phase 2

@@ -16,7 +16,7 @@
 set -uo pipefail
 TASKS=$1; GRID=$2; SEG=$3; LOCAL=$4; PAR=${5:-4}; THREADS=${6:-4}
 HERE="$(cd "$(dirname "$0")" && pwd)"; CODE=$(cd "$HERE/../.." && pwd)
-SIF=${SIF:-/mnt/sargasso1/CxSV/bundles/cxsv-bundle-20261105-8fc5bef725bd/container/cxsv-pipeline.sif}
+SIF=${SIF:-/mnt/sargasso1/CxSV/bundles/cxsv-bundle-20261105-95126e14f036/container/cxsv-pipeline.sif}
 REL_SRC=${REL_SRC:-/mnt/sargasso1/CxSV/build/panel-v1.1-r2/results/panel/release}
 mkdir -p "$GRID/claims" "$GRID/failed" "$GRID/logs" "$LOCAL/work"
 # the marker sits beside the copy: the release verifies against its manifest and

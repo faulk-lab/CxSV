@@ -44,7 +44,7 @@ def main():
     ap.add_argument("--ref", required=True)
     ap.add_argument("--catalogues", default="/mnt/sargasso1/CxSV/datasets/external_catalogues")
     ap.add_argument("--sample", required=True)
-    ap.add_argument("--bundle", default="/mnt/sargasso1/CxSV/bundles/cxsv-bundle-20261105-8fc5bef725bd",
+    ap.add_argument("--bundle", default="/mnt/sargasso1/CxSV/bundles/cxsv-bundle-20261105-95126e14f036",
                     help="host path of the bundle the run used: /bundle/ paths in its scoring_params.json map here")
     a = ap.parse_args()
     R, A, W = a.run, a.aug, f"{a.code}/workflow/scripts"
