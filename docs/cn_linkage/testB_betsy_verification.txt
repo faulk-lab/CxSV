@@ -1,0 +1,8 @@
+MECP2_R9_S2000_T100 exit 0
+result.json identical (excl wall_s): True
+cxsv_scores.tsv byte-identical: True 5 5
+merged_sv.vcf records: 23 23 identical excl header: True
+PLP1_R9_S2000_T200 exit 0
+result.json identical (excl wall_s): True
+cxsv_scores.tsv byte-identical: True 3 3
+merged_sv.vcf records: 16 16 identical excl header: True

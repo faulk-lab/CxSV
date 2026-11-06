@@ -1,0 +1,6 @@
+genome	locus	cls	status	score	tier	top
+HG01868	chr3:134712784-134722137	CN_linked_gain	public	-0.7	Benign_likely	panel_privacy -1.00; gene_dosage +0.15; caller_agreement +0.10
+HG01868	chr9:33220-142303	CN_linked_loss	public	-1.05	Benign_likely	panel_privacy -1.00; artefact_context -0.30; exons +0.15
+HG01868	chr1:156217-344470	DUP-TRP_INV-DUP	public	-1.65	Benign_likely	panel_privacy -1.00; no_genes -0.60; artefact_context -0.20
+pos_control (host 3559 + E01-E13, L01-L04)	chrX:101752400-102492226	DUP-TRP_INV-DUP	private	1.53	Tier1_high_priority	gene_dosage +1.00; panel_privacy +0.18; exons +0.15
+pos_control (host 3559 + E01-E13, L01-L04)	chr9:30092263-32825947	CN_linked_loss	private	0.75	Tier2	panel_privacy +0.25; exons +0.15; size +0.15
