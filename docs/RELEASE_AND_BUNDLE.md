@@ -41,8 +41,14 @@ nothing else (no reads, no per-sample VCFs).
 **Release id:** `<release.name>-<YYYYMMDD>-<first 12 hex digits of the
 calling fingerprint>`, e.g. `TEST-posctrl10slice-20261028-ad454c604bdd`. The
 fingerprint part says which calling a patient must match. The name and date
-tell apart releases that share a calling but differ in samples. The id is fixed
-the first time it is made (`results/panel/panel/release_id.txt`).
+tell apart releases that share a calling but differ in samples. A **test release**
+(`release.test_release: true`) gets the suffix `-test`
+(`cxsv-panel-20261106-c31ecc9f8fa2-test`), so it can never carry the id of a real
+release built the same day from the same calling. Real releases keep the plain
+form, so panel-v1.1 stays `cxsv-panel-20261105-c31ecc9f8fa2`. The id is fixed the
+first time it is made (`results/panel/panel/release_id.txt`). Every score report
+prints the id, `test release: yes/no` and the release's `release_manifest.tsv`
+sha256.
 `config/panel.yaml`:
 
 ```yaml

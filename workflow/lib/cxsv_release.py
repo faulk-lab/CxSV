@@ -5,7 +5,8 @@ A panel release is a directory the patient workflow reads and nothing else:
     release_id   <name>-<YYYYMMDD>-<first 12 hex digits of the calling fingerprint>
                  e.g. cxsv-panel-20261029-3f2a9c1d0b4e. Same fingerprint = the
                  same calling; the date and name tell apart rebuilds with more
-                 samples.
+                 samples. A test release (release.test_release true) gets the
+                 suffix -test, so it can never carry a real release's id.
     release.json metadata: id, source commit, fingerprint, counts by platform and
                  superpopulation, callability definition and summary, tool
                  versions, container runtime (docs/RELEASE_AND_BUNDLE.md)
@@ -32,14 +33,14 @@ MANIFEST_COLUMNS = ("file", "bytes", "sha256")
 _NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
-def release_id(name: str, date: str, fingerprint_sha256: str) -> str:
+def release_id(name: str, date: str, fingerprint_sha256: str, test: bool = False) -> str:
     if not _NAME_RE.match(name or ""):
         raise ValueError(f"panel release name {name!r}: use letters, digits, '.', '_' or '-'")
     if not re.fullmatch(r"\d{8}", str(date)):
         raise ValueError(f"panel release date {date!r}: use YYYYMMDD")
     if not re.fullmatch(r"[0-9a-f]{64}", fingerprint_sha256 or ""):
         raise ValueError("calling fingerprint sha256 must be 64 hex digits")
-    return f"{name}-{date}-{fingerprint_sha256[:12]}"
+    return f"{name}-{date}-{fingerprint_sha256[:12]}" + ("-test" if test else "")
 
 
 def sha256_file(path, block=1 << 20) -> str:

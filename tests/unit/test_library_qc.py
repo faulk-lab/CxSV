@@ -95,7 +95,7 @@ def test_read_metrics_with_pysam(tmp_path):
                 a.set_tag("SA", sa)
             out.write(a)
     pysam.index(path)
-    m = lq.read_metrics(path, None, [("chr1", 1000, 2000), ("chrZ", 0, 10)], 20)
+    m, _ = lq.read_metrics(path, None, [("chr1", 1000, 2000), ("chrZ", 0, 10)], 20)
     assert m["windows_used"] == 1 and m["reads_sampled"] == 3
     assert m["frac_sa"] == pytest.approx(2 / 3) and m["frac_sa_interchrom"] == pytest.approx(1 / 3)
     assert m["coverage_est"] == pytest.approx(300 / 1000)
@@ -155,3 +155,27 @@ def test_gate_not_applied_when_pass_or_off():
             assert "did not act here" in summary[-1]
         if not mode:
             assert "Conservative mode is OFF" in summary[-1]
+
+
+def test_report_wording_flag_without_tier1():
+    scx = _scorer()
+    loci, P = [x for x in _loci() if x["tier"] != "Tier1_high_priority"], _params(True)
+    scx.apply_library_qc_gate(loci, {"qc_flag": "FLAG"}, P)
+    summary, section = scx.library_qc_report({"qc_flag": "FLAG", "qc_group": "ONT_LRSC_R10",
+                                              "qc_group_source": "header",
+                                              "qc_group_evidence": "header: @RG DS names 'r10.4.1'"}, P, loci)
+    text = "\n".join(summary)
+    assert "no Tier-1 locus to gate" in text and "all 0 Tier-1" not in text and section == []
+    assert "group ONT_LRSC_R10, chosen from the header" in summary[0]
+    assert summary[-1] == "  - QC group evidence: header: @RG DS names 'r10.4.1'"
+
+
+def test_report_panel_release_line():
+    scx = _scorer()
+    pm = {"panel_match": {"tolerance": 500, "min_junction_fraction": 0.75}}
+    line = scx.panel_release_line({**pm, "panel_release_id": "cxsv-panel-20261105-c31ecc9f8fa2-test",
+                                   "panel_release_test": True, "panel_release_manifest_sha256": "ab" * 32})
+    assert "test release: **yes**" in line and "release_manifest.tsv sha256 " + "ab" * 32 in line
+    line = scx.panel_release_line({**pm, "panel_release_id": "x", "panel_release_test": False})
+    assert "test release: no" in line
+

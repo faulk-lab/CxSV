@@ -4,7 +4,8 @@
 calling fingerprint.
 
     library_qc.py --aln ALN --ref REF --windows BED --merged-vcf merged_sv.vcf --out library_qc.tsv
-                  [--sample NAME] [--min-mapq 20] [--thresholds config/library_qc.yaml --group GROUP]
+                  [--sample NAME] [--min-mapq 20] [--thresholds PARAMS.json]
+                  [--group-override GROUP] [--platform ONT|PACBIO]
 
 Read level, over the fixed windows (config/library_qc_windows.hs1.bed: 20 x 1 Mb of
 unique autosomal sequence), primary mapped reads with MAPQ >= --min-mapq that START
@@ -26,12 +27,20 @@ group, a coverage-adjusted robust z,
 1.4826 x MAD of its residuals; calibration/library_qc/calibrate.py). qc_flag is
 FLAG when any z > k, PASS otherwise, NA when the group has no calibration or no
 QC window lies on the alignment's reference.
+Group (lib/cxsv_libgroup.py): --group-override (the sample-sheet qc_group) when set,
+else detected from the alignment header, else from the sampled reads (base-quality
+profile, PacBio read names), else library_qc.default_group[--platform]. Columns
+qc_group_source / qc_group_detected / qc_group_evidence say how.
 """
 import argparse
 import csv
 import math
+import os
 import statistics
 import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lib"))
+import cxsv_libgroup as lg  # noqa: E402
 
 METRICS = ("frac_sa", "frac_sa_interchrom", "single_caller_bnd_per_gb", "svim_only_bnd_per_gb",
            "single_caller_any_per_gb", "svim_only_any_per_gb")
@@ -47,11 +56,14 @@ def read_windows(path):
     return out
 
 
-def read_metrics(aln, ref, windows, min_mapq):
+def read_metrics(aln, ref, windows, min_mapq, cues=None):
     """Read-level metrics over the windows that lie on the alignment's contigs
-    (a window off the header, e.g. on a test reference, is skipped)."""
+    (a window off the header, e.g. on a test reference, is skipped). With `cues`
+    (lg.ReadCues), the sampled reads also feed the group detection; returns
+    (metrics, header dict)."""
     import pysam  # only this part needs pysam
     f = pysam.AlignmentFile(aln, reference_filename=ref)
+    header = f.header.to_dict()
     lengths = dict(zip(f.references, f.lengths))
     windows = [(c, s, e) for c, s, e in windows if c in lengths and e <= lengths[c]]
     n = sa = inter = sa2 = bases = 0
@@ -63,6 +75,9 @@ def read_metrics(aln, ref, windows, min_mapq):
             if r.mapping_quality < min_mapq:
                 continue
             n += 1
+            if cues is not None and cues.n < cues.max_reads:
+                cues.add(r.query_name, r.query_qualities, r.get_tag("RG") if r.has_tag("RG") else None,
+                         r.has_tag("rq"))
             bases += r.query_alignment_length or 0
             lens.append(r.query_length or r.infer_read_length() or 0)
             if r.has_tag("SA"):
@@ -75,7 +90,7 @@ def read_metrics(aln, ref, windows, min_mapq):
             "frac_sa_2plus": sa2 / n if n else float("nan"),
             "frac_sa_interchrom": inter / n if n else float("nan"),
             "coverage_est": bases / span if span else float("nan"),
-            "median_read_len": int(statistics.median(lens)) if lens else 0}
+            "median_read_len": int(statistics.median(lens)) if lens else 0}, header
 
 
 def info_get(info, key):
@@ -139,27 +154,39 @@ def main():
         ap.add_argument(f"--{k}", required=True)
     ap.add_argument("--sample", default="sample")
     ap.add_argument("--min-mapq", type=int, default=20)
-    ap.add_argument("--thresholds", default=None)
-    ap.add_argument("--group", default=None)
+    ap.add_argument("--thresholds", default=None, help="library_qc_params.json (the config block used)")
+    ap.add_argument("--group-override", default="", help="sample-sheet qc_group; wins over detection")
+    ap.add_argument("--group", default=None, help="old name of --group-override")
+    ap.add_argument("--platform", default="", help="sample-sheet platform, for the default group")
     a = ap.parse_args()
+    t = load_thresholds(a.thresholds) if a.thresholds else {}
+    rules = {**lg.DEFAULTS, **(t.get("group_detection") or {})}
+    cues = lg.ReadCues(int(rules["max_reads"]))
     row = {"sample": a.sample}
-    row.update(read_metrics(a.aln, a.ref, read_windows(a.windows), a.min_mapq))
+    metrics, header = read_metrics(a.aln, a.ref, read_windows(a.windows), a.min_mapq, cues)
+    row.update(metrics)
     row.update(call_metrics(a.merged_vcf))
     gb = row["coverage_est"] * genome_gb(a.ref) if row["coverage_est"] == row["coverage_est"] else 0.0
     row["sequence_gb_est"] = gb
     for m in ("single_caller_bnd", "svim_only_bnd", "single_caller_any", "svim_only_any"):
         row[f"{m}_per_gb"] = row[m] / gb if gb else float("nan")
     if a.thresholds:
-        t = load_thresholds(a.thresholds)
-        cal = (t.get("groups") or {}).get(a.group or "", {})
-        row["qc_group"] = a.group or "NA"
+        s = cues.summary()
+        g = lg.resolve((a.group_override or a.group or "").strip() or None,
+                       lg.classify_text(lg.header_text(header), "header"), lg.classify_reads(s, rules),
+                       a.platform, t.get("default_group"), t.get("groups") or {})
+        cal = (t.get("groups") or {}).get(g["qc_group"], {})
+        row.update(g)
+        row["reads_median_mean_q"] = s["median_mean_q"]
+        row["reads_uniform_q_fraction"] = s["uniform_q_fraction"]
         row["qc_flag"], row["qc_reason"], zs = flag(row, cal, float(t["k"]), float(t["eps"]))
         for m in cal:
             row[f"z_{m}"] = zs[m]
     with open(a.out, "w", newline="") as fh:
         w = csv.writer(fh, delimiter="\t", lineterminator="\n")
         w.writerow(list(row))
-        w.writerow([f"{v:.6g}" if isinstance(v, float) else v for v in row.values()])
+        w.writerow([f"{v:.6g}" if isinstance(v, float) else lg.clean(v, 600) if isinstance(v, str) else v
+                    for v in row.values()])
     print("\t".join(f"{k}={v}" for k, v in row.items()), file=sys.stderr)
 
 

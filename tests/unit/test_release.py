@@ -17,6 +17,8 @@ FP = "3f2a9c1d0b4e" + "0" * 52
 # ─── release id and source ──────────────────────────────────────────────────
 def test_release_id_format_and_validation():
     assert cr.release_id("cxsv-panel", "20261029", FP) == "cxsv-panel-20261029-3f2a9c1d0b4e"
+    assert cr.release_id("cxsv-panel", "20261029", FP, test=False) == "cxsv-panel-20261029-3f2a9c1d0b4e"
+    assert cr.release_id("cxsv-panel", "20261029", FP, test=True) == "cxsv-panel-20261029-3f2a9c1d0b4e-test"
     for bad in [("bad name", "20261029", FP), ("x", "2026-10-29", FP), ("x", "20261029", "abc")]:
         with pytest.raises(ValueError):
             cr.release_id(*bad)

@@ -110,6 +110,41 @@ Which metric finds which genome:
 
 ## 4. Patient side: conservative mode
 
+### 4a. Which calibration group a patient is compared with
+
+`workflow/lib/cxsv_libgroup.py`, called by `library_qc.py`. The group is chosen in
+this order, and the report states the group, where it came from and the evidence:
+
+1. **Sample sheet.** The column `qc_group` (or `patients.<sample>.qc_group`) always
+   wins. The report adds what auto-detection would have given when it differs.
+2. **Alignment header.**
+   - PacBio: `@RG PL:PACBIO`, `DS` with `READTYPE=CCS`, or an `@PG` ccs / jasmine /
+     pbmm2 / lima entry → PacBio_HiFi.
+   - ONT chemistry named in `@RG DS/ID/PU`, `@PG CL/DS` or `@CO`: r10.4 / R10 / e8.2 /
+     LSK114 / NBD114 / RBK114 → ONT_LRSC_R10; r9.4 / R9 / LSK109 / LSK110 / NBD104 /
+     RBK004 → ONT_LRSC_R9.
+   - Both chemistries named → ambiguous, the header is not used. Tokens are matched
+     whole, so `chr9`, `chr10` or `-K 10g` do not count.
+3. **Reads.** The read-group tags and base qualities of the reads the QC samples
+   anyway (primary, MAPQ ≥ 20, in the QC windows, first 20,000):
+   - a read-group tag naming the basecall model (dorado writes it) → as in 2;
+   - PacBio CCS read names or `rq` tags on ≥ half of the reads → PacBio_HiFi;
+   - base qualities uniform within ≥ 90% of reads (SRA-lite style) → ONT_1kGP_1019;
+   - median per-read mean base quality ≥ 30 → ONT_LRSC_R10; ≤ 28 → ONT_LRSC_R9;
+     between → undecided.
+4. **Platform default.** `default_group[platform]` (ONT → ONT_1kGP_1019, PACBIO →
+   PacBio_HiFi).
+
+When header and reads both decide and disagree, the header is used and the report
+says so. Thresholds: `library_qc.group_detection` (not fingerprinted).
+
+**Validation on the 1,619 panel alignments** (3,000 reads each;
+[library_qc/group_detection_panel.tsv](library_qc/group_detection_panel.tsv)):
+
+@VAL@
+
+### 4b. The conservative gate
+
 With `library_qc.conservative_mode: true` and a **FLAG**ged library, a Tier-1 locus
 stays Tier 1 only if:
 - more than half of its junctions are called by ≥ 2 callers, or
@@ -119,14 +154,14 @@ Otherwise it is reported as Tier 2 with its points unchanged
 (`cxsv_scoring.library_qc_gate`, column `Library_QC_Gate`).
 
 **What the score report says** (`score_cxsv.library_qc_report`):
-- always: the flag (PASS / FLAG / NA), the group, the reason, the four metrics and
-  their z;
+- always: the flag (PASS / FLAG / NA), the group and where it came from (section 4a),
+  the reason, the four metrics and their z, and a "QC group evidence" line;
 - FLAG, mode on, loci demoted: a bold line "Conservative mode DEMOTED n Tier-1
   locus/loci" with the rule and the number kept, and a section "Library QC: loci
   demoted by conservative mode" listing each demoted locus: rank, locus, class,
   total, tier before, tier reported, reason;
 - FLAG, mode on, nothing demoted: that every Tier-1 locus has multi-caller or
-  copy-number support;
+  copy-number support, or "no Tier-1 locus to gate" when there is none;
 - FLAG, mode off: that Tier-1 loci are not gated, plus the caution line (always
   shown for FLAG);
 - PASS: that the mode did not act; NA: that the library could not be assessed;
@@ -248,7 +283,8 @@ is private to them.
 
 | file | role |
 |---|---|
-| `config/library_qc.yaml` | windows, MAPQ, k, eps, `default_group` by platform, calibration per group, `conservative_mode` (true), gate parameters |
+| `config/library_qc.yaml` | windows, MAPQ, k, eps, `default_group` by platform, `group_detection` thresholds, calibration per group, `conservative_mode` (true), gate parameters |
+| `workflow/lib/cxsv_libgroup.py` | calibration-group detection: header, reads, resolution order (section 4a) |
 | `config/library_qc_windows.hs1.bed` | the 20 windows |
 | `workflow/rules/library_qc.smk` | rules `library_qc_params`, `library_qc` → `{S}/qc/library_qc.tsv` (patient workflow) |
 | `workflow/scripts/library_qc.py` | metrics, z, flag |
@@ -256,10 +292,12 @@ is private to them.
 | `workflow/rules/patient_scoring.smk` | `score_cxsv` input `qc/library_qc.tsv`; `scoring_params.json` carries the switch |
 | `calibration/library_qc/` | `make_windows.py`, `survey.sh` (panel survey), `calibrate.py`, `tier1_locus_evidence.py`, `catalog_impact.py`, `exclusion_rerun.sh`, `privacy_compare.py`, `flagged_v1.1.tsv` |
 | `calibration/graded_privacy/locus_callability.py` | `--skip-individuals-without-mask` (LOFO against a panel that leaves scored genomes out; `panel_rates.sh` env `LOCUS_CALLABILITY_EXTRA`) |
-| `tests/unit/test_library_qc.py` | counts, z and flag, gate, config, windows, fingerprint independence, read metrics (pysam) |
+| `tests/unit/test_library_qc.py` | counts, z and flag, gate, config, windows, fingerprint independence, read metrics (pysam), report wording, panel-release line |
+| `tests/unit/test_libgroup.py` | group detection on abridged real headers of each panel platform and the patient stand-ins, read cues, resolution order, `library_qc.py` end to end on a small BAM |
 
-**Calibration group of a patient:**
-- the sample-sheet column `qc_group`, else `patients.<sample>.qc_group`, else
+**Calibration group of a patient:** section 4a. In short:
+- the sample-sheet column `qc_group` (or `patients.<sample>.qc_group`) when set;
+- else detected from the alignment header, else from the sampled reads, else
   `default_group[platform]` (ONT → ONT_1kGP_1019, PACBIO → PacBio_HiFi);
 - groups: ONT_1kGP_1019, ONT_LRSC_R10, ONT_LRSC_R9, PacBio_HiFi;
 - a library whose reference has none of the windows (test data) gets NA.
