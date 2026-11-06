@@ -176,6 +176,8 @@ def main():
     ap.add_argument("--library-qc", default=None,
                     help="qc/library_qc.tsv (library_qc.py): reported; conservative Tier-1 gate when FLAG "
                          "and library_qc.conservative_mode")
+    ap.add_argument("--cn-only", default=None,
+                    help="cn/cn_only.tsv (cn_linkage.py): copy-number-only candidates, listed untiered")
     ap.add_argument("--sample", default="patient")
     a = ap.parse_args()
 
@@ -483,6 +485,25 @@ def top3(feats):
 LIT_COLS = ("Literature_Match", "Literature_Events")
 
 
+def cn_only_report(path):
+    """Report lines for copy-number-only candidates (rules/cn.smk, roadmap item 15):
+    linked copy-number changes with no SV junction in the sample. They are not loci,
+    get no points and no tier; listed for review (read depth alone)."""
+    rows = read_tsv(path) if path and os.path.exists(path) else []
+    summary = [f"- copy-number-only candidates (untiered, listed at the end): {len(rows)}"]
+    if not rows:
+        return summary, []
+    S = ["\n## Copy-number-only candidates (not scored, not tiered)\n",
+         "Linked copy-number changes (read depth against the panel-of-normals) with no SV junction "
+         "in this sample, so no locus could be built. Read-depth evidence only; review in a genome "
+         "browser before any follow-up (docs/CN_LINKAGE.md).\n",
+         "| Candidate | Class | Span (bp) | Segments | SV records |", "|---|---|---:|---|---|"]
+    for r in rows:
+        S.append(f"| {r.get('candidate', 'NA')} | {r.get('cls', 'NA')} | {r.get('span', 'NA')} | "
+                 f"{(r.get('segments') or '-').replace(';', '; ')} | {r.get('record_types') or '-'} |")
+    return summary, S
+
+
 def write_outputs(a, P, loci, cat_names, sex_note, with_literature=False, qc=None):
     base = ["Rank", "Locus_ID", "Chr", "Start", "End", "Size", "Cmplx_Class", "SV_Types", "CxSV_Criteria",
             "Complexity_Tier", "N_Junctions", "N_Breakends", "Max_Interleaved", "Panel_Status", "Panel_Carriers",
@@ -553,6 +574,8 @@ def write_report(a, P, loci, sex_note, qc=None):
         tiers[x["tier"]] += 1
     qc_summary, qc_section = library_qc_report(qc or {}, P, loci)
     L.extend(qc_summary)
+    cn_summary, cn_section = cn_only_report(getattr(a, "cn_only", None))
+    L.extend(cn_summary)
     L.append("- tiers: " + ", ".join(f"{t['name']} {tiers[t['name']]}" for t in P["tiers"]) + "\n")
     L.extend(qc_section)
     L.append("## Ranking\n")
@@ -585,6 +608,7 @@ def write_report(a, P, loci, sex_note, qc=None):
         for f in x["feats"]:
             L.append(f"| {f.name} | {str(f.value).replace('|', '/')} | {f.points:+.2f} | {f.rule} |")
         L.append(f"| **total** | | **{x['total']:+.2f}** | chromothripsis points {x['ct']:+.2f} |")
+    L.extend(cn_section)
     with open(a.out_report, "w") as fh:
         fh.write("\n".join(L) + "\n")
 

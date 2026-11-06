@@ -37,6 +37,8 @@ nothing else (no reads, no per-sample VCFs).
 | `panel_cxsv_calls.tsv`, `panel_cxsv_loci.tsv`, `panel_summary.tsv` | CxSV loci per sample, merged loci with carriers by platform, counts per cohort/platform |
 | `sniffles_population_sites.tsv`, `panel_frequency_comparison*.tsv` | Sniffles2 population-mode sites and their comparison with the clustered sites |
 | `tool_versions.tsv` | versions of the fingerprinted tools |
+| `cn/pon/<stratum>.npz`, `cn/pon/pon_members.tsv` | copy-number panel-of-normals per stratum (per-bin median, relative MAD, genome count of normalised 10 kb depth) and its member list; from panel-v1.2 (docs/CN_LINKAGE.md) |
+| `cn/panel_cn_segments.tsv` | copy-number segments of every panel library (public filter of the copy-number track) |
 
 **Release id:** `<release.name>-<YYYYMMDD>-<first 12 hex digits of the
 calling fingerprint>`, e.g. `TEST-posctrl10slice-20261028-ad454c604bdd`. The

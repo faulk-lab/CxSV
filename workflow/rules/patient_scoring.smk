@@ -144,6 +144,7 @@ rule locus_depth:
         unpack(caller_inputs),
         junctions = f"{S}/junctions/junctions.tsv",
         loci      = f"{S}/private/cxsv_panel_status.tsv",
+        cn_loci   = f"{S}/cn/cn_loci.tsv",
         fai       = f"{REFERENCE}.fai",
         script    = f"{SCRIPTS}/locus_segments.py"
     output:
@@ -158,7 +159,8 @@ rule locus_depth:
         HTS_ENV + """
         python {input.script} --junctions {input.junctions} --loci {input.loci} --fai {input.fai} \
             --collapse-distance {params.collapse} --composite-fraction {params.composite} \
-            --flank {params.flank} --gap {params.gap} --margin {params.margin} --out {output.bed} 2> {log}
+            --flank {params.flank} --gap {params.gap} --margin {params.margin} --cn-loci {input.cn_loci} \
+            --out {output.bed} 2> {log}
         if [ -s {output.bed} ]; then
             samtools bedcov -Q {params.mapq} -j --reference {REFERENCE} {output.bed} {input.aln} \
                 > {output.depth} 2>> {log}
@@ -216,6 +218,7 @@ rule score_cxsv:
         params    = f"{S}/scoring/scoring_params.json",
         svim_ok   = f"{S}/qc/svim_check.tsv",       # rules/caller_checks.smk: no report from a cut SVIM call set
         libqc     = f"{S}/qc/library_qc.tsv",       # rules/library_qc.smk: flag in the report, conservative gate
+        cn_only   = f"{S}/cn/cn_only.tsv",          # rules/cn.smk: copy-number-only candidates, listed untiered
         genes     = config["annotation"]["genes_bed"],
         exons     = config["annotation"]["exons_bed"],
         repeats   = config["annotation"]["repeats_bed"],
@@ -237,5 +240,5 @@ rule score_cxsv:
         "--vcf {input.vcf} --caller-vcf Sniffles2={input.sniffles} --caller-vcf cuteSV={input.cutesv} "
         "--caller-vcf SVIM={input.svim} --depth {input.depth} --params {input.params} "
         "--genes {input.genes} --exons {input.exons} --repeats {input.repeats} --segdups {input.segdups} "
-        "--fai {input.fai} {params.parents} {params.literature} --library-qc {input.libqc} --sample {wildcards.sample} "
+        "--fai {input.fai} {params.parents} {params.literature} --library-qc {input.libqc} --cn-only {input.cn_only} --sample {wildcards.sample} "
         "--out-tsv {output.tsv} --out-features {output.features} --out-report {output.report} 2> {log}"

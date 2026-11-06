@@ -553,6 +553,15 @@ are the build ledger and per-node cost summary for the release.
   (make_shards.py, measured cost model). The dashed line is the NAS read floor:
   80.8 TB at 630 MB/s.
 
+## Copy-number track (panel-v1.2, roadmap item 15)
+
+From panel-v1.2 the shards stop at the junction-track discovery
+(`cxsv/junction_summary.tsv`) and the binned depth (`cn/depth.regions.bed.gz`);
+the aggregate run builds the copy-number PoN per stratum and then runs the
+linkage and everything after it. A downstream-only rebuild must set
+`cn_depth_precomputed` and `cn_strata_table` in `aggregate.yaml`
+(docs/CN_LINKAGE.md section 5).
+
 ## Downstream-only rebuild (panel-v1.1 candidate, 2026-11-04)
 
 When a change touches only the rules after `merge_sv_callers` (item 13: CxSV

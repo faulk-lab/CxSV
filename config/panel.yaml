@@ -40,6 +40,15 @@ panel_individuals: null
 #   date: YYYYMMDD; null = the day the id is first made
 #   test_release: true for panels that must never label a real patient (e.g.
 #     the 10-genome regression slices); recorded in release.json
+# Copy-number track (rules/cn.smk, docs/CN_LINKAGE.md), run configuration (not
+# fingerprinted):
+#   cn_strata_table: TSV cohort, sample_id, cn_stratum, PoN stratum per library
+#     (the 1kGP panel: calibration/cn_linkage/panel_strata_v1.tsv)
+#   cn_depth_precomputed: root of a full-panel depth pass
+#     (<root>/<cohort>/<sample>/depth.regions.bed.gz); "none" = run mosdepth
+cn_strata_table: null
+cn_depth_precomputed: none
+
 release:
   name: "cxsv-panel"
   date: null

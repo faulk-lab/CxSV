@@ -13,7 +13,7 @@ import cxsv_fingerprint as fpm
 from conftest import REPO
 
 SHARED = [
-    "common.smk", "indexing.smk", "calling.smk", "per_sample.smk", "junctions.smk",
+    "common.smk", "indexing.smk", "calling.smk", "per_sample.smk", "cn.smk", "junctions.smk",
     "sample_report.smk", "fingerprint.smk",
 ]
 

@@ -38,6 +38,12 @@
 # build); after the run
 # the reused files are re-checked against the inventory and the release is
 # verified.
+#
+# Copy-number track (panel-v1.2, roadmap item 15): cn_depth is new and not held,
+# so NEW_BUILD/aggregate.yaml must set cn_depth_precomputed (the cn_depth_v1
+# full-panel depth pass; cn_depth.sh then verifies and links each file and fails
+# on a missing one rather than reading 1,619 alignments on the aggregate host)
+# and cn_strata_table (PoN stratum of every panel library). Both are checked here.
 # =============================================================================
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"   # link_upstream.py lives next to this script
@@ -51,6 +57,10 @@ export CXSV_SIF CXSV_REF_CACHE
 source "$CODE/scripts/panel_build/lib.sh"
 [ "$(cat "$CODE/COMMIT")" = "$(cat "$CODE/workflow/COMMIT" 2>/dev/null)" ] \
     || cp "$CODE/COMMIT" "$CODE/workflow/COMMIT"     # release.json source.commit (cxsv_release.source_info)
+for k in cn_depth_precomputed cn_strata_table; do
+    v=$(awk -v k="$k" -F': *' '$1==k{print $2}' "$NEW/aggregate.yaml" | tr -d "\"'")
+    [ -n "$v" ] && [ "$v" != none ] && [ -e "$v" ] || { echo "aggregate.yaml: $k unset or missing ($v); stop"; exit 1; }
+done
 HELD='run_sniffles|run_cutesv|run_svim|filter_sniffles|filter_cutesv|filter_svim|merge_sv_callers|check_cram_reference|build_ref_cache|tool_versions|callable_mask|panel_callability_masks|panel_sniffles_population'
 ulimit -Sn "$(ulimit -Hn)"
 WD="${CXSV_REBUILD_WORKDIR:-$NEW/aggregate}" TMP="$HOME/scratch/cxsv_panel_build/tmp/aggregate-$(basename "$NEW")"

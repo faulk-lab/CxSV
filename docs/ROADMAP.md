@@ -125,7 +125,9 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
     ([library_qc/DEPLOYMENT.md](library_qc/DEPLOYMENT.md)).
 18. **Large duplication–triplication events (item 15, new 2026-11-05).**
     Plan: [docs/DUP_TRP_PLAN.md](DUP_TRP_PLAN.md); the PI approved the section 6 defaults.
-    Phase 1 report: [docs/CN_LINKAGE_PHASE1.md](CN_LINKAGE_PHASE1.md). Phase 2 waits on the PI.
+    Phase 1 report: [docs/CN_LINKAGE_PHASE1.md](CN_LINKAGE_PHASE1.md). *Decided 2026-11-06:
+    Phase 2 approved* (full-panel depth pass, pipeline integration, panel-v1.2 by a
+    downstream-only rebuild). Pipeline: [docs/CN_LINKAGE.md](CN_LINKAGE.md).
 
 ---
 
@@ -148,7 +150,7 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
 | 13 | Oversized-cluster blind spot | **done 2026-11-04** (fix + panel evaluation); first panel-v1.1 build held (healthy Tier 1 +86%) and superseded; fix `svim_lowq` adopted 2026-11-05; panel-v1.1 released 2026-11-05 as `cxsv-panel-20261105-c31ecc9f8fa2` (healthy Tier 1 0.251, bundle validated, tag pending; docs/panel_v1.1/README.md) | `main` (`de23a0e`), `item13-oversized-clusters-2`, docs/OVERSIZED_CLUSTERS.md |
 | – | Small fixes 2026-11 (8 fixes from the panel-v1.0 validation) | done 2026-11-04; merged (PR #21) | `main`, below |
 | 14 | Library-chimerism QC (panel and patient) | **done 2026-11-06**: 24/1,619 panel libraries flagged; conservative mode on by default; no panel exclusion; bundle `cxsv-bundle-20261105-95126e14f036` validated 8/8, positive control unchanged | `main` (PR #28, #29), docs/LIBRARY_QC.md, docs/library_qc/DEPLOYMENT.md |
-| 15 | Copy-number-anchored detection of large DUP-TRP/INV-DUP and other CN-linked events | **Phase 1 done** (decision 18; Phase 2 awaits the PI) | docs/DUP_TRP_PLAN.md, docs/CN_LINKAGE_PHASE1.md |
+| 15 | Copy-number-anchored detection of large DUP-TRP/INV-DUP and other CN-linked events | **Phase 1 done**; Phase 2 (pipeline integration, panel-v1.2) in progress (decision 18) | docs/DUP_TRP_PLAN.md, docs/CN_LINKAGE_PHASE1.md, docs/CN_LINKAGE.md |
 
 ---
 
