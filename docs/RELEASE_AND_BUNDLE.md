@@ -8,7 +8,11 @@ network, from material whose origin can be checked. This document defines:
 3. the **container image**: one pinned environment for both workflows;
 4. the **offline bundle**: everything needed to score a patient with no network;
 5. how to **build** and **run** each of them;
-6. the **validation records** of the bundles (6a: panel-v1.0, the current one).
+6. the **validation records** of the bundles. The current bundle is
+   `cxsv-bundle-20261105-95126e14f036` (panel-v1.1 + library QC, conservative mode on;
+   record in [library_qc/DEPLOYMENT.md](library_qc/DEPLOYMENT.md)). The panel-v1.1 bundle
+   `cxsv-bundle-20261105-8fc5bef725bd` is recorded in [panel_v1.1/README.md](panel_v1.1/README.md).
+   6a–6c below are the earlier bundles.
 
 ## 1. Panel release
 
