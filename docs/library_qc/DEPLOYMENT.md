@@ -94,7 +94,8 @@ Results:
   - E01–E12, L02 and L04 pass. E13, L01 and L03 fail exactly as before.
   - Junctions: 86 exact, 1 partial, 0 missed of 87.
   - Off-target CxSV loci: 1,198.
-  - Tier 1: 15 loci.
+  - Tier 1: 12 of the 17 events (`score.events.tsv`); 15 Tier-1 loci genome-wide
+    (the report's tier line: Tier1_high_priority 15, Tier2 8, Tier3 28, Benign_likely 1,181).
 - **Result tree** ([comparison](deployment/compare_tagged_pc.tsv)): same pattern as HG01868.
   - 42 files identical and 3 identical after QC masking.
   - 2 new QC files.
