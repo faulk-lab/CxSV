@@ -52,9 +52,9 @@ def test_conservative_gate():
     assert not sc.library_qc_gate(0, 0, 0, w)[0]
 
 
-def test_config_default_off_and_groups():
+def test_config_default_on_and_groups():
     cfg = yaml.safe_load((REPO / "config" / "library_qc.yaml").read_text())["library_qc"]
-    assert cfg["conservative_mode"] is False
+    assert cfg["conservative_mode"] is True      # PI decision 2026-11-05
     assert set(cfg["groups"]) == {"ONT_1kGP_1019", "ONT_LRSC_R10", "ONT_LRSC_R9", "PacBio_HiFi"}
     for g in cfg["groups"].values():
         assert set(g) == {"svim_only_bnd_per_gb", "svim_only_any_per_gb"}
@@ -99,3 +99,59 @@ def test_read_metrics_with_pysam(tmp_path):
     assert m["windows_used"] == 1 and m["reads_sampled"] == 3
     assert m["frac_sa"] == pytest.approx(2 / 3) and m["frac_sa_interchrom"] == pytest.approx(1 / 3)
     assert m["coverage_est"] == pytest.approx(300 / 1000)
+
+
+class _J:
+    def __init__(self, supp_vec):
+        self.supp_vec = supp_vec
+
+
+def _loci():
+    def x(L, tier, vecs, segs):
+        return {"L": L, "tier": tier, "kept": [_J(v) for v in vecs], "segs": segs, "total": 1.5, "rank": 1,
+                "row": {"Cmplx_Class": "BND_cluster"}}
+    return [x("chr1:100-200", "Tier1_high_priority", ["010", "100"], None),          # single-caller, no depth
+            x("chr2:100-200", "Tier1_high_priority", ["111", "011", "010"], None),   # 2/3 multi-caller
+            x("chr3:100-200", "Tier2", ["010"], None)]                               # not Tier 1
+
+
+def _params(mode=True):
+    return {"tiers": [{"name": "Tier1_high_priority", "min": 0.99}, {"name": "Tier2", "min": 0.5},
+                      {"name": "Tier3", "min": 0.0}],
+            "library_qc": {"conservative_mode": mode,
+                           "conservative": {"min_multi_caller_fraction": 0.5, "min_cn_changed": 1,
+                                            "demote_to": "Tier2"}}}
+
+
+def _scorer():
+    sys.path.insert(0, str(REPO / "workflow" / "scripts"))
+    import score_cxsv  # noqa: E402
+    return score_cxsv
+
+
+def test_gate_and_report_flagged():
+    scx = _scorer()
+    loci, P = _loci(), _params(True)
+    scx.apply_library_qc_gate(loci, {"qc_flag": "FLAG"}, P)
+    assert [x["tier"] for x in loci] == ["Tier2", "Tier1_high_priority", "Tier2"]
+    assert loci[0]["qc_gate"].startswith("demoted") and loci[1]["qc_gate"].startswith("kept")
+    assert loci[2]["qc_gate"] == "not_applied"
+    summary, section = scx.library_qc_report({"qc_flag": "FLAG", "qc_group": "ONT_LRSC_R10"}, P, loci)
+    text = "\n".join(summary + section)
+    assert "Conservative mode DEMOTED 1 Tier-1 locus/loci" in text
+    assert "loci demoted by conservative mode" in text and "chr1:100-200" in text
+    assert "| Tier1_high_priority | Tier2 |" in text and "chr2:100-200" not in "\n".join(section)
+
+
+def test_gate_not_applied_when_pass_or_off():
+    scx = _scorer()
+    for qc, mode in (({"qc_flag": "PASS"}, True), ({"qc_flag": "NA"}, True), ({"qc_flag": "FLAG"}, False)):
+        loci, P = _loci(), _params(mode)
+        scx.apply_library_qc_gate(loci, qc, P)
+        assert [x["tier"] for x in loci] == ["Tier1_high_priority", "Tier1_high_priority", "Tier2"]
+        summary, section = scx.library_qc_report(qc, P, loci)
+        assert section == []
+        if qc["qc_flag"] == "PASS":
+            assert "did not act here" in summary[-1]
+        if not mode:
+            assert "Conservative mode is OFF" in summary[-1]

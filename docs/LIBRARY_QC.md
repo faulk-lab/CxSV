@@ -1,9 +1,12 @@
 # Library QC: chimeric-library flag and conservative mode (roadmap item 14)
 
-Status 2026-11-05: implemented on branch `library-qc` (off `main` 03281cb).
+Status 2026-11-05: deployed (PR #28, then this change). PI decision 2026-11-05:
+the flag in every patient report, **conservative mode ON by default** for flagged
+libraries, **no panel exclusion** (panel-v1.1 stays as is).
 - The QC flag is computed and reported for every patient.
-- Conservative mode is implemented behind `library_qc.conservative_mode`, **default
-  off** until the PI decides.
+- Conservative mode (`library_qc.conservative_mode`, default **true**) acts only on a
+  FLAGged library. The report states whether it demoted calls and lists every
+  demoted locus (section 4).
 - **Calling fingerprint unchanged** (c31ecc9f8fa2): no fingerprinted file or
   parameter section changes, so panel-v1.1 stays compatible.
 - Healthy-genome rates: panel-v1.1 (`cxsv-panel-20261105-c31ecc9f8fa2`),
@@ -111,7 +114,24 @@ stays Tier 1 only if:
 - ≥ 1 copy-number segment changed (`locus_depth`).
 
 Otherwise it is reported as Tier 2 with its points unchanged
-(`cxsv_scoring.library_qc_gate`, column `Library_QC_Gate`, a line in the report).
+(`cxsv_scoring.library_qc_gate`, column `Library_QC_Gate`).
+
+**What the score report says** (`score_cxsv.library_qc_report`):
+- always: the flag (PASS / FLAG / NA), the group, the reason, the four metrics and
+  their z;
+- FLAG, mode on, loci demoted: a bold line "Conservative mode DEMOTED n Tier-1
+  locus/loci" with the rule and the number kept, and a section "Library QC: loci
+  demoted by conservative mode" listing each demoted locus: rank, locus, class,
+  total, tier before, tier reported, reason;
+- FLAG, mode on, nothing demoted: that every Tier-1 locus has multi-caller or
+  copy-number support;
+- FLAG, mode off: that Tier-1 loci are not gated, plus the caution line (always
+  shown for FLAG);
+- PASS: that the mode did not act; NA: that the library could not be assessed;
+- per locus, the section of each gated Tier-1 locus has a "library QC gate" line.
+
+Switch it off for a run with `library_qc: {conservative_mode: false}` in the site
+config.
 
 **Test patients: the 24 flagged panel genomes**, scored LOFO against panel-v1.1
 ([conservative_mode_flagged.tsv](library_qc/conservative_mode_flagged.tsv)):
@@ -209,9 +229,9 @@ is private to them.
   and of SVIM-only records per Gb, per platform group; FLAG when either z > 6. The
   read-level supplementary fractions are reported only.
 - **Patient:** always report the QC row and flag in the score report. Switch
-  conservative mode on for flagged libraries. It removes two thirds of the
+  conservative mode on for flagged libraries (*adopted 2026-11-05: default on*). It removes two thirds of the
   flagged genomes' Tier-1 calls and leaves every positive-control event in Tier 1.
-- **Panel exclusion: no.**
+- **Panel exclusion: no** (*decided 2026-11-05; panel-v1.1 stays as is*).
   - It does not change healthy Tier 1 (0.251 → 0.252) or any patient tier tested.
   - It removes 181,556 mostly single-carrier junction sites, which are noise but
     harmless to scoring.
@@ -226,7 +246,7 @@ is private to them.
 
 | file | role |
 |---|---|
-| `config/library_qc.yaml` | windows, MAPQ, k, eps, `default_group` by platform, calibration per group, `conservative_mode` (false), gate parameters |
+| `config/library_qc.yaml` | windows, MAPQ, k, eps, `default_group` by platform, calibration per group, `conservative_mode` (true), gate parameters |
 | `config/library_qc_windows.hs1.bed` | the 20 windows |
 | `workflow/rules/library_qc.smk` | rules `library_qc_params`, `library_qc` → `{S}/qc/library_qc.tsv` (patient workflow) |
 | `workflow/scripts/library_qc.py` | metrics, z, flag |
