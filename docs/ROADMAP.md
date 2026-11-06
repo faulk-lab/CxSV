@@ -124,8 +124,8 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
     2026-11-06 in bundle `cxsv-bundle-20261105-95126e14f036`
     ([library_qc/DEPLOYMENT.md](library_qc/DEPLOYMENT.md)).
 18. **Large duplication–triplication events (item 15, new 2026-11-05).**
-    Plan: [docs/DUP_TRP_PLAN.md](DUP_TRP_PLAN.md) (proposed). Phase 1 and the
-    decisions in its section 6 wait on the PI.
+    Plan: [docs/DUP_TRP_PLAN.md](DUP_TRP_PLAN.md); the PI approved the section 6 defaults.
+    Phase 1 report: [docs/CN_LINKAGE_PHASE1.md](CN_LINKAGE_PHASE1.md). Phase 2 waits on the PI.
 
 ---
 
@@ -148,7 +148,7 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
 | 13 | Oversized-cluster blind spot | **done 2026-11-04** (fix + panel evaluation); first panel-v1.1 build held (healthy Tier 1 +86%) and superseded; fix `svim_lowq` adopted 2026-11-05; panel-v1.1 released 2026-11-05 as `cxsv-panel-20261105-c31ecc9f8fa2` (healthy Tier 1 0.251, bundle validated, tag pending; docs/panel_v1.1/README.md) | `main` (`de23a0e`), `item13-oversized-clusters-2`, docs/OVERSIZED_CLUSTERS.md |
 | – | Small fixes 2026-11 (8 fixes from the panel-v1.0 validation) | done 2026-11-04; merged (PR #21) | `main`, below |
 | 14 | Library-chimerism QC (panel and patient) | **done 2026-11-06**: 24/1,619 panel libraries flagged; conservative mode on by default; no panel exclusion; bundle `cxsv-bundle-20261105-95126e14f036` validated 8/8, positive control unchanged | `main` (PR #28, #29), docs/LIBRARY_QC.md, docs/library_qc/DEPLOYMENT.md |
-| 15 | Copy-number-anchored detection of large DUP-TRP/INV-DUP and other CN-linked events | **planned** (decision 18) | docs/DUP_TRP_PLAN.md |
+| 15 | Copy-number-anchored detection of large DUP-TRP/INV-DUP and other CN-linked events | **Phase 1 done** (decision 18; Phase 2 awaits the PI) | docs/DUP_TRP_PLAN.md, docs/CN_LINKAGE_PHASE1.md |
 
 ---
 
@@ -554,11 +554,15 @@ of healthy Tier 1. Plan:
 4. Measure what flagged genomes contribute to the panel before deciding on
    exclusion.
 
-### 15. Copy-number-anchored detection of large DUP-TRP/INV-DUP — planned (decision 18)
+### 15. Copy-number-anchored detection of large DUP-TRP/INV-DUP — Phase 1 done, Phase 2 awaits the PI (decision 18)
 
 None of the 26 published DUP-TRP/INV-DUP events (MECP2, PLP1; 0.42–7.4 Mb) is
 called today: their junctions are > 500 kb or > 50 kb apart, and copy number is
 not used in discovery. Plan: [docs/DUP_TRP_PLAN.md](DUP_TRP_PLAN.md).
+Phase 1 (prototype outside the pipeline, `calibration/cn_linkage/`; 2026-11-06):
+[docs/CN_LINKAGE_PHASE1.md](CN_LINKAGE_PHASE1.md). It passes tests A–E: DUP-TRP literature
+26/26 called, grid 97.5% at ≥ 20x and ≥ 100 kb, PC L01 Tier 1, healthy Tier 1 +0.01 per
+genome on the 100-genome subset, HG01868 0 Tier 1. Recommendation: go for Phase 2.
 
 ---
 
