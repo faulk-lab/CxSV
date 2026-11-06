@@ -65,10 +65,10 @@ def _cn_strata_table():
 CN_STRATA_TABLE = _cn_strata_table()
 
 
-def cn_stratum_of(cohort, sample):
-    """PoN stratum: sheet cn_stratum / qc_group, then cn_strata_table, then
-    patients.<sample>.qc_group, cohort-spec qc_group, cn_params.chemistry_stratum[sheet
-    chemistry], cn_params.default_stratum[platform]."""
+def cn_stratum_explicit(cohort, sample):
+    """PoN stratum set by the site, '' when none: sheet cn_stratum / qc_group, then
+    cn_strata_table, patients.<sample>.qc_group, cohort-spec qc_group,
+    cn_params.chemistry_stratum[sheet chemistry]."""
     row = _cn_sheet_row(cohort, sample)
     for col in ("cn_stratum", "qc_group"):
         if (row.get(col) or "").strip():
@@ -84,12 +84,24 @@ def cn_stratum_of(cohort, sample):
     chem = (row.get("chemistry") or "").strip()
     if chem and chem in (CNP.get("chemistry_stratum") or {}):
         return CNP["chemistry_stratum"][chem]
+    return ""
+
+
+def cn_default_stratum(cohort, sample):
     plat = (SAMPLE_TABLE[(cohort, sample)].platform or "").upper()
     s = (CNP.get("default_stratum") or {}).get(plat)
     if not s:
         raise ValueError(f"[cn] no copy-number stratum for {cohort}/{sample} (platform {plat!r}); "
                          "set sample-sheet column cn_stratum or cn_params.default_stratum")
     return s
+
+
+def cn_stratum_of(cohort, sample):
+    """Panel: the explicit stratum, else cn_params.default_stratum[platform]. Patient runs
+    resolve it at run time instead (rule cn_segment): explicit, else the library-QC group
+    detected from the alignment (qc/library_qc.tsv, lib/cxsv_libgroup.py), else the
+    platform default."""
+    return cn_stratum_explicit(cohort, sample) or cn_default_stratum(cohort, sample)
 
 
 def cn_stratum(wildcards):
@@ -131,19 +143,27 @@ rule cn_depth:
         "{threads} {params.pre} > {log} 2>&1"
 
 
-def cn_pon_file(wildcards):
-    st = cn_stratum(wildcards)
+def cn_pon_input(wildcards):
+    """Panel: the stratum's PoN. Patient: every PoN of the release (the stratum is
+    resolved at run time; cn_segment.py picks <stratum>.npz)."""
     if WORKFLOW_NAME == "panel":
-        return f"{RESULTS_ROOT}/panel/cn/pon/{st}.npz"
-    f = f"{PANEL_RELEASE}/cn/pon/{st}.npz"
-    if not os.path.isdir(f"{PANEL_RELEASE}/cn/pon"):
+        return [f"{RESULTS_ROOT}/panel/cn/pon/{cn_stratum(wildcards)}.npz"]
+    d = f"{PANEL_RELEASE}/cn/pon"
+    have = sorted(x for x in os.listdir(d) if x.endswith(".npz")) if os.path.isdir(d) else []
+    if not have:
         raise ValueError(f"[cn] panel release {PANEL_RELEASE} has no copy-number PoN (cn/pon/): it predates "
                          "the copy-number track (roadmap item 15; panel-v1.2 or later is needed)")
-    if not os.path.exists(f):
-        have = sorted(x[:-4] for x in os.listdir(f"{PANEL_RELEASE}/cn/pon") if x.endswith(".npz"))
-        raise ValueError(f"[cn] the panel release has no PoN for stratum {st!r} ({f}); "
-                         f"set the sample's cn_stratum (or qc_group) to one of {have}")
-    return f
+    st = cn_stratum_explicit(wildcards.cohort, wildcards.sample)
+    if st and f"{st}.npz" not in have:
+        raise ValueError(f"[cn] the panel release has no PoN for stratum {st!r}; set the sample's "
+                         f"cn_stratum (or qc_group) to one of {[x[:-4] for x in have]}")
+    return [f"{d}/{x}" for x in have]
+
+
+def cn_segment_extra(wildcards):
+    if WORKFLOW_NAME == "panel":
+        return {}
+    return {"libqc": f"{S}/qc/library_qc.tsv"}
 
 
 def cn_panel_segments(wildcards=None):
@@ -179,19 +199,24 @@ if WORKFLOW_NAME == "panel":
 rule cn_segment:
     """Copy-number segments of one sample against its stratum's PoN (scripts/cn_segment.py)."""
     input:
+        unpack(cn_segment_extra),
         depth  = f"{S}/cn/depth.regions.bed.gz",
-        pon    = cn_pon_file,
+        pon    = cn_pon_input,
         params = f"{RESULTS_ROOT}/cn_params.json",
         script = f"{SCRIPTS}/cn_segment.py"
     output:
         segs  = f"{S}/cn/segments.tsv",
         stats = f"{S}/cn/stats.json"
     params:
-        stratum = cn_stratum
+        pon     = lambda wc, input: input.pon[0] if WORKFLOW_NAME == "panel" else os.path.dirname(input.pon[0]),
+        stratum = lambda wc: cn_stratum(wc) if WORKFLOW_NAME == "panel" else (cn_stratum_explicit(wc.cohort, wc.sample) or "auto"),
+        default = lambda wc: cn_default_stratum(wc.cohort, wc.sample),
+        libqc   = lambda wc, input: f"--library-qc {input.libqc}" if WORKFLOW_NAME != "panel" else ""
     log: f"{S}/logs/cn_segment.log"
     shell:
-        "python {input.script} --depth {input.depth} --pon {input.pon} --params {input.params} "
-        "--stratum {params.stratum} --out {output.segs} --stats {output.stats} 2> {log}"
+        "python {input.script} --depth {input.depth} --pon {params.pon} --params {input.params} "
+        "--stratum {params.stratum} --default-stratum {params.default} {params.libqc} "
+        "--out {output.segs} --stats {output.stats} 2> {log}"
 
 
 if WORKFLOW_NAME == "panel":

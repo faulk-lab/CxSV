@@ -140,11 +140,31 @@ def test_pon_and_segment_scripts(tmp_path):
     lines = (tmp_path / "seg.tsv").read_text().splitlines()
     assert len(lines) == 2 and lines[1].startswith("chr1\t") and lines[1].split("\t")[3] == "3"
     st = json.loads((tmp_path / "stats.json").read_text())
-    assert st["stratum"] == "T" and st["sex"] == "female"
+    assert st["stratum"] == "T" and st["sex"] == "female" and st["stratum_source"] == "configured"
+    # patient mode: PoN directory, stratum from the library-QC group, fallback to the default
+    seg = [sys.executable, S / "cn_segment.py", "--depth", case, "--pon", tmp_path / "pon", "--params",
+           tmp_path / "p.json", "--stratum", "auto", "--out", tmp_path / "s2.tsv", "--stats", tmp_path / "s2.json"]
+    (tmp_path / "lq.tsv").write_text("sample\tqc_group\tqc_group_source\nx\tT\theader\n")
+    subprocess.run(seg + ["--library-qc", tmp_path / "lq.tsv", "--default-stratum", "U"], check=True)
+    st = json.loads((tmp_path / "s2.json").read_text())
+    assert st["stratum"] == "T" and st["stratum_source"] == "library_qc (header)"
+    (tmp_path / "lq.tsv").write_text("sample\tqc_group\tqc_group_source\nx\tR10\treads\n")
+    (tmp_path / "pon" / "T.npz").rename(tmp_path / "pon" / "D.npz")
+    subprocess.run(seg + ["--library-qc", tmp_path / "lq.tsv", "--default-stratum", "D"], check=True)
+    st = json.loads((tmp_path / "s2.json").read_text())
+    assert st["stratum"] == "D" and st["stratum_source"].startswith("platform default (no PoN")
+    r = subprocess.run(seg[:9] + ["Q"] + seg[10:], capture_output=True, text=True)
+    assert r.returncode != 0 and "available: ['D']" in r.stderr
 
 
 def test_report_lists_cn_only_untiered(tmp_path):
     import score_cxsv
+    (tmp_path / "st.json").write_text(json.dumps(dict(stratum="ONT_LRSC_R10", stratum_source="library_qc (header)",
+                                                      pon_genomes=240, sex="male", x_ratio=0.51,
+                                                      masked_fraction=0.05, segments=12)))
+    line = score_cxsv.cn_track_line(str(tmp_path / "st.json"))[0]
+    assert "ONT_LRSC_R10 (library_qc (header); 240 genomes)" in line and "sex male" in line
+    assert score_cxsv.cn_track_line(str(tmp_path / "none.json")) == []
     p = tmp_path / "cn_only.tsv"
     assert score_cxsv.cn_only_report(str(p))[1] == []           # absent file: count only
     p.write_text("candidate\tdecision\tcls\tspan\tsegments\trecord_types\n"

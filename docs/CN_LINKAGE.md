@@ -88,8 +88,15 @@ One PoN per stratum; the stratum names are the library-QC groups of item 14:
   `patients.<sample>.qc_group`, the cohort spec's `qc_group`,
   `cn_params.chemistry_stratum[<sheet chemistry>]` and finally
   `cn_params.default_stratum[<platform>]` (ONT → `ONT_1kGP_1019`, PACBIO →
-  `PacBio_HiFi`). A patient whose stratum has no PoN in the release stops with an
-  error that lists the release's strata.
+  `PacBio_HiFi`).
+- **Patient runs** resolve the stratum at run time (`cn_segment.py --stratum auto`)
+  when the site sets none of the above: the library-QC group detected from the
+  alignment (`qc/library_qc.tsv` `qc_group`; header, then read cues;
+  lib/cxsv_libgroup.py, docs/LIBRARY_QC.md 4a), so the PoN and the library-QC
+  calibration use the same group. If the release has no PoN for that group, the
+  platform default is used. A stratum set by the site must have a PoN; otherwise
+  the run stops with an error listing the release's strata. `cn/stats.json` and
+  the report's summary line give the stratum and where it came from.
 - **1kGP panel:** its sample sheets have no chemistry column, so the panel build
   config sets `cn_strata_table: calibration/cn_linkage/panel_strata_v1.tsv`
   (1,619 libraries; 1,017 / 220 / 247 / 135). `make_panel_strata.py` derives it

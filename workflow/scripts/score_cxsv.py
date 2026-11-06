@@ -176,6 +176,7 @@ def main():
     ap.add_argument("--library-qc", default=None,
                     help="qc/library_qc.tsv (library_qc.py): reported; conservative Tier-1 gate when FLAG "
                          "and library_qc.conservative_mode")
+    ap.add_argument("--cn-stats", default=None, help="cn/stats.json (cn_segment.py): stratum, sex, PoN size")
     ap.add_argument("--cn-only", default=None,
                     help="cn/cn_only.tsv (cn_linkage.py): copy-number-only candidates, listed untiered")
     ap.add_argument("--sample", default="patient")
@@ -485,6 +486,17 @@ def top3(feats):
 LIT_COLS = ("Literature_Match", "Literature_Events")
 
 
+def cn_track_line(path):
+    """One summary line on the copy-number track of the sample (cn/stats.json)."""
+    if not path or not os.path.exists(path):
+        return []
+    with open(path) as fh:
+        s = json.load(fh)
+    return [f"- copy-number track: PoN stratum {s.get('stratum', 'NA')} ({s.get('stratum_source', 'NA')}; "
+            f"{s.get('pon_genomes', 'NA')} genomes), sex {s.get('sex', 'NA')} (chrX ratio {s.get('x_ratio', 'NA')}), "
+            f"masked fraction {s.get('masked_fraction', 'NA')}, segments {s.get('segments', 'NA')}"]
+
+
 def cn_only_report(path):
     """Report lines for copy-number-only candidates (rules/cn.smk, roadmap item 15):
     linked copy-number changes with no SV junction in the sample. They are not loci,
@@ -575,6 +587,7 @@ def write_report(a, P, loci, sex_note, qc=None):
     qc_summary, qc_section = library_qc_report(qc or {}, P, loci)
     L.extend(qc_summary)
     cn_summary, cn_section = cn_only_report(getattr(a, "cn_only", None))
+    L.extend(cn_track_line(getattr(a, "cn_stats", None)))
     L.extend(cn_summary)
     L.append("- tiers: " + ", ".join(f"{t['name']} {tiers[t['name']]}" for t in P["tiers"]) + "\n")
     L.extend(qc_section)

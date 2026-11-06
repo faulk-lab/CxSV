@@ -219,6 +219,7 @@ rule score_cxsv:
         svim_ok   = f"{S}/qc/svim_check.tsv",       # rules/caller_checks.smk: no report from a cut SVIM call set
         libqc     = f"{S}/qc/library_qc.tsv",       # rules/library_qc.smk: flag in the report, conservative gate
         cn_only   = f"{S}/cn/cn_only.tsv",          # rules/cn.smk: copy-number-only candidates, listed untiered
+        cn_stats  = f"{S}/cn/stats.json",           # rules/cn.smk: PoN stratum and its source
         genes     = config["annotation"]["genes_bed"],
         exons     = config["annotation"]["exons_bed"],
         repeats   = config["annotation"]["repeats_bed"],
@@ -240,5 +241,5 @@ rule score_cxsv:
         "--vcf {input.vcf} --caller-vcf Sniffles2={input.sniffles} --caller-vcf cuteSV={input.cutesv} "
         "--caller-vcf SVIM={input.svim} --depth {input.depth} --params {input.params} "
         "--genes {input.genes} --exons {input.exons} --repeats {input.repeats} --segdups {input.segdups} "
-        "--fai {input.fai} {params.parents} {params.literature} --library-qc {input.libqc} --cn-only {input.cn_only} --sample {wildcards.sample} "
+        "--fai {input.fai} {params.parents} {params.literature} --library-qc {input.libqc} --cn-only {input.cn_only} --cn-stats {input.cn_stats} --sample {wildcards.sample} "
         "--out-tsv {output.tsv} --out-features {output.features} --out-report {output.report} 2> {log}"
