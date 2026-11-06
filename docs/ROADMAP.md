@@ -119,9 +119,10 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
     linkage was not adopted (docs on branch `item13-paired-linkage`, kept
     unmerged for the record). The sensitivity gap goes to item 15 instead.
 17. **Library-chimerism QC (item 14, new 2026-11-05).** *Decided 2026-11-05:
-    add it.* Open: whether QC-failed genomes are also excluded from the panel.
-    That will be decided after item 14 reports how many genomes are flagged and
-    what they contribute to the panel.
+    add it.* *Decided 2026-11-05 (after item 14 reported): flag in every patient
+    report, conservative mode on by default, no panel exclusion.* Deployed
+    2026-11-06 in bundle `cxsv-bundle-20261105-95126e14f036`
+    ([library_qc/DEPLOYMENT.md](library_qc/DEPLOYMENT.md)).
 18. **Large duplication–triplication events (item 15, new 2026-11-05).**
     Plan: [docs/DUP_TRP_PLAN.md](DUP_TRP_PLAN.md); the PI approved the section 6 defaults.
     Phase 1 report: [docs/CN_LINKAGE_PHASE1.md](CN_LINKAGE_PHASE1.md). Phase 2 waits on the PI.
@@ -146,7 +147,7 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
 | 12 | Full panel build and first real release | **done 2026-11-03**: release `cxsv-panel-20261102-cd7e1d194cd4`, tag `panel-v1.0`; bundle validated offline (check 7: one locale-dependent plot, data identical); positive control run against it | `main` (tag), `validation-panel-v1.0`, below |
 | 13 | Oversized-cluster blind spot | **done 2026-11-04** (fix + panel evaluation); first panel-v1.1 build held (healthy Tier 1 +86%) and superseded; fix `svim_lowq` adopted 2026-11-05; panel-v1.1 released 2026-11-05 as `cxsv-panel-20261105-c31ecc9f8fa2` (healthy Tier 1 0.251, bundle validated, tag pending; docs/panel_v1.1/README.md) | `main` (`de23a0e`), `item13-oversized-clusters-2`, docs/OVERSIZED_CLUSTERS.md |
 | – | Small fixes 2026-11 (8 fixes from the panel-v1.0 validation) | done 2026-11-04; merged (PR #21) | `main`, below |
-| 14 | Library-chimerism QC (panel and patient) | **in progress** 2026-11-05 (decision 17) | below |
+| 14 | Library-chimerism QC (panel and patient) | **done 2026-11-06**: 24/1,619 panel libraries flagged; conservative mode on by default; no panel exclusion; bundle `cxsv-bundle-20261105-95126e14f036` validated 8/8, positive control unchanged | `main` (PR #28, #29), docs/LIBRARY_QC.md, docs/library_qc/DEPLOYMENT.md |
 | 15 | Copy-number-anchored detection of large DUP-TRP/INV-DUP and other CN-linked events | **Phase 1 done** (decision 18; Phase 2 awaits the PI) | docs/DUP_TRP_PLAN.md, docs/CN_LINKAGE_PHASE1.md |
 
 ---
@@ -532,7 +533,13 @@ Details are in docs/LITERATURE_SET.md.
 
 ---
 
-### 14. Library-chimerism QC — in progress (decision 17)
+### 14. Library-chimerism QC — done 2026-11-06 (decision 17)
+
+Done: metric, per-platform calibration, conservative mode (default on) and the
+exclusion study (docs/LIBRARY_QC.md); deployed in bundle
+`cxsv-bundle-20261105-95126e14f036` (docs/library_qc/DEPLOYMENT.md, which also lists
+three small follow-ups: patient `qc_group`, a report wording fix, release-id
+collisions of test releases). The original plan:
 
 In 11 panel genomes (7 LRSC R10, 1 R9, 3 ONT-1019), thousands of SVIM-only
 low-QUAL TRA/BND records and an elevated supplementary-alignment fraction point

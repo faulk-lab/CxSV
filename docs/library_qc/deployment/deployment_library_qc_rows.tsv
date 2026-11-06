@@ -1,0 +1,5 @@
+sample	qc_group	qc_flag	qc_reason	frac_sa	frac_sa_interchrom	coverage_est	svim_only_bnd_per_gb	z_svim_only_bnd_per_gb	svim_only_any_per_gb	z_svim_only_any_per_gb
+HG01868	ONT_1kGP_1019	PASS	every z <= 6	0.0480124	0.0368054	30.7006	0.415846	-0.63214	33.5342	-1.2857
+pos_control	ONT_1kGP_1019	PASS	every z <= 6	0.0603464	0.0303367	37.5792	1.15856	0.50274	33.2324	-1.47311
+HG04176	ONT_1kGP_1019	FLAG	svim_only_any_per_gb 122 (z 9.4 > 6); svim_only_bnd_per_gb 90.7 (z 6.5 > 6)	0.158034	0.143308	51.5524	90.7272	6.45431	122.007	9.3759
+HG01879	ONT_1kGP_1019	FLAG	svim_only_any_per_gb 112 (z 9.1 > 6)	0.430335	0.134029	23.1416	1.31554	1.68635	112.175	9.10274
