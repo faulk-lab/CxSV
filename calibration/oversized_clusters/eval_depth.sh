@@ -5,6 +5,9 @@
 # not measure: a locus whose id (Chr:Start-End) is unchanged has the same junctions
 # (item 13 leaves every cluster that was not oversized as it was), so its segments
 # and depth rows are copied from OLD_CAL. Usage: eval_depth.sh COHORT SAMPLE ALIGNMENT
+# Copy-number-linked loci (panel-v1.2, roadmap item 15) are new ids, so they are
+# measured; their copy-number segment boundaries come from cn/cn_loci.tsv
+# (locus_segments.py --cn-loci), as in the patient workflow's locus_depth rule.
 set -uo pipefail
 source "$(dirname "$0")/../graded_privacy/config.sh"
 cohort=$1; sample=$2; aln=$3
@@ -30,7 +33,8 @@ t0=$(date +%s)
   if [ "$(wc -l < "$O/new_loci.tsv")" -gt 1 ]; then
     $X python "$CODE/workflow/scripts/locus_segments.py" --junctions "$S/junctions/junctions.tsv" \
         --loci "$O/new_loci.tsv" --fai "$REF.fai" --collapse-distance 300 --composite-fraction 0.25 \
-        --flank 20000 --gap 1000 --margin 200 --out "$O/segs.all.bed" || exit 1
+        --flank 20000 --gap 1000 --margin 200 \
+        $( [ -f "$S/cn/cn_loci.tsv" ] && echo --cn-loci "$S/cn/cn_loci.tsv" ) --out "$O/segs.all.bed" || exit 1
     $X samtools view -H "$aln" | awk -F'\t' '$1=="@SQ"{for(i=2;i<=NF;i++) if($i~/^SN:/) print substr($i,4)}' > "$O/sq.txt"
     awk 'NR==FNR{ok[$1]=1;next} ($1 in ok)' "$O/sq.txt" "$O/segs.all.bed" > "$O/segs.bed"
     echo "segments $(wc -l < "$O/segs.bed") bp $(awk '{s+=$3-$2} END{print s+0}' "$O/segs.bed")"

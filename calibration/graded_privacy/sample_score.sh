@@ -4,6 +4,10 @@
 # individual (LOIO) or family (LOFO) removed. Inputs: leaveout_status.py
 # (status_<MODE>.tsv, jstatus_<MODE>.tsv) and sample_depth_catalogues.sh
 # (depth.tsv, cats.tsv). Output: scores_<MODE>.tsv (+ params.json).
+# LIBQC_ROOT (optional): <LIBQC_ROOT>/<cohort>/<sample>/library_qc.tsv (library_qc.py
+# as deployed) is passed as --library-qc, so the conservative gate acts on FLAGged
+# libraries as in a patient run. The copy-number track's cn/cn_only.tsv and
+# cn/stats.json (panel-v1.2) are passed when present (report lines only; no points).
 # Usage: sample_score.sh COHORT SAMPLE SEX [MODES]
 set -uo pipefail
 source "$(dirname "$0")/config.sh"
@@ -25,7 +29,10 @@ tag=${SCORE_TAG:-}
         --caller-vcf "cuteSV=$S/callers/cutesv_filtered.vcf" --caller-vcf "SVIM=$S/callers/svim_filtered.vcf" \
         --depth "$O/depth.tsv" --params "$O/params${tag}.json" --genes "$RES/genes.final.bed" \
         --exons "$RES/exons.filtered.bed" --repeats "$RES/repeats.final.bed" --segdups "$RES/segdup.final.bed" \
-        --fai "$REF.fai" --sample "$sample" --out-tsv "$O/scores${tag}_$m.tsv.tmp" \
+        --fai "$REF.fai" --sample "$sample" \
+        ${LIBQC_ROOT:+--library-qc "$LIBQC_ROOT/$cohort/$sample/library_qc.tsv"} \
+        $( [ -f "$S/cn/cn_only.tsv" ] && echo --cn-only "$S/cn/cn_only.tsv" --cn-stats "$S/cn/stats.json" ) \
+        --out-tsv "$O/scores${tag}_$m.tsv.tmp" \
         --out-features "$O/features.tmp.$m" --out-report "$O/report.tmp.$m" || exit 1
     mv "$O/scores${tag}_$m.tsv.tmp" "$O/scores${tag}_$m.tsv"; rm -f "$O/features.tmp.$m" "$O/report.tmp.$m"
     echo "$m wall_s $(( $(date +%s) - t0 ))"

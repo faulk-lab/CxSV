@@ -3,7 +3,9 @@
 
 Weights, tiers, copy-number, clustering, fold-back settings and resources come
 from config/scoring.yaml; matching from config/patient.yaml; collapse distance
-and composite fraction from config/calling.yaml (all in this checkout). Patient
+and composite fraction from config/calling.yaml; the library-QC switch and gate
+(conservative_mode, conservative, k) from config/library_qc.yaml, as rule
+scoring_params passes them (all in this checkout). Patient
 information: the sample's registry sex only (no HPO terms, no parents).
 --weights-override (YAML) replaces top-level keys of `weights` (used to score
 with a candidate privacy rule).
@@ -31,9 +33,11 @@ def main():
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
     cfg = {}
-    for f in ("calling.yaml", "patient.yaml", "scoring.yaml"):
-        with open(os.path.join(a.config_dir, f)) as fh:
-            cfg.update(yaml.safe_load(fh) or {})
+    for f in ("calling.yaml", "patient.yaml", "scoring.yaml", "library_qc.yaml"):
+        p = os.path.join(a.config_dir, f)
+        if os.path.exists(p):
+            with open(p) as fh:
+                cfg.update(yaml.safe_load(fh) or {})
     W = cfg["weights"]
     if a.weights_override:
         with open(a.weights_override) as fh:
@@ -49,6 +53,7 @@ def main():
         "collapse_distance": cfg["junction_params"]["collapse_distance"],
         "composite_fraction": cfg["cxsv_params"]["composite_fraction"],
         "panel_release_id": rel.get("release_id"),
+        "library_qc": {k: (cfg.get("library_qc") or {}).get(k) for k in ("conservative_mode", "conservative", "k")},
         "patient": {"hpo_terms": [], "parents_affected": False,
                     **({"sex": a.sex} if a.sex in ("male", "female") else {})},
     }

@@ -18,6 +18,11 @@
 #                            (OLD_CAL) or the item-13 subset evaluation (REUSE_CAL);
 #                            only new loci are measured; catalogue hits for all
 #   4 sample_score.sh LOFO   scores_LOFO.tsv per genome
+# LIBQC_ROOT (optional, panel-v1.2): before scoring, workflow/scripts/library_qc.py as
+# deployed (config/library_qc.yaml, group detected from the alignment, sheet platform)
+# writes LIBQC_ROOT/<cohort>/<sample>/library_qc.tsv for every genome, and the scorer
+# gets it (--library-qc), so conservative mode acts on FLAGged libraries as in a
+# patient run.
 # Families and sexes: the item-10 families.tsv (registry). Results are collected
 # by panel_rates_collect.py.
 # =============================================================================
@@ -63,6 +68,32 @@ for _, c, s, a in sorted(rows, reverse=True):
 PY
 xargs -P "$PAR" -L 1 bash -c 'bash '"$CODE"'/calibration/oversized_clusters/eval_depth.sh "$0" "$1" "$2"' < "$CAL_ROOT/depth_tasks.txt"
 echo "depth: $(ls "$CAL_ROOT"/persample/*/*/depth_catalogues.ok | wc -l) wall_s $(( $(date +%s) - t0 ))"; t0=$(date +%s)
+if [ -n "${LIBQC_ROOT:-}" ]; then
+  mkdir -p "$LIBQC_ROOT"
+  $X python - "$CODE" "$LIBQC_ROOT/library_qc_params.json" <<'PY' || exit 1
+import json, sys, yaml
+code, out = sys.argv[1:3]
+lq = yaml.safe_load(open(f"{code}/config/library_qc.yaml"))["library_qc"]
+json.dump({**lq, "group_override": ""}, open(out, "w"), sort_keys=True)
+PY
+  python3 - "$SAMPLE_MANIFEST" "$SAMPLE_SHEETS" "$SAMPLES_ROOT" > "$CAL_ROOT/libqc_tasks.txt" <<'PY'
+import csv, sys
+man, sheets, root = sys.argv[1:4]
+for r in csv.DictReader(open(man), delimiter="\t"):
+    sh = {x["sample_id"]: x for x in csv.DictReader(open(f"{sheets}/{r['cohort']}.tsv"), delimiter="\t")}
+    x = sh[r["sample_id"]]
+    print(r["cohort"], r["sample_id"], x["alignment"], (x.get("platform") or "").upper(),
+          f"{root}/{r['cohort']}/{r['sample_id']}/merged_sv.vcf")
+PY
+  export LIBQC_ROOT X REF
+  xargs -P "$PAR" -L 1 bash -c 'o=$LIBQC_ROOT/$0/$1; [ -s "$o/library_qc.tsv" ] && exit 0; mkdir -p "$o"
+    REF_PATH="'"${CXSV_REF_CACHE:-/mnt/sargasso1/CxSV/refs/ref_cache}"'/%2s/%2s/%s" $X python "$CODE/workflow/scripts/library_qc.py" \
+      --aln "$2" --ref "$REF" --windows "$CODE/config/library_qc_windows.hs1.bed" --merged-vcf "$4" --sample "$1" \
+      --min-mapq 20 --thresholds "$LIBQC_ROOT/library_qc_params.json" --group-override= --platform="$3" \
+      --out "$o/library_qc.tsv.tmp" 2> "$o/library_qc.log" && mv "$o/library_qc.tsv.tmp" "$o/library_qc.tsv" || echo "FAILED libqc $0 $1" >&2' \
+    < "$CAL_ROOT/libqc_tasks.txt"
+  echo "library QC: $(ls "$LIBQC_ROOT"/*/*/library_qc.tsv | wc -l) wall_s $(( $(date +%s) - t0 ))"; t0=$(date +%s)
+fi
 python3 - "$SAMPLE_MANIFEST" "$CAL_ROOT/families.tsv" > "$CAL_ROOT/score_tasks.txt" <<'PY'
 import csv, sys
 sex = {r["individual_id"]: r["sex"] for r in csv.DictReader(open(sys.argv[2]), delimiter="\t")}
