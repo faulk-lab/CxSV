@@ -171,7 +171,8 @@ rule locus_depth:
 rule scoring_params:
     """The weights, tiers, resources and patient information this run scores with."""
     input:
-        release = f"{PANEL_RELEASE}/{cxsv_release.METADATA}"
+        release  = f"{PANEL_RELEASE}/{cxsv_release.METADATA}",
+        manifest = f"{PANEL_RELEASE}/{cxsv_release.MANIFEST}"
     output: f"{S}/scoring/scoring_params.json"
     run:
         with open(input.release) as fh:
@@ -186,6 +187,8 @@ rule scoring_params:
             "collapse_distance": config["junction_params"]["collapse_distance"],
             "composite_fraction": config["cxsv_params"]["composite_fraction"],
             "panel_release_id": rel.get("release_id"),
+            "panel_release_test": bool(rel.get("test_release")),
+            "panel_release_manifest_sha256": cxsv_release.sha256_file(input.manifest),
             "patient": patient_info(wildcards.cohort, wildcards.sample),
             # rules/library_qc.smk; the gate acts only on a FLAGged library with the switch on
             "library_qc": {k: (config.get("library_qc") or {}).get(k)

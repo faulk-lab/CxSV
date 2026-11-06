@@ -7,8 +7,11 @@ library_qc:
   min_mapq: 20
   k: 6
   eps: 0.001
-  # calibration group of a patient: sample-sheet column qc_group, else by platform
+  # calibration group of a patient (lib/cxsv_libgroup.py): sample-sheet qc_group when set,
+  # else detected from the alignment header, else from the sampled reads, else by platform
   default_group: {ONT: ONT_1kGP_1019, PACBIO: PacBio_HiFi}
+  group_detection: {max_reads: 20000, min_reads: 200, r10_min_median_q: 30, r9_max_median_q: 28,
+                    uniform_q_min_fraction: 0.9, pacbio_min_fraction: 0.5}
   # conservative mode for FLAGged libraries (on by default, PI decision 2026-11-05): a
   # Tier-1 locus stays Tier 1 only with > min_multi_caller_fraction of its junctions
   # called by >= 2 callers or >= min_cn_changed copy-number-changed segments;

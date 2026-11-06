@@ -430,7 +430,9 @@ def library_qc_report(qc, P, loci):
             f"otherwise it is reported as {w.get('demote_to', 'Tier2')} with its points unchanged")
     demoted = [x for x in loci if str(x.get("qc_gate", "")).startswith("demoted")]
     kept = [x for x in loci if str(x.get("qc_gate", "")).startswith("kept")]
-    S = [f"- library QC (docs/LIBRARY_QC.md): **{flag}** (group {qc.get('qc_group', 'NA')}; "
+    src = qc.get("qc_group_source")
+    S = [f"- library QC (docs/LIBRARY_QC.md): **{flag}** (group {qc.get('qc_group', 'NA')}"
+         + (f", chosen from the {src}" if src else "") + f"; "
          f"{qc.get('qc_reason', 'NA')}); reads with a supplementary alignment {qc.get('frac_sa', 'NA')}, to "
          f"another chromosome {qc.get('frac_sa_interchrom', 'NA')}; SVIM-only BND/TRA per Gb "
          f"{qc.get('svim_only_bnd_per_gb', 'NA')} (z {qc.get('z_svim_only_bnd_per_gb', 'NA')}), SVIM-only "
@@ -442,6 +444,8 @@ def library_qc_report(qc, P, loci):
             S.append(f"  - **Conservative mode DEMOTED {len(demoted)} Tier-1 locus/loci** ({rule}); "
                      f"{len(kept)} Tier-1 locus/loci kept. The demoted loci are listed under "
                      "\"Library QC: loci demoted by conservative mode\".")
+        elif mode and not kept:
+            S.append("  - Conservative mode is on: no Tier-1 locus to gate.")
         elif mode:
             S.append(f"  - Conservative mode is on and demoted no locus: all {len(kept)} Tier-1 loci "
                      "have multi-caller or copy-number support.")
@@ -452,6 +456,8 @@ def library_qc_report(qc, P, loci):
                                           if mode else "off."))
     else:
         S.append("  - The library could not be assessed (NA); conservative mode did not act.")
+    if qc.get("qc_group_evidence"):
+        S.append(f"  - QC group evidence: {qc['qc_group_evidence']}")
     X = []
     if demoted:
         X.append("\n## Library QC: loci demoted by conservative mode\n")
@@ -464,7 +470,7 @@ def library_qc_report(qc, P, loci):
     return S, X
 
 
-QC_FIELDS = ("qc_group", "qc_flag", "qc_reason", "frac_sa", "frac_sa_interchrom", "svim_only_bnd_per_gb",
+QC_FIELDS = ("qc_group", "qc_group_source", "qc_group_detected", "qc_group_evidence", "qc_flag", "qc_reason", "frac_sa", "frac_sa_interchrom", "svim_only_bnd_per_gb",
              "svim_only_any_per_gb", "z_svim_only_bnd_per_gb", "z_svim_only_any_per_gb", "coverage_est",
              "reads_sampled")
 
@@ -515,6 +521,16 @@ def write_outputs(a, P, loci, cat_names, sex_note, with_literature=False, qc=Non
     write_report(a, P, loci, sex_note, qc or {})
 
 
+def panel_release_line(P):
+    """Report line naming the panel release: id, whether it is a test release, and the
+    sha256 of its release_manifest.tsv (which pins every file of the release)."""
+    test = P.get("panel_release_test")
+    t = "NA" if test is None else ("**yes**" if test else "no")
+    return (f"- panel release: {P.get('panel_release_id', 'NA')} (test release: {t}; release_manifest.tsv "
+            f"sha256 {P.get('panel_release_manifest_sha256', 'NA')}); matching tolerance "
+            f"{P['panel_match']['tolerance']} bp, min junction fraction {P['panel_match']['min_junction_fraction']}")
+
+
 def write_report(a, P, loci, sex_note, qc=None):
     L = []
     L.append(f"# CxSV score report: {a.sample}\n")
@@ -523,8 +539,7 @@ def write_report(a, P, loci, sex_note, qc=None):
              "cohort-specific choice, not a validated cutoff.** This report is research output for review by "
              "qualified clinical scientists; it is not a diagnosis.\n")
     L.append(f"- loci scored: {len(loci)}; {sex_note}")
-    L.append(f"- panel release: {P.get('panel_release_id', 'NA')}; matching tolerance "
-             f"{P['panel_match']['tolerance']} bp, min junction fraction {P['panel_match']['min_junction_fraction']}")
+    L.append(panel_release_line(P))
     vers = resource_versions(P.get("scoring_resources", {}).get("manifest"))
     if vers:
         L.append("- resources: " + "; ".join(f"{f} ({s} {v}, sha256 {h})" for f, s, v, h, _ in vers

@@ -516,14 +516,20 @@ fingerprint.
   group after a coverage adjustment. FLAG when either robust z > 6
   (`config/library_qc.yaml`). The supplementary-alignment fractions of reads over 20
   fixed windows are reported with it.
-- **Report.** The flag and metrics head every score report.
+- **Group.** The calibration group comes from the sample sheet (`qc_group`) when set,
+  else from the alignment header, else from the reads' base-quality profile, else
+  the platform default. The report says which (docs/LIBRARY_QC.md section 4a).
+- **Report.** The flag, group and metrics head every score report.
 - **Conservative mode** (default on, PI decision 2026-11-05) acts only on a FLAGged
   library. A Tier-1 locus stays Tier 1 when more than half of its junctions are
   called by >= 2 callers or at least one copy-number segment changed; otherwise it
   is reported as Tier 2. Points and the total are unchanged, and column
   `Library_QC_Gate` says why.
 - **Demotions are explicit.** The report says how many loci were demoted and lists
-  them in "Library QC: loci demoted by conservative mode".
+  them in "Library QC: loci demoted by conservative mode". A FLAGged library without
+  any Tier-1 locus reads "no Tier-1 locus to gate".
+- **Panel release in the header.** The report names the release id, whether it is a
+  test release, and the sha256 of its `release_manifest.tsv`.
 - **Effect.** On the 24 flagged panel genomes, Tier 1 went from 168 to 55. Every
   positive-control event stays Tier 1 with the mode forced on.
 

@@ -62,14 +62,15 @@ RELEASE_ID_FILE = f"{P}/release_id.txt"
 
 
 rule panel_release_id:
-    """<name>-<YYYYMMDD>-<fingerprint[:12]>; release.date null = the day this first runs."""
+    """<name>-<YYYYMMDD>-<fingerprint[:12]>[-test]; release.date null = the day this first runs."""
     input:  fingerprint = f"{RESULTS_ROOT}/calling_fingerprint.json"
     output: RELEASE_ID_FILE
     run:
         with open(input.fingerprint) as fh:
             fp = json.load(fh)["sha256"]
         date = str(RELEASE.get("date") or datetime.date.today().strftime("%Y%m%d"))
-        rid = cxsv_release.release_id(RELEASE.get("name", "cxsv-panel"), date, fp)
+        rid = cxsv_release.release_id(RELEASE.get("name", "cxsv-panel"), date, fp,
+                                      test=bool(RELEASE.get("test_release", False)))
         with open(output[0], "w") as fh:
             fh.write(rid + "\n")
 

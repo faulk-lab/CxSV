@@ -15,8 +15,10 @@
 #   library_qc_params   {S}/qc/library_qc_params.json  (the config block used)
 #   library_qc          {S}/qc/library_qc.tsv
 #
-# The group is the sample-sheet column qc_group, else patients.<sample>.qc_group,
-# else library_qc.default_group[<platform>]. The flag changes no locus; with
+# The group is the sample-sheet column qc_group (or patients.<sample>.qc_group) when
+# set, else detected from the alignment header, else from the sampled reads, else
+# library_qc.default_group[<platform>] (lib/cxsv_libgroup.py; the report says which).
+# The flag changes no locus; with
 # library_qc.conservative_mode true, score_cxsv.py applies the conservative Tier-1
 # gate to a FLAGged library (rules/patient_scoring.smk).
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -31,9 +33,9 @@ def _lqc_path(p):
     return p if os.path.isabs(p) else os.path.join(PROJECT_DIR, p)
 
 
-def library_qc_group(wildcards):
-    """Calibration group: sample sheet qc_group, then patients.<sample>.qc_group, then
-    library_qc.default_group by platform; NA when none applies."""
+def library_qc_group_override(wildcards):
+    """The group set by the site: sample-sheet qc_group, then patients.<sample>.qc_group;
+    '' when neither is set (library_qc.py then detects it)."""
     spec = COHORT_SPECS.get(wildcards.cohort) or {}
     sheet = spec.get("samples") if isinstance(spec, dict) else None
     if sheet and os.path.exists(sheet):
@@ -42,16 +44,23 @@ def library_qc_group(wildcards):
                 if (r.get("sample_id") or "").strip() == wildcards.sample and (r.get("qc_group") or "").strip():
                     return r["qc_group"].strip()
     g = ((config.get("patients") or {}).get(wildcards.sample) or {}).get("qc_group")
-    if g:
-        return str(g)
-    plat = (record(wildcards).platform or "").upper()
-    return (LIBQC.get("default_group") or {}).get(plat, "NA")
+    return str(g) if g else ""
+
+
+def library_qc_platform(wildcards):
+    return (record(wildcards).platform or "").upper()
+
+
+def library_qc_params_body(wildcards):
+    """The config block, the site's group override and the sample-sheet platform."""
+    return _lqc_json.dumps({**LIBQC, "group_override": library_qc_group_override(wildcards),
+                            "platform": library_qc_platform(wildcards)}, sort_keys=True)
 
 
 rule library_qc_params:
     """The library QC configuration this sample is checked with."""
     output: f"{S}/qc/library_qc_params.json"
-    params: body = lambda wc: _lqc_json.dumps({**LIBQC, "group": library_qc_group(wc)}, sort_keys=True)
+    params: body = lambda wc: library_qc_params_body(wc)
     run:
         with open(output[0], "w") as fh:
             fh.write(params.body + "\n")
@@ -67,12 +76,14 @@ rule library_qc:
         script  = f"{SCRIPTS}/library_qc.py"
     output: f"{S}/qc/library_qc.tsv"
     params:
-        mapq  = int(LIBQC.get("min_mapq", 20)),
-        group = library_qc_group
+        mapq     = int(LIBQC.get("min_mapq", 20)),
+        override = library_qc_group_override,
+        platform = library_qc_platform
     log: f"{S}/logs/library_qc.log"
     shell:
         HTS_ENV + """
         python {input.script} --aln {input.aln} --ref {REFERENCE} --windows {input.windows} \
             --merged-vcf {input.vcf} --sample {wildcards.sample} --min-mapq {params.mapq} \
-            --thresholds {input.params} --group {params.group} --out {output} 2> {log}
+            --thresholds {input.params} --group-override={params.override:q} --platform={params.platform:q} \
+            --out {output} 2> {log}
         """
