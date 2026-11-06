@@ -35,13 +35,16 @@ include: "../panel/Snakefile"
 import glob as _glob
 import sys
 
-# Panel inputs that must exist per sample before the aggregate step can run
-# (what rule all and the aggregate rules of workflow/panel read per sample).
+# Per-sample outputs a shard produces before the aggregate step. Everything
+# downstream of the copy-number linkage (cxsv/cxsv_summary.tsv, sv_summary.txt,
+# the master table, junctions/junctions.tsv) needs the aggregate panel-of-normals (rules/cn.smk,
+# panel_cn_pon), so shards stop at the junction-track discovery and the binned
+# depth; the aggregate run builds the PoN and then the rest (roadmap item 15).
 SHARD_TARGETS = (
-    "sv_summary.txt",
-    "cxsv/cxsv_master_table.tsv",
+    "cxsv/junction_summary.tsv",
+    "cxsv/junction_only.vcf",
+    "cn/depth.regions.bed.gz",
     "callers/sniffles.snf",
-    "junctions/junctions.tsv",
     "callability/callable.bed.gz",
     "qc/svim_check.tsv",
 )

@@ -10,8 +10,10 @@
 #
 # Outputs per sample, under {S} = results/<workflow>/samples/<cohort>/<sample>:
 #   merged_sv.vcf                  three-caller SURVIVOR merge
-#   cxsv/cxsv_summary.tsv          every cluster, IsCxSV + criteria C1-C5
-#   cxsv/cxsv_only.vcf             merged calls inside CxSV loci
+#   cxsv/junction_summary.tsv      junction track: every cluster, IsCxSV + criteria C1-C5
+#   cxsv/junction_only.vcf         merged calls inside junction-track CxSV loci
+#   cxsv/cxsv_summary.tsv          junction track + copy-number-linked loci (rules/cn.smk)
+#   cxsv/cxsv_only.vcf             merged calls inside either kind of locus
 #   cxsv/cxsv_master_table.tsv     annotated CxSV loci
 #   cxsv/cxsv_loci.bed             Chr, Start, End, Exon_Disrupt
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -106,7 +108,7 @@ rule sample_cluster_sv:
     input:  f"{S}/cxsv/merged_sv.bed"
     output:
         sorted_bed   = f"{S}/cxsv/merged_sv_sorted.bed",
-        clusters_bed = f"{S}/cxsv/clusters.bed"
+        clusters_bed = f"{S}/cxsv/junction_clusters.bed"     # + CN loci -> cxsv/clusters.bed (rules/cn.smk)
     params: cluster_dist = config["cxsv_params"]["cluster_distance"]
     log:    f"{S}/logs/cluster_sv.log"
     shell:
@@ -125,10 +127,10 @@ rule sample_classify_cxsv:
     workflow/lib/cxsv_classes.py). Genomic context is never a criterion.
     """
     input:
-        bed = f"{S}/cxsv/clusters.bed",
+        bed = f"{S}/cxsv/junction_clusters.bed",
         vcf = f"{S}/merged_sv.vcf",
         fai = f"{REFERENCE}.fai"
-    output: f"{S}/cxsv/cxsv_summary.tsv"
+    output: f"{S}/cxsv/junction_summary.tsv"       # + CN loci -> cxsv/cxsv_summary.tsv (rules/cn.smk)
     params:
         min_bp      = config["cxsv_params"]["min_breakpoints"],
         max_win     = config["cxsv_params"]["cluster_distance"],
@@ -169,11 +171,11 @@ rule sample_classify_cxsv:
 
 
 rule sample_extract_cxsv_vcf:
-    """This sample's merged calls that fall inside its own CxSV loci."""
+    """This sample's merged calls that fall inside its own junction-track CxSV loci."""
     input:
         vcf     = f"{S}/merged_sv.vcf",
-        summary = f"{S}/cxsv/cxsv_summary.tsv"
-    output: f"{S}/cxsv/cxsv_only.vcf"
+        summary = f"{S}/cxsv/junction_summary.tsv"
+    output: f"{S}/cxsv/junction_only.vcf"          # + CN loci's records -> cxsv/cxsv_only.vcf (rules/cn.smk)
     params:
         link_max = config["cxsv_params"]["span_link_max"],
         rule     = config["cxsv_params"]["long_span_rule"]
@@ -186,7 +188,8 @@ rule sample_extract_cxsv_vcf:
 rule sample_annotate_cxsv:
     """
     Annotated CxSV master table and loci BED for this sample (genes, exons,
-    repeats, segdups, complexity class). Annotation never removes a locus.
+    repeats, segdups, complexity class): junction-track and copy-number-linked loci
+    (sample_cn_linkage, rules/cn.smk). Annotation never removes a locus.
     """
     input:
         cxsv_summary = f"{S}/cxsv/cxsv_summary.tsv",

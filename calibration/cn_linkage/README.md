@@ -15,7 +15,10 @@ Nothing here is used by the workflows; it runs in the pipeline image beside a pa
 | test B | `grid.py`, `grid_worker.sh`, `train_model.sh` | read-level simulation grid (design, simulate, run, collect) on the fleet |
 | test C/E | `smoke_pc.py`, `patient_rescore.py` | positive control (truth-CN smoke test; real depth), HG01868 |
 | test D | `cn_lofo.sh`, `testD_compare.py` | LOFO on the augmented subset vs panel-v1.1-r2 |
-| comparator | `spectre_compare.sh` | Spectre on the same mosdepth tracks |
+| comparator | `spectre_compare.sh` | Spectre on the same mosdepth tracks (optional `--blacklist`; CN read from INFO) |
+| Phase 2 full-panel depth | `cn_depth_build.sh` (`tasks`, `reuse`, `worker`, `ledger`), `depth_pass.sh` (writes `depth.sha256`) | the cn_depth_v1 pass over all 1,619 panel libraries (docs/CN_LINKAGE.md section 5); frozen copy in `/mnt/sargasso1/CxSV/build/cn_depth_v1/code` |
+| Phase 2 strata | `make_panel_strata.py` → `panel_strata_v1.tsv` | PoN stratum per panel library (`cn_strata_table`) |
+| Phase 2 Spectre sanity check | `spectre_blacklist.py`, `spectre_sanity.py` | PoN-mask blacklist for Spectre; Spectre with/without it against our segments and PC L01 |
 | figures | `make_figures.py` | the three report figures |
 
 Unit tests: `tests/unit/test_cn_linkage.py` (numpy only).

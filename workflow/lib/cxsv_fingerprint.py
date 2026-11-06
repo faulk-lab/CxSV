@@ -25,7 +25,8 @@ import hashlib
 import json
 from pathlib import Path
 
-CALLING_PARAM_KEYS = ("sv_params", "filter_params", "survivor_params", "cxsv_params", "junction_params")
+CALLING_PARAM_KEYS = ("sv_params", "filter_params", "survivor_params", "cxsv_params", "junction_params",
+                      "cn_params")
 
 # Relative to the workflow/ directory. Everything that decides which CxSV loci a
 # sample has; changing any of these needs a new panel release.
@@ -40,6 +41,14 @@ CALLING_CODE = (
     "scripts/extract_junctions.py",
     "lib/cxsv_junctions.py",
     "lib/cxsv_classes.py",
+    # copy-number track (roadmap item 15; rules/cn.smk)
+    "rules/cn.smk",
+    "scripts/cn_depth.sh",
+    "scripts/cn_segment.py",
+    "scripts/cn_pon.py",
+    "scripts/cn_linkage.py",
+    "lib/cxsv_cn.py",
+    "lib/cxsv_cnlink.py",
 )
 
 TOOLS = ("sniffles", "cuteSV", "svim", "SURVIVOR", "bcftools", "bedtools", "samtools")

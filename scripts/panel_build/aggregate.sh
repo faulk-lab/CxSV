@@ -11,7 +11,9 @@
 # exists, so only the aggregate rules run: cohort call sets and QC plots,
 # panel loci and junction sites with carriers per individual, callability
 # masks and per-site callability, Sniffles2 population genotyping, release.
-# The dry run is checked first: it must schedule no per-sample job.
+# The dry run is checked first: it must schedule no per-sample job of the shard
+# stage. Since panel-v1.2 (copy-number track, docs/CN_LINKAGE.md) the per-sample
+# rules after the aggregate panel-of-normals run here: AFTER_PON below.
 # =============================================================================
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -37,7 +39,9 @@ run() { cxsv_container "$BUILD/aggregate" "$TMP" snakemake -s "$BUILD/code/workf
         --keep-going --printshellcmds "$@"; }
 mkdir -p "$BUILD/aggregate"
 run -n > "$BUILD/aggregate/dryrun.txt" 2>&1
-per_sample=$(awk '/^Job stats/{f=1} f && $1 ~ /^(run_|filter_|merge_sv|sample_|callable_mask|check_cram)/ {s+=$2} END{print s+0}' "$BUILD/aggregate/dryrun.txt")
+# per-sample rules that need the aggregate PoN (rules/cn.smk and everything after the linkage)
+AFTER_PON='cn_segment|sample_cn_linkage|sample_annotate_cxsv|sample_junctions|sample_sv_summary'
+per_sample=$(awk -v ap="^($AFTER_PON)\$" '/^Job stats/{f=1} f && $1 ~ /^(run_|filter_|merge_sv|sample_|callable_mask|check_cram|cn_depth)/ && $1 !~ ap {s+=$2} END{print s+0}' "$BUILD/aggregate/dryrun.txt")
 # print the first Job stats table without a pipe: under pipefail, grep | sed '/^$/q' dies of SIGPIPE
 # (rc 141) when Snakemake prints a second Job stats block after sed has quit
 awk '/^Job stats/{f=1} f{print} f && /^$/{exit}' "$BUILD/aggregate/dryrun.txt"

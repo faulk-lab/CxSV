@@ -414,8 +414,11 @@ different commit, or if the fingerprint is not `expected_fingerprint`
 (`cd7e1d194cd4`). It never overwrites a plan.
 
 **What `aggregate.sh` checks.** It stops unless every planned sample is done,
-and unless its dry run schedules no per-sample job. That second check catches a
-stale or incomplete shard.
+and unless its dry run schedules no per-sample job of the shard stage. That
+second check catches a stale or incomplete shard. From panel-v1.2 the per-sample
+rules after the copy-number PoN (`cn_segment`, `sample_cn_linkage`,
+`sample_annotate_cxsv`, `sample_junctions`, `sample_sv_summary`) run in the
+aggregate step and are not counted.
 
 ### Pause, resume, stop
 
@@ -552,6 +555,15 @@ are the build ledger and per-node cost summary for the release.
 - **(b)** Projected hours of the per-sample step for each dispatch option
   (make_shards.py, measured cost model). The dashed line is the NAS read floor:
   80.8 TB at 630 MB/s.
+
+## Copy-number track (panel-v1.2, roadmap item 15)
+
+From panel-v1.2 the shards stop at the junction-track discovery
+(`cxsv/junction_summary.tsv`) and the binned depth (`cn/depth.regions.bed.gz`);
+the aggregate run builds the copy-number PoN per stratum and then runs the
+linkage and everything after it. A downstream-only rebuild must set
+`cn_depth_precomputed` and `cn_strata_table` in `aggregate.yaml`
+(docs/CN_LINKAGE.md section 5).
 
 ## Downstream-only rebuild (panel-v1.1 candidate, 2026-11-04)
 

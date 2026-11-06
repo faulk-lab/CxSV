@@ -218,6 +218,10 @@ RELEASE_FILES = {
     "tool_versions.tsv":        f"{RESULTS_ROOT}/tool_versions.tsv",
     f"callability/{cxsv_callability.SAMPLES_TSV}": f"{CALL_DIR}/{cxsv_callability.SAMPLES_TSV}",
     **{f"callability/{CALL_MASKS[k]}": f"{CALL_DIR}/{CALL_MASKS[k]}" for k in KEYS},
+    # copy-number track (rules/cn.smk): PoN per stratum, its members, every library's segments
+    **{f"cn/pon/{s}.npz": f"{P}/cn/pon/{s}.npz" for s in CN_STRATA},
+    "cn/pon/pon_members.tsv":    f"{P}/cn/pon/pon_members.tsv",
+    "cn/panel_cn_segments.tsv":  f"{P}/cn/panel_cn_segments.tsv",
 }
 
 

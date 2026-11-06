@@ -11,6 +11,10 @@ local baseline. Output BED (0-based, half-open), sorted:
 
     chrom start end locus_id kind index      kind: flank_left | segment | flank_right
 
+Copy-number-linked loci (--cn-loci, cn/cn_loci.tsv of rules/cn.smk): the boundaries of
+the locus's copy-number segments are added as breakends, so a segment bounded by a copy-
+number change but by no detected junction is still measured (roadmap item 15).
+
 The rule then runs `samtools bedcov` on the patient alignment over these
 intervals; scripts/score_cxsv.py turns mean depth into copy number.
 
@@ -46,6 +50,7 @@ def main():
     ap.add_argument("--flank", type=int, default=20000)
     ap.add_argument("--gap", type=int, default=1000)
     ap.add_argument("--margin", type=int, default=200)
+    ap.add_argument("--cn-loci", default=None, help="cn/cn_loci.tsv (copy-number-linked loci and their segments)")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
     order = cj.contig_order(a.fai)
@@ -61,6 +66,17 @@ def main():
     with open(a.loci, newline="") as fh:
         loci = [f"{r['Chr']}:{r['Start']}-{r['End']}" for r in csv.DictReader(fh, delimiter="\t")]
     p = {**cc.DEFAULTS, "collapse_distance": a.collapse_distance, "composite_fraction": a.composite_fraction}
+    cn_bounds = defaultdict(list)             # locus -> [(chrom, pos)] copy-number segment boundaries
+    if a.cn_loci and os.path.exists(a.cn_loci):
+        with open(a.cn_loci, newline="") as fh:
+            for r in csv.DictReader(fh, delimiter="\t"):
+                if r.get("written") != "yes":
+                    continue
+                for seg in filter(None, (r.get("segments") or "").split(";")):
+                    loc, _st = seg.rsplit(":", 1)
+                    chrom, rng = loc.rsplit(":", 1)
+                    s0, e0 = rng.split("-")
+                    cn_bounds[r["locus_id"]] += [(chrom, int(s0)), (chrom, int(e0))]
     out = []
     off_ref = defaultdict(int)                # contig -> breakends skipped (not in --fai)
     for L in loci:
@@ -68,6 +84,9 @@ def main():
         per_chrom = defaultdict(list)
         for chrom, pos in cc.breakends(kept, a.collapse_distance):
             per_chrom[chrom].append(pos)
+        for chrom, pos in cn_bounds.get(L, []):
+            if all(abs(pos - q) > a.collapse_distance for q in per_chrom[chrom]):
+                per_chrom[chrom].append(pos)
         for chrom, ps in per_chrom.items():
             if chrom not in lengths:          # not a reference contig: bedcov cannot measure it
                 off_ref[chrom] += len(ps)
