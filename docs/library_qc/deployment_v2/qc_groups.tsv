@@ -1,0 +1,6 @@
+sample	qc_group	qc_group_source	qc_flag	z_svim_only_bnd_per_gb	z_svim_only_any_per_gb	reads_median_mean_q	frac_sa	svim_only_bnd_per_gb	svim_only_any_per_gb	coverage_est	qc_group_evidence
+HG01868	ONT_LRSC_R9	header	PASS	0.336847	-0.663062	23.543	0.0480124	0.415846	33.5342	30.7006	header: @PG CL names 'R9'; reads: median per-read mean base quality 23.5 <= 28 (R9-like)
+HG01879_PacBio	PacBio_HiFi	header	PASS	1.88076	1.15517	39.0015	0.00918386	1.27218	26.3867	29.8487	header: @RG PL 'PACBIO'; reads: 100% PacBio CCS read names or rq tags
+HG04176	ONT_LRSC_R10	reads	FLAG	14.7429	18.17	44.1731	0.158034	90.7272	122.007	51.5524	header: no chemistry cue (no @RG); reads: median per-read mean base quality 44.2 >= 30 (R10-like)
+PC_host_3559	ONT_LRSC_R10	header	PASS	1.68222	0.158839	43.1268	0.0604796	1.1583	33.2248	37.5878	header: @RG DS names 'r10.4.1'; reads: median per-read mean base quality 43.1 >= 30 (R10-like)
+pos_control	ONT_LRSC_R10	header	PASS	1.68374	0.161248	43.1268	0.0603464	1.15856	33.2324	37.5792	header: @RG DS names 'r10.4.1'; reads: median per-read mean base quality 43.1 >= 30 (R10-like)

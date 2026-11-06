@@ -9,9 +9,13 @@ network, from material whose origin can be checked. This document defines:
 4. the **offline bundle**: everything needed to score a patient with no network;
 5. how to **build** and **run** each of them;
 6. the **validation records** of the bundles. The current bundle is
-   `cxsv-bundle-20261105-95126e14f036` (panel-v1.1 + library QC, conservative mode on;
-   record in [library_qc/DEPLOYMENT.md](library_qc/DEPLOYMENT.md)). The panel-v1.1 bundle
-   `cxsv-bundle-20261105-8fc5bef725bd` is recorded in [panel_v1.1/README.md](panel_v1.1/README.md).
+   `cxsv-bundle-20261106-169503679a60` (commit 1695036, panel-v1.1 + library QC with the
+   auto-detected group, conservative mode on; record in
+   [library_qc/DEPLOYMENT.md](library_qc/DEPLOYMENT.md), which also covers the previous
+   bundle `cxsv-bundle-20261105-95126e14f036`). The panel-v1.1 bundle
+   `cxsv-bundle-20261105-8fc5bef725bd` (deleted 2026-11-06, PI-approved) is recorded in
+   [panel_v1.1/README.md](panel_v1.1/README.md). Bundles from later commits need a release
+   with their calling fingerprint (item 15 changed it).
    6a–6c below are the earlier bundles.
 
 ## 1. Panel release

@@ -1,0 +1,73 @@
+
+== 0. provenance (2026-11-06 10:11:21)
+bundle cxsv-bundle-20261106-169503679a60 commit 169503679a600918645a71c4a0ac2213bddc7c59 release cxsv-panel-20261105-c31ecc9f8fa2 SIF 9f4e049fe5c5eb89717e1f531d284836efc7c306e0103374872c8165c01ff967
+input /mnt/sargasso1/CxSV/datasets/pos_control/release/pos_control_3559.hs1.minimap2.cram (105249063224 bytes)
+E13 add-on matches its MD5SUMS
+L01 add-on matches its MD5SUMS
+L02 add-on matches its MD5SUMS
+L03 add-on matches its MD5SUMS
+L04 add-on matches its MD5SUMS
+all 25 @SQ M5 of the input are in the bundle's MD5 cache
+
+== 1. CRAM version (2026-11-06 10:12:15)
+input is CRAM 3.0
+no transcode needed
+
+== 2. add-on splice (whole genome): E13 L01 L02 L03 L04 (2026-11-06 10:12:15)
+source	/mnt/sargasso1/CxSV/datasets/pos_control/release/pos_control_3559.hs1.minimap2.cram
+source_md5	77d1b04f9c27fcd9d6b4b25a469743eb
+replace_bed	/home/minknow/scratch/item11r2_full/input/E13+L01+L02+L03+L04.replace.bed
+dropped_names	25839
+dropped_records	31119
+simulated_records	29754
+input_records	18558204
+output_records	18556839
+cram_version	3.0
+seconds	695
+
+== 3. patient run from the bundle (Singularity, network off) (2026-11-06 10:12:15)
+patient run finished: 7943 s
+  panel release:     /bundle/panel_release/cxsv-panel-20261105-c31ecc9f8fa2
+  release id:        cxsv-panel-20261105-c31ecc9f8fa2
+  test release:      False
+  source commit:     8fc5bef725bd0020901eb1e3ee563832ccbcf2a2
+  fingerprint:       c31ecc9f8fa26f3c76509fd48327522309af1310689d94423ec7f89fd866b7d7
+  manifest sha256:   09d3e32e8610463408a29d49e73ea660434184e1076ab5c139ff3064a412393b
+  files verified:    1634 (2452335302 bytes)
+  runtime image:     cxsv-pipeline:ba820f7b2bd3
+  runtime image id:  sha256:b6c1bded8b3a9357c63bbe9f44c0e0e60039a9d5fa92731094d93ebbdb2e15d0
+  runtime SIF:       9f4e049fe5c5eb89717e1f531d284836efc7c306e0103374872c8165c01ff967
+  bundle:            cxsv-bundle-20261106-169503679a60
+  status: VERIFIED
+  this run fingerprint:  c31ecc9f8fa26f3c76509fd48327522309af1310689d94423ec7f89fd866b7d7
+  panel fingerprint:     c31ecc9f8fa26f3c76509fd48327522309af1310689d94423ec7f89fd866b7d7
+  panel release:         /bundle/panel_release/cxsv-panel-20261105-c31ecc9f8fa2
+  status: COMPATIBLE
+
+== 4. score against the truth set (E01-E12 release truth + add-on truth: E13 L01 L02 L03 L04) (2026-11-06 12:24:38)
+E01	PASS	junctions 2+0p/2	cxsv_loci=1 class=Complex_inversion (expected Complex_inversion, match yes) status=private (expected private) carriers=0 region_carriers=0 bp_matched=2/2 junction_panel_carriers=0,0 score=1.35 tier=Tier1_high_priority (expected top)
+E02	PASS	junctions 2+0p/2	cxsv_loci=1 class=Complex_inversion (expected Complex_inversion, match yes) status=private (expected private) carriers=0 region_carriers=0 bp_matched=2/2 junction_panel_carriers=0,0 score=1.95 tier=Tier1_high_priority (expected top)
+E03	PASS	junctions 2+0p/2	cxsv_loci=1 class=Complex_inversion (expected Complex_inversion, match yes) status=private (expected private) carriers=0 region_carriers=0 bp_matched=2/2 junction_panel_carriers=0,0 score=1.72 tier=Tier1_high_priority (expected top)
+E04	PASS	junctions 3+0p/3	cxsv_loci=1 class=DUP+INV (expected DUP+INV, match yes) status=private (expected private) carriers=0 region_carriers=903 bp_matched=3/3 junction_panel_carriers=0,0,0 score=1.74 tier=Tier1_high_priority (expected top)
+E05	PASS	junctions 4+0p/4	cxsv_loci=1 class=Nested_SV (expected Nested_SV, match yes) status=private (expected private) carriers=0 region_carriers=0 bp_matched=4/4 junction_panel_carriers=0,0,0,0 score=1.93 tier=Tier1_high_priority (expected top)
+E06	PASS	junctions 3+0p/3	cxsv_loci=1 class=DUP+INV (expected DUP+INV, match yes) status=private (expected private) carriers=0 region_carriers=0 bp_matched=3/3 junction_panel_carriers=0,0,0 score=1.94 tier=Tier1_high_priority (expected top)
+E07	PASS	junctions 2+0p/2	cxsv_loci=2 class=BND_cluster (expected BND_cluster, match yes) status=private (expected private) carriers=0 region_carriers=0;1 bp_matched=2/2 junction_panel_carriers=0,0 score=1.55 tier=Tier1_high_priority (expected top)
+E08	PASS	junctions 2+1p/3	cxsv_loci=1 class=BND_cluster (expected BND_cluster, match yes) status=private (expected private) carriers=0 region_carriers=0 bp_matched=2/3 junction_panel_carriers=.,0,0 score=1.44 tier=Tier1_high_priority (expected top)
+E09	PASS	junctions 9+0p/9	cxsv_loci=1 class=Chromothripsis_like (expected Chromothripsis_like, match yes) status=private (expected private) carriers=0 region_carriers=91 bp_matched=9/9 junction_panel_carriers=0,0,0,0,0,0,0,0,0 score=2.66 tier=Tier1_high_priority (expected top)
+E10	PASS	junctions 4+0p/4	cxsv_loci=1 class=Multi_breakpoint_cluster (expected Multi_breakpoint_cluster, match yes) status=private (expected private) carriers=0 region_carriers=0 bp_matched=4/4 junction_panel_carriers=0,0,0,0 score=0.26 tier=Tier3 (expected below_top)
+E11	PASS	junctions 1+0p/1	cxsv_loci=0 class=. (expected None, match n/a) status=. (expected not_cxsv) carriers=. region_carriers=. bp_matched=1/1 junction_panel_carriers=0 score=. tier=. (expected not_scored)
+E12	PASS	junctions 2+0p/2	cxsv_loci=0 class=. (expected None, match n/a) status=. (expected not_cxsv) carriers=. region_carriers=. bp_matched=2/2 junction_panel_carriers=0,0 score=. tier=. (expected not_scored)
+E13	FAIL	junctions 4+0p/4	cxsv_loci=1 class=Nested_SV (expected Nested_SV, match yes) status=private (expected public) carriers=0 region_carriers=5 bp_matched=4/4 junction_panel_carriers=0,0,0,0 score=0.08 tier=Tier3 (expected below_top)
+L01	FAIL	junctions 2+0p/2	cxsv_loci=0 class=. (expected ., match no) status=. (expected private) carriers=. region_carriers=. bp_matched=2/2 junction_panel_carriers=0,0 score=. tier=. (expected top)
+L02	PASS	junctions 2+0p/2	cxsv_loci=1 class=Complex_inversion (expected ., match no) status=private (expected private) carriers=0 region_carriers=1310 bp_matched=2/2 junction_panel_carriers=0,0 score=1.04 tier=Tier1_high_priority (expected top)
+L03	FAIL	junctions 40+0p/40	cxsv_loci=19 class=BND_cluster;Complex_other;DEL+DUP+INV;Multi_breakpoint_cluster;Nested_SV (expected ., match no) status=private;public;shared_junctions (expected private) carriers=0;1016;17;380;526;84 region_carriers=0;1;107;139;292;293;391;5;745;9 bp_matched=40/40 junction_panel_carriers=0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 score=1.04 tier=Tier1_high_priority (expected top)
+L04	PASS	junctions 2+0p/2	cxsv_loci=2 class=BND_cluster (expected ., match no) status=private (expected private) carriers=0 region_carriers=0 bp_matched=2/2 junction_panel_carriers=0,0 score=1.74 tier=Tier1_high_priority (expected top)
+class concordance: 11/15 with expect.ideal_class, 4/15 with the labels before roadmap item 5
+junctions: 86 exact, 1 partial, 0 missed of 87
+off-target CxSV loci in the slices: 1198 (1 private, 146 shared_junctions, 1051 public)
+
+== 5. the bundle's panel release is unchanged (2026-11-06 12:24:41)
+manifest sha256:   09d3e32e8610463408a29d49e73ea660434184e1076ab5c139ff3064a412393b
+files verified:    1634 (2452335302 bytes)
+status: VERIFIED
+done
