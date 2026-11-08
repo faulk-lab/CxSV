@@ -1,7 +1,9 @@
 # Library QC: chimeric-library flag and conservative mode (roadmap item 14)
 
-Status 2026-11-06: deployed in bundle `cxsv-bundle-20261105-95126e14f036` (main 95126e1,
-PR #28 + PR #29; validation and end-to-end record: [library_qc/DEPLOYMENT.md](library_qc/DEPLOYMENT.md)).
+Status 2026-11-06: deployed in bundle `cxsv-bundle-20261106-169503679a60` (commit 1695036 =
+PR #28, #29 and the follow-ups PR #32: auto-detected group, wording, test-release ids; earlier
+bundle `cxsv-bundle-20261105-95126e14f036`). Validation and end-to-end records:
+[library_qc/DEPLOYMENT.md](library_qc/DEPLOYMENT.md).
 PI decision 2026-11-05:
 the flag in every patient report, **conservative mode ON by default** for flagged
 libraries, **no panel exclusion** (panel-v1.1 stays as is).
