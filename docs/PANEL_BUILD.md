@@ -565,6 +565,39 @@ linkage and everything after it. A downstream-only rebuild must set
 `cn_depth_precomputed` and `cn_strata_table` in `aggregate.yaml`
 (docs/CN_LINKAGE.md section 5).
 
+Downstream-only rebuild with the copy-number track (panel-v1.2; all committed tools,
+OLD = the build whose upstream outputs are reused, NEW = a new, empty root):
+
+```bash
+T=$NEW/code/scripts/panel_build
+git -C REPO archive COMMIT | tar -x -C $NEW/code; git -C REPO rev-parse COMMIT > $NEW/code/COMMIT
+python3 $T/tree_snapshot.py $OLD --sha256 results/panel/release --out $NEW/provenance/old_tree_before.tsv
+python3 $T/make_aggregate_yaml.py $OLD $NEW $NEW/provenance/release_description.txt \
+    --cn-depth-precomputed /mnt/sargasso1/CxSV/build/cn_depth_v1 \
+    --cn-strata-table $NEW/code/calibration/cn_linkage/panel_strata_v1.tsv
+CXSV_SIF=SIF CXSV_REBUILD_WORKDIR=<node-local dir> bash $T/rebuild_downstream.sh $OLD $NEW 20 --plan-old
+python3 $T/link_upstream.py --old $OLD/results/panel --new $NEW/results/panel \
+    --dryrun $NEW/provenance/dryrun_oldtree.txt --inventory $NEW/provenance/reused_upstream.tsv \
+    --include-log svim.log --apply
+CXSV_SIF=SIF CXSV_REBUILD_WORKDIR=<node-local dir> bash $T/rebuild_downstream.sh $OLD $NEW 20 --dry-run
+CXSV_SIF=SIF CXSV_REBUILD_WORKDIR=<node-local dir> bash $T/rebuild_downstream.sh $OLD $NEW 20
+python3 $T/tree_snapshot.py $OLD --sha256 results/panel/release --out $NEW/provenance/old_tree_after.tsv
+python3 $T/tree_snapshot.py --compare $NEW/provenance/old_tree_before.tsv $NEW/provenance/old_tree_after.tsv
+```
+
+- `make_aggregate_yaml.py --cn-depth-precomputed / --cn-strata-table` writes the two
+  keys (absolute paths; both must exist) into the JSON `aggregate.yaml`.
+- `rebuild_downstream.sh` checks them first (`check_aggregate_config.py`) and stops
+  if either is unset or missing.
+- `--plan-old` replaces the ad-hoc dry run of earlier rebuilds: `snakemake -n` of the
+  new code with NEW's `aggregate.yaml` but OLD's results root, written to
+  `NEW/provenance/dryrun_oldtree.txt`; `link_upstream.py --dryrun` reads it. It writes
+  nothing under OLD (work directory `<workdir>/plan_old`).
+- `tree_snapshot.py` lists every entry of OLD (path, type, size, mtime_ns, inode; sha256
+  of everything under `results/panel/release`); the before/after `--compare` must
+  report no difference. On the CIFS NAS a full listing takes 1–2 h; a full-panel
+  dry run needs a run clock of 8 h or more (the job graph alone took over 2 h).
+
 ## Downstream-only rebuild (panel-v1.1 candidate, 2026-11-04)
 
 When a change touches only the rules after `merge_sv_callers` (item 13: CxSV

@@ -5,7 +5,14 @@
 # (panel-v1.1 = panel-v1.0 + roadmap item 13; docs/PANEL_BUILD.md,
 # "Downstream-only rebuild").
 #
-#   bash rebuild_downstream.sh OLD_BUILD NEW_BUILD CORES [--dry-run | --resume]
+#   bash rebuild_downstream.sh OLD_BUILD NEW_BUILD CORES [--plan-old | --dry-run | --resume]
+#
+# --plan-old writes NEW_BUILD/provenance/dryrun_oldtree.txt: `snakemake -n` of the new
+# code (NEW_BUILD/code) with NEW_BUILD/aggregate.yaml but OLD_BUILD's results root,
+# i.e. the jobs the new code would run on the old tree. link_upstream.py --dryrun
+# reads it to leave every planned output unlinked. Nothing is written under
+# OLD_BUILD (a dry run only; the work directory is CXSV_REBUILD_WORKDIR/plan_old or
+# NEW_BUILD/aggregate/plan_old). The held-rule check applies.
 #
 # --resume continues an interrupted or partly failed run in the same tree:
 # no --forcerun (Snakemake's own metadata in NEW_BUILD/aggregate now records
@@ -14,7 +21,7 @@
 #
 # Expects (made by the steps in docs/PANEL_BUILD.md):
 #   NEW_BUILD/code               git archive of the release commit + COMMIT
-#   NEW_BUILD/aggregate.yaml     OLD_BUILD/aggregate.yaml with
+#   NEW_BUILD/aggregate.yaml     (make_aggregate_yaml.py) OLD_BUILD/aggregate.yaml with
 #                                panel_results_root = NEW_BUILD/results/panel
 #                                and the new release description
 #   NEW_BUILD/results/panel      upstream outputs of OLD_BUILD, hard-linked by
@@ -43,13 +50,17 @@
 # so NEW_BUILD/aggregate.yaml must set cn_depth_precomputed (the cn_depth_v1
 # full-panel depth pass; cn_depth.sh then verifies and links each file and fails
 # on a missing one rather than reading 1,619 alignments on the aggregate host)
-# and cn_strata_table (PoN stratum of every panel library). Both are checked here.
+# and cn_strata_table (PoN stratum of every panel library); make_aggregate_yaml.py
+# --cn-depth-precomputed / --cn-strata-table writes them. check_aggregate_config.py
+# checks both (the file is JSON) before anything runs.
 # =============================================================================
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"   # link_upstream.py lives next to this script
-OLD="$1" NEW="$2" CORES="$3" DRY=false RESUME=false
+OLD="$1" NEW="$2" CORES="$3" DRY=false RESUME=false PLANOLD=false
 [ "${4:-}" = --dry-run ] && DRY=true
 [ "${4:-}" = --resume ] && RESUME=true
+[ "${4:-}" = --plan-old ] && PLANOLD=true
+python3 "$HERE/check_aggregate_config.py" "$NEW/aggregate.yaml" || { echo "aggregate.yaml: copy-number keys missing; stop"; exit 1; }
 CODE="$NEW/code"
 : "${CXSV_SIF:?set CXSV_SIF}" "${CXSV_REF_CACHE:=/mnt/sargasso1/CxSV/refs/ref_cache}"
 export CXSV_SIF CXSV_REF_CACHE
@@ -57,26 +68,34 @@ export CXSV_SIF CXSV_REF_CACHE
 source "$CODE/scripts/panel_build/lib.sh"
 [ "$(cat "$CODE/COMMIT")" = "$(cat "$CODE/workflow/COMMIT" 2>/dev/null)" ] \
     || cp "$CODE/COMMIT" "$CODE/workflow/COMMIT"     # release.json source.commit (cxsv_release.source_info)
-for k in cn_depth_precomputed cn_strata_table; do
-    v=$(awk -v k="$k" -F': *' '$1==k{print $2}' "$NEW/aggregate.yaml" | tr -d "\"'")
-    [ -n "$v" ] && [ "$v" != none ] && [ -e "$v" ] || { echo "aggregate.yaml: $k unset or missing ($v); stop"; exit 1; }
-done
 HELD='run_sniffles|run_cutesv|run_svim|filter_sniffles|filter_cutesv|filter_svim|merge_sv_callers|check_cram_reference|build_ref_cache|tool_versions|callable_mask|panel_callability_masks|panel_sniffles_population'
 ulimit -Sn "$(ulimit -Hn)"
 WD="${CXSV_REBUILD_WORKDIR:-$NEW/aggregate}" TMP="$HOME/scratch/cxsv_panel_build/tmp/aggregate-$(basename "$NEW")"
 mkdir -p "$WD" "$NEW/provenance"
 case "$WD" in "$CXSV_NAS"/*) ;; *) export CXSV_EXTRA_BINDS="${CXSV_EXTRA_BINDS:-} $WD" ;; esac
+CFG="$NEW/aggregate.yaml"
+if $PLANOLD; then
+    WD="$WD/plan_old"; mkdir -p "$WD"; CFG="$WD/aggregate_oldtree.yaml"
+    python3 - "$NEW/aggregate.yaml" "$OLD/aggregate.yaml" "$CFG" <<'PY'
+import json, sys
+cfg = json.load(open(sys.argv[1]))
+cfg["panel_results_root"] = json.load(open(sys.argv[2]))["panel_results_root"]
+json.dump(cfg, open(sys.argv[3], "w"), indent=2)
+PY
+fi
 sm() { cxsv_container "$WD" "$TMP" snakemake -s "$CODE/workflow/panel/Snakefile" --directory "$WD" \
-        --configfile "$NEW/aggregate.yaml" --cores "$CORES" "$@"; }
+        --configfile "$CFG" --cores "$CORES" "$@"; }
 sm --list-rules 2>/dev/null | grep -vE '^[[:space:]]' | awk '{print $1}' | sort -u > "$WD/rules.txt"
 grep -v -x -E "$HELD" "$WD/rules.txt" > "$WD/allowed.txt"
 ARGS=(--allowed-rules $(cat "$WD/allowed.txt") --keep-going --printshellcmds)
-if $RESUME; then ARGS+=(--rerun-incomplete); DRYOUT="$WD/dryrun.resume.txt"
+if $PLANOLD; then ARGS+=(--forcerun sample_vcf_to_bed calling_fingerprint); DRYOUT="$NEW/provenance/dryrun_oldtree.txt"
+elif $RESUME; then ARGS+=(--rerun-incomplete); DRYOUT="$WD/dryrun.resume.txt"
 else ARGS+=(--forcerun sample_vcf_to_bed calling_fingerprint); DRYOUT="$WD/dryrun.txt"; fi
 sm -n "${ARGS[@]}" > "$DRYOUT" 2>&1
 awk '/^Job stats/{f=1} f{print} f && /^$/{exit}' "$DRYOUT"
 held=$(awk -v re="^($HELD)\$" '/^Job stats/{f=1} f && $1 ~ re {s+=$2} f && /^$/{exit} END{print s+0}' "$DRYOUT")
 [ "$held" = 0 ] || { echo "dry run plans $held held-rule jobs; stop"; exit 1; }
+if $PLANOLD; then echo "old-tree plan: $DRYOUT"; exit 0; fi
 $RESUME || python3 - "$DRYOUT" "$HERE" <<'PY'
 import os, sys
 sys.path.insert(0, sys.argv[2])
