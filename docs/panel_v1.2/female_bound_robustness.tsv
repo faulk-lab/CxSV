@@ -1,0 +1,4 @@
+female_upper	female_n	ambiguous_n	male_chrX_gain	female_chrX_gain	female_chrX_loss	L01_segments	L01_matches_sex_matched	L01_matching	L01_public	autosomes_identical
+1.12	806	18	0.484	0.877	0.153	chrX:101753000-102493000 3/2	0		False	1619
+1.18	808	16	0.484	1.01	0.153	chrX:101753000-102493000 3/2	1	1kGP_LRSC_ONT_CHM13/NA19238(101422000-102367000 3/2 female)	True	1619
+1.25	808	16	0.484	1.01	0.153	chrX:101753000-102493000 3/2	1	1kGP_LRSC_ONT_CHM13/NA19238(101422000-102367000 3/2 female)	True	1619

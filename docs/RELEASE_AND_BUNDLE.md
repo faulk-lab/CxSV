@@ -376,12 +376,35 @@ Inside the container, for every process (small fixes 2026-11):
 `tests/lab/check_container_env.sh BUNDLE WORKDIR` checks both settings under
 Singularity and Docker.
 
+**After every patient run (interim, panel-v1.2 bundles):** read `cn/stats.json`
+(`sex_call`, `x_ratio`, `y_ratio`). If `sex_call` is `ambiguous`, flag the sample to the
+analyst as a possible sex-chromosome aneuploidy or mosaicism, and treat the run's chrX
+and chrY copy-number calls as unreliable. The patient report does not show this yet
+(docs/CN_LINKAGE.md, section "After every patient run"; ROADMAP item 16 (c)).
+
 **Open question for the restricted environment's IT** (unchanged): which
 workflow engine and container runtime are allowed. The bundle assumes
 Snakemake (inside the image) plus Singularity/Apptainer, and also ships a
 Docker archive.
 
 ## 6. Validation record
+
+### 6-v1.2. Bundle with panel-v1.2-r2, 2026-11-09
+
+Record: [panel_v1.2/README.md](panel_v1.2/README.md) (bundle
+`cxsv-bundle-20261109-84d380e08cc4`, release `cxsv-panel-20261108-fdac9ff80401`, 9 checks
+including check 9 "literature set shipped").
+
+**Known defect in earlier bundles (fixed in PR #37, main 761f75d).** `make_bundle.sh`
+chose the literature set with `ls -d <resources>/literature/lit-v* | sort -V | tail -1`,
+and that picked the file `lit-v1.0.build.log`, not the directory `lit-v1.0`. The literature
+set was therefore silently left out of bundles `cxsv-bundle-20261103-33c075a22071`,
+`cxsv-bundle-20261106-169503679a60` (the deployed patient bundle) and
+`cxsv-bundle-20261108-c40e26528d5f`. Patient runs from them carry no `literature_match`
+annotation (`private/cxsv_literature_hits.tsv`). Tiers and scores are unaffected, because
+the literature set is annotation only. The script now selects directories only, stops when
+no set is found unless `--no-literature` is given, and validation check 9 fails a bundle
+without the set.
 
 ### 6a. Bundle with panel-v1.0 (the first real release), 2026-11-03
 

@@ -1,0 +1,18 @@
+event	gene	verdict	classes	status	score	tier	rank	diff_vs_169503679a60	diff_vs_c40e26528d5f
+E01	MECP2	PASS	Complex_inversion	private	1.35	Tier1_high_priority	13	rank: 12 -> 13	rank: 12 -> 13
+E02	NF1	PASS	Complex_inversion	private	1.95	Tier1_high_priority	2	identical	identical
+E03	PMP22	PASS	Complex_inversion	private	1.72	Tier1_high_priority	7	identical	identical
+E04	SHANK3	PASS	DUP+INV	private	1.74	Tier1_high_priority	6	identical	identical
+E05	NRXN1	PASS	Nested_SV	private	1.93	Tier1_high_priority	4	identical	identical
+E06	AUTS2	PASS	DUP+INV	private	1.94	Tier1_high_priority	3	identical	identical
+E07	SATB2/FOXP2	PASS	BND_cluster	private	1.55	Tier1_high_priority	9	identical	identical
+E08	NSD2/EHMT1/ZIC2	PASS	BND_cluster	private	1.44	Tier1_high_priority	12	rank: 11 -> 12	rank: 11 -> 12
+E09	CHD2	PASS	Chromothripsis_like	private	2.66	Tier1_high_priority	1	identical	identical
+E10	intergenic	PASS	Multi_breakpoint_cluster	private	0.26	Tier3	32	rank: 30 -> 32	rank: 31 -> 32
+E11	intergenic	PASS	.	.	.	.	.	identical	identical
+E12	intergenic	PASS	.	.	.	.	.	identical	identical
+E13	intergenic	FAIL	Nested_SV	private	0.08	Tier3	39	rank: 37 -> 39	rank: 38 -> 39
+L01	PLP1	PASS	CN_linked_gain	private	1.53	Tier1_high_priority	11	verdict: FAIL -> PASS; cxsv_loci: 0 -> 1; classes: . -> CN_linked_gain; panel_status: . -> private; carriers: . -> 0; score: . -> 1.53; tier: . -> Tier1_high_priority; rank: . -> 11	verdict: FAIL -> PASS; cxsv_loci: 0 -> 1; classes: . -> CN_linked_gain; panel_status: . -> private; carriers: . -> 0; score: . -> 1.53; tier: . -> Tier1_high_priority; rank: . -> 11
+L02	intergenic	PASS	Complex_inversion	private	1.04	Tier1_high_priority	14	rank: 13 -> 14	rank: 13 -> 14
+L03	intergenic	FAIL	BND_cluster;CN_linked_loss;Complex_other;DEL+DUP+INV;Multi_breakpoint_cluster;Nested_SV	private;public;shared_junctions	1.04	Tier1_high_priority	15	cxsv_loci: 19 -> 20; classes: BND_cluster;Complex_other;DEL+DUP+INV;Multi_breakpoint_cluster;Nested_SV -> BND_cluster;CN_linked_loss;Complex_other;DEL+DUP+INV;Multi_breakpoint_cluster;Nested_SV; rank: 14 -> 15	rank: 14 -> 15
+L04	BCAP31	PASS	BND_cluster	private	1.74	Tier1_high_priority	5	identical	identical

@@ -1,0 +1,5 @@
+release fp file ['/bundle/panel_release/cxsv-panel-20261108-fdac9ff80401/calling_fingerprint.json']
+bundle code fp fdac9ff804017b671528b22bbd44c2babff71eab19f6a64f8ffe4e6d3a6503ed
+release fp     fdac9ff804017b671528b22bbd44c2babff71eab19f6a64f8ffe4e6d3a6503ed
+differences 0
+MATCH

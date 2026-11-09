@@ -198,6 +198,34 @@ In the patient workflow:
   candidates (not scored, not tiered)* to the report and their count to the
   summary lines. They get no points and no tier.
 
+### After every patient run: check the sex call (interim, panel-v1.2)
+
+Until roadmap item 16 (c) is done, the patient report prints only the ploidy sex and the
+chrX ratio. An ambiguous sex call, and with it a possible sex-chromosome aneuploidy,
+does not appear in the report. After every patient run, the analyst reads
+`results/patient/samples/<cohort>/<sample>/cn/stats.json`:
+
+- `sex_call` (`male`, `female` or `ambiguous`), `x_ratio`, `y_ratio`, and
+  `pon_sex_reference` (the chrX/chrY reference used).
+- **If `sex_call` is `ambiguous`:** flag the sample to the analyst as a possible
+  sex-chromosome aneuploidy or mosaicism (for example 45,X, 47,XXY, 47,XXX or
+  mosaic X loss), and treat every chrX and chrY copy-number call of that run as
+  unreliable. In panel-v1.2 an ambiguous sample is segmented on chrX with the
+  reference of its ploidy sex (`sex_ratio_male` 0.75) and is never counted for
+  sex-matched panel frequency. A 45,X sample gets male ploidy and no chrX loss. An
+  XXY sample gets female ploidy and its chrY is not segmented. Neither case is
+  reported as a finding.
+- `score_cxsv.py` infers sex separately from flank depth (`infer_sex`, cut-offs
+  0.75 / 0.85; a sample-sheet sex overrides it). That call can disagree with
+  `sex_call`. When the two disagree, `cn/stats.json` is the reference.
+
+Panel evidence that this case is real: 18 of 1,619 panel libraries are ambiguous.
+Nine of them are registry females with a male-range chrX ratio (0.50-0.66) and
+no chrY, consistent with X loss in cell lines or a registry error. Three are
+females whose chrX ratio exceeds the female range: NA18946 1.15; NA19238 LRSC
+1.17, whose other library (ONT-1019) is normal at 1.02; and HG02805 1.26
+(docs/cn_linkage/sex/sex_ambiguous.tsv).
+
 ## 4. Fingerprint
 
 `cn_params` is a fingerprinted section of `config/calling.yaml`; `rules/cn.smk`,
