@@ -52,10 +52,10 @@ while [ $# -gt 0 ]; do
         --catalogues) CATALOGUES="$2"; shift 2 ;;
         --literature) LITERATURE="$2"; shift 2 ;;
         --no-literature) NO_LITERATURE=1; shift ;;
-        *) echo "unknown option $1"; sed -n '4,34p' "$0"; exit 1 ;;
+        *) echo "unknown option $1"; sed -n '4,36p' "$0"; exit 1 ;;
     esac
 done
-[[ "$MODE" == image || "$MODE" == bundle ]] || { sed -n '4,34p' "$0"; exit 1; }
+[[ "$MODE" == image || "$MODE" == bundle ]] || { sed -n '4,36p' "$0"; exit 1; }
 [ -n "$COMMIT_REV" ] || { echo "--commit is required"; exit 1; }
 # literature set chosen before any work is done, so a missing set stops the build at once
 if [ "$MODE" = bundle ]; then
