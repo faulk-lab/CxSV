@@ -79,12 +79,14 @@ def test_infer_sex_and_par_ploidy():
     assert cn.ploidy_track("chrY", 10, "female", PAR).sum() == 0
 
 
-def test_pon_pools_chrx_and_roundtrips(tmp_path):
+def test_pon_chrx_by_sex_and_roundtrips(tmp_path):
     rng = np.random.default_rng(2)
     pon = _pon(rng)
-    assert pon.meta["genomes"] == 8 and pon.meta["males"] == 4
-    med, rel, n = pon.reference("chrX", 400)
-    assert np.nanmedian(med) == pytest.approx(1.0, abs=0.05) and n.min() == 8   # both sexes pooled
+    assert pon.meta["genomes"] == 8 and pon.meta["males"] == 4 and pon.meta["females"] == 4
+    assert pon.meta["sex_reference"] == "by_sex" and "chrX" not in pon.med
+    for sex in ("male", "female"):                      # one chrX reference per sex (panel-v1.2-r2)
+        med, rel, n = pon.reference("chrX", 400, sex)
+        assert np.nanmedian(med) == pytest.approx(1.0, abs=0.05) and n.min() == 4
     pon.save(tmp_path / "T.npz")
     assert (tmp_path / "T.npz").exists() and not (tmp_path / "T.npz.npz").exists()
     back = cn.Pon.load(tmp_path / "T.npz")
@@ -135,7 +137,8 @@ def test_pon_and_segment_scripts(tmp_path):
     pon = cn.Pon.load(tmp_path / "pon" / "T.npz")
     assert pon.meta["genomes"] == 4                     # n4 (params) and n5 (--exclude) left out
     mem = (tmp_path / "pon" / "pon_members.tsv").read_text()
-    assert "c/n5\tI5\tT\tmale" in mem and "no: library-QC flag" in mem
+    assert "c/n5\tI5\tT\tmale\tmale" in mem and "no: library-QC flag" in mem
+    assert mem.splitlines()[0].split("\t")[-1] == "in_sex_reference"
     case = tmp_path / "case.bed.gz"
     _write_bins(case, _fine(rng, 30, "female", [("chr1", 2000, 2300, 3)]))
     subprocess.run([sys.executable, S / "cn_segment.py", "--depth", case, "--pon", tmp_path / "pon" / "T.npz",
@@ -145,6 +148,7 @@ def test_pon_and_segment_scripts(tmp_path):
     assert len(lines) == 2 and lines[1].startswith("chr1\t") and lines[1].split("\t")[3] == "3"
     st = json.loads((tmp_path / "stats.json").read_text())
     assert st["stratum"] == "T" and st["sex"] == "female" and st["stratum_source"] == "configured"
+    assert st["sex_call"] == "female" and st["pon_sex_reference"] == "by_sex"
     # patient mode: PoN directory, stratum from the library-QC group, fallback to the default
     seg = [sys.executable, S / "cn_segment.py", "--depth", case, "--pon", tmp_path / "pon", "--params",
            tmp_path / "p.json", "--stratum", "auto", "--out", tmp_path / "s2.tsv", "--stats", tmp_path / "s2.json"]

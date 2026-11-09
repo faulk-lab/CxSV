@@ -1,0 +1,4 @@
+pc_segment	state	ploidy	nested	rule	n_genomes	genomes
+chrX:101753000-102493000	3	2	False	new_sex_matched	0	
+chrX:101753000-102493000	3	2	False	new_no_sex_matching	1	1kGP_LRSC_ONT_CHM13/NA19238(101422000-102356000 3/2)
+chrX:101753000-102493000	3	2	False	old_panel_v1.2	0	

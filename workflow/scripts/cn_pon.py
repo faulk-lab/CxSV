@@ -6,12 +6,15 @@ panel_cn_pon, workflow/rules/cn.smk; docs/CN_LINKAGE.md).
       --out-dir DIR [--threads N]
 
 members.tsv: key (cohort/sample), individual_id, stratum, depth (1 kb regions.bed.gz).
-Every member is read once: genome median of its 10 kb bins and sex from the chrX ratio
-(cxsv_cn.infer_sex). Libraries in cn_params.pon_exclude (cohort/sample_id; the library-QC
+Every member is read once: genome median of its 10 kb bins and its sex call from the
+chrX and chrY ratios (cxsv_cn.call_sex: male / female / ambiguous; ploidy follows the
+call, an ambiguous library gets the legacy chrX rule). Libraries in cn_params.pon_exclude (cohort/sample_id; the library-QC
 flag list) or in --exclude (TSV cohort, sample_id) do not enter the PoN. Per stratum, DIR/<stratum>.npz holds the per-bin
-median, relative MAD and genome count of normalised depth (cxsv_cn.Pon; chrX pools
-both sexes, chrY males only). DIR/pon_members.tsv lists every library with its sex,
-chrX ratio, genome median and whether it is in the PoN (and why not).
+median, relative MAD and genome count of normalised depth (cxsv_cn.Pon; autosomes from
+every member; chrX one reference per sex, chrY males only; ambiguous calls enter the
+autosomes only). DIR/pon_members.tsv lists every library with its sex call, ploidy sex,
+chrX and chrY ratios, genome median, whether it is in the PoN (and why not) and whether
+it is in its sex's chrX/chrY reference.
 """
 import argparse
 import csv
@@ -31,9 +34,9 @@ def load(row):
     fine = cn.read_bins(row["depth"])
     coarse = cn.to_coarse(fine)
     gmed = cn.genome_median(coarse)
-    sex, ratio = cn.infer_sex(coarse, gmed, P)
-    # no chrX track (e.g. a single-contig test reference): every contig is diploid
-    return row["key"], cn.normalised(coarse, gmed, sex if sex != "unknown" else "female", PAR), sex, ratio, gmed
+    sx = cn.call_sex(coarse, gmed, PAR, P)
+    # no chrX track (e.g. a single-contig test reference): every contig is diploid (ploidy_sex female)
+    return row["key"], cn.normalised(coarse, gmed, sx["ploidy_sex"], PAR), sx, gmed
 
 
 def init(par, params):
@@ -70,14 +73,14 @@ def main():
         init(par, params)
         results = map(load, members)
     try:
-        for key, norm, sex, ratio, gmed in results:
-            info[key] = (sex, ratio, gmed)
+        for key, norm, sx, gmed in results:
+            info[key] = (sx, gmed)
             m = by_key[key]
             if key in excl:
                 continue
             if not gmed > 0:
                 continue
-            by_stratum.setdefault(m["stratum"], []).append((norm, sex))
+            by_stratum.setdefault(m["stratum"], []).append((norm, sx["sex_call"]))
     finally:
         if ex is not None:
             ex.shutdown()
@@ -86,14 +89,18 @@ def main():
         mem = by_stratum.get(s, [])
         pon = cn.Pon.build(mem, par, meta={"stratum": s})
         pon.save(f"{a.out_dir}/{s}.npz")
-        print(f"{s}: {pon.meta['genomes']} genomes ({pon.meta['males']} male) in the PoN", file=sys.stderr)
+        print(f"{s}: {pon.meta['genomes']} genomes in the PoN ({pon.meta['males']} male, "
+              f"{pon.meta['females']} female, {pon.meta['sex_ambiguous']} ambiguous: autosomes only)", file=sys.stderr)
     with open(f"{a.out_dir}/pon_members.tsv", "w") as fh:
-        fh.write("key\tindividual_id\tstratum\tsex\tx_ratio\tgenome_median\tin_pon\n")
+        fh.write("key\tindividual_id\tstratum\tsex\tsex_call\tx_ratio\ty_ratio\tgenome_median\tin_pon\tin_sex_reference\n")
         for m in members:
-            sex, ratio, gmed = info[m["key"]]
+            sx, gmed = info[m["key"]]
             why = ("no: library-QC flag" if m["key"] in excl else
                    "no: no depth" if not gmed > 0 else "yes")
-            fh.write(f"{m['key']}\t{m['individual_id']}\t{m['stratum']}\t{sex}\t{ratio}\t{round(gmed, 3)}\t{why}\n")
+            sexref = "yes" if why == "yes" and sx["sex_call"] in ("male", "female") else \
+                     ("no: sex " + sx["sex_call"] if why == "yes" else "no")
+            fh.write(f"{m['key']}\t{m['individual_id']}\t{m['stratum']}\t{sx['ploidy_sex']}\t{sx['sex_call']}\t"
+                     f"{sx['x_ratio']}\t{sx['y_ratio']}\t{round(gmed, 3)}\t{why}\t{sexref}\n")
 
 
 if __name__ == "__main__":

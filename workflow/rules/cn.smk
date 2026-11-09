@@ -11,7 +11,9 @@
 #                       cn_params.depth), or the precomputed full-panel pass
 #                       (config cn_depth_precomputed: <root>/<cohort>/<sample>/)
 #   panel_cn_pon        panel: {P}/cn/pon/<stratum>.npz from every panel library not
-#                       in cn_params.pon_exclude (library-QC flags), + pon_members.tsv
+#                       in cn_params.pon_exclude (library-QC flags), + pon_members.tsv;
+#                       chrX one reference per sex call, chrY males only (ambiguous
+#                       sex calls: autosomes only; lib/cxsv_cn.classify_sex)
 #   cn_segment          per sample: {S}/cn/segments.tsv, stats.json against the PoN of
 #                       its stratum (panel: {P}/cn/pon; patient: the release's cn/pon)
 #   panel_cn_segments   panel: {P}/cn/panel_cn_segments.tsv (every library's segments;
@@ -224,7 +226,9 @@ rule cn_segment:
 
 if WORKFLOW_NAME == "panel":
     rule panel_cn_segments:
-        """Every panel library's segments in one table (segment-level panel frequency)."""
+        """Every panel library's segments in one table (segment-level panel frequency). The
+        sex column is the library's sex call (male / female / ambiguous): chrX / chrY
+        segments count only towards samples of the same sex (cxsv_cnlink.cn_public)."""
         input:
             segs  = per_sample(f"{S}/cn/segments.tsv"),
             stats = per_sample(f"{S}/cn/stats.json")
@@ -241,7 +245,8 @@ if WORKFLOW_NAME == "panel":
                             head = h
                             fo.write("key\tindividual_id\tstratum\tsex\t" + h + "\n")
                         for line in fh:
-                            fo.write(f"{c}/{s}\t{SAMPLE_TABLE[(c, s)].individual_id}\t{st['stratum']}\t{st['sex']}\t{line}")
+                            fo.write(f"{c}/{s}\t{SAMPLE_TABLE[(c, s)].individual_id}\t{st['stratum']}\t"
+                                     f"{st.get('sex_call', st['sex'])}\t{line}")
                 if head is None:
                     fo.write("key\tindividual_id\tstratum\tsex\tchrom\tstart\tend\tstate\tploidy\n")
             os.replace(tmp, output[0])
@@ -256,6 +261,7 @@ rule sample_cn_linkage:
         cxsv_vcf = f"{S}/cxsv/junction_only.vcf",
         single   = f"{S}/cxsv/single_caller_filtered.tsv",
         segs     = f"{S}/cn/segments.tsv",
+        stats    = f"{S}/cn/stats.json",
         panel    = cn_panel_segments,
         params   = f"{RESULTS_ROOT}/cn_params.json",
         fai      = f"{REFERENCE}.fai",
@@ -275,7 +281,7 @@ rule sample_cn_linkage:
     shell:
         "python {input.script} --vcf {input.vcf} --clusters {input.clusters} --summary {input.summary} "
         "--cxsv-vcf {input.cxsv_vcf} --single {input.single} --segments {input.segs} "
-        "--panel-segments {input.panel} --individual {params.individual:q} --fai {input.fai} "
+        "--panel-segments {input.panel} --individual {params.individual:q} --stats {input.stats} --fai {input.fai} "
         "--calling {input.params} --scripts {SCRIPTS} --work {params.work} "
         "--out-clusters {output.clusters} --out-summary {output.summary} --out-vcf {output.cxsv_vcf} "
         "--out-candidates {output.candidates} --out-loci {output.loci} --out-cn-only {output.cn_only} 2> {log}"

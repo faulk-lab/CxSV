@@ -12,7 +12,9 @@ qc/library_qc.tsv, detected from the alignment; lib/cxsv_libgroup.py) is used wh
 release has its PoN, else --default-stratum (platform default). stats.json records the
 stratum and its source.
 
-Sex is inferred from the sample's chrX depth ratio (cxsv_cn.infer_sex). Segments:
+Sex is called from the sample's chrX and chrY depth ratios (cxsv_cn.call_sex: male /
+female / ambiguous); ploidy and the chrX/chrY reference follow the ploidy sex (an ambiguous
+call: the legacy chrX rule), and stats.json records both. Segments:
 cxsv_cn.segment_genome (ploidy-aware HMM on 10 kb bins, 1 kb boundary refinement,
 nested-level scan, masked-bin extents at each boundary).
 """
@@ -62,7 +64,7 @@ def main():
     fine = cn.read_bins(a.depth)
     coarse = cn.to_coarse(fine)
     gmed = cn.genome_median(coarse)
-    sex, ratio = cn.infer_sex(coarse, gmed, P)
+    sx = cn.call_sex(coarse, gmed, par, P)
     stratum, source = resolve_stratum(a)
     if os.path.isdir(a.pon) and source.startswith("library_qc") and \
             not os.path.exists(os.path.join(a.pon, f"{stratum}.npz")) and a.default_stratum:
@@ -75,7 +77,10 @@ def main():
         sys.exit(f"no PoN for stratum {stratum!r} ({source}) in {a.pon}; available: {have}. "
                  "Set the sample's cn_stratum (or qc_group).")
     pon = cn.Pon.load(pon_path)
-    segs, st = cn.segment_genome(fine, sex if sex != "unknown" else "female", par, pon, P)
+    if sx["sex_call"] == "ambiguous":
+        print(f"sex call ambiguous (chrX ratio {sx['x_ratio']}, chrY ratio {sx['y_ratio']}): "
+              f"ploidy and chrX/chrY reference of a {sx['ploidy_sex']}", file=sys.stderr)
+    segs, st = cn.segment_genome(fine, sx["ploidy_sex"], par, pon, P)
     with open(a.out, "w") as fh:
         fh.write("\t".join(COLS) + "\n")
         for s in segs:
@@ -84,7 +89,10 @@ def main():
                 v = s.get(c, False if c == "nested" else 0)
                 vals.append(str(round(v, 4)) if isinstance(v, float) else str(v))
             fh.write("\t".join(vals) + "\n")
-    stats = dict(stratum=stratum, stratum_source=source, sex=sex, x_ratio=ratio if ratio == ratio else None, pon_genomes=pon.meta.get("genomes"),
+    fin = lambda v: v if v == v else None          # noqa: E731  (NaN -> null)
+    stats = dict(stratum=stratum, stratum_source=source, sex=sx["ploidy_sex"], sex_call=sx["sex_call"],
+                 x_ratio=fin(sx["x_ratio"]), y_ratio=fin(sx["y_ratio"]), pon_genomes=pon.meta.get("genomes"),
+                 pon_sex_reference=pon.meta.get("sex_reference", "pooled"),
                  genome_median=round(st["genome_median"], 3), sigma=round(st["sigma"], 4) if st["sigma"] == st["sigma"] else None,
                  masked_fraction=round(st["masked_fraction"], 4) if st["masked_fraction"] == st["masked_fraction"] else None,
                  segments=len(segs))

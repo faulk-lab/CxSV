@@ -6,13 +6,20 @@ Pieces
   read_bins          mosdepth --by 1000 regions.bed.gz -> {contig: 1 kb mean depth}
   to_coarse          1 kb -> 10 kb bins (mean of the 1 kb bins)
   genome_median      median of the non-sex-chromosome 10 kb bins (> 0)
-  infer_sex          chrX / autosome median ratio (male below sex_ratio_male)
+  infer_sex          chrX / autosome median ratio (male below sex_ratio_male; legacy rule,
+                     kept as the ploidy fallback of an ambiguous call)
+  sex_ratios         chrX and chrY (outside the PARs) / autosome depth ratios
+  classify_sex       male / female / ambiguous from both ratios (sex_* thresholds); an
+                     ambiguous library (aneuploid-looking, mosaic, low chrY in a male-like
+                     chrX, ...) gets the legacy ploidy and is left out of the chrX/chrY reference
   ploidy_track       expected copies per 10 kb bin from sex (+ PAR on chrX in males)
   pon_summary        per platform stratum: per-bin median, relative MAD and genome count of
                      normalised depth (depth / genome median / (expected copies / 2)) over
-                     the stratum's unflagged panel libraries. chrX pools both sexes (values
-                     are per expected copy); chrY uses males only. Stored as summary arrays
-                     (Pon), not the genome matrix.
+                     the stratum's unflagged panel libraries. Autosomes: every member.
+                     chrX: separate male and female references (panel-v1.2: the pooled
+                     chrX reference gave males spurious gains); chrY: males only.
+                     Libraries with an ambiguous sex call enter the autosomes only.
+                     Stored as summary arrays (Pon), not the genome matrix.
   segment_genome     ratio = depth / (genome median x PoN median); ploidy-aware HMM over
                      copy-number states (Viterbi), >= min_bins per segment, boundaries
                      refined on the 1 kb bins, then a nested-level scan inside gains
@@ -38,6 +45,11 @@ DEFAULTS = dict(
     max_pon_relmad=0.30,     # PoN robust relative spread above this: bin masked
     min_pon_genomes=4,       # fewer healthy genomes with data in the bin: masked
     sex_ratio_male=0.75,     # chrX / autosome median depth ratio below which a genome is male
+                             # (legacy rule; ploidy fallback of an ambiguous call)
+    sex_x_male=[0.40, 0.60],     # chrX ratio range of a male call
+    sex_x_female=[0.80, 1.12],   # chrX ratio range of a female call
+    sex_y_male_min=0.10,     # chrY ratio (mean non-PAR depth / genome median) at least this: Y present
+    sex_y_female_max=0.05,   # chrY ratio at most this: no Y
     p_change=1e-4,           # HMM per-bin probability of a copy-number change
     outlier=0.01,            # HMM emission mixture weight of a flat outlier density
     max_cn=6,                # highest copy-number state (ploidy 2); ploidy 1: max_cn - 2
@@ -156,6 +168,59 @@ def infer_sex(coarse, gmed, P=DEFAULTS):
     return ("male" if r < P["sex_ratio_male"] else "female"), round(r, 4)
 
 
+def _nonpar(contig, a, par, binsize=COARSE * 1000):
+    m = np.ones(len(a), bool)
+    for s, e in par.get(contig, []):
+        m[s // binsize:int(math.ceil(e / binsize))] = False
+    return a[m]
+
+
+def sex_ratios(coarse, gmed, par):
+    """(x_ratio, y_ratio) over the genome median: x = median chrX non-PAR 10 kb bin with
+    depth > 0; y = mean depth of the chrY non-PAR 10 kb bins (most of chrY has no
+    mappable depth even in males, so the mean, not the median: panel-v1.2 survey, males
+    0.14-0.28, females <= 0.03; calibration/cn_linkage/sex_survey.py). NaN without the
+    contig."""
+    if not np.isfinite(gmed) or gmed <= 0:
+        return float("nan"), float("nan")
+    x = coarse.get("chrX")
+    if x is not None:
+        x = _nonpar("chrX", x, par)
+        x = x[np.isfinite(x) & (x > 0)]
+    xr = round(float(np.median(x)) / gmed, 4) if x is not None and len(x) else float("nan")
+    y = coarse.get("chrY")
+    if y is not None:
+        y = _nonpar("chrY", y, par)
+        y = y[np.isfinite(y)]
+    yr = round(float(np.mean(y)) / gmed, 4) if y is not None and len(y) else float("nan")
+    return xr, yr
+
+
+def classify_sex(x_ratio, y_ratio, P=DEFAULTS):
+    """(sex_call, ploidy_sex). sex_call: male (chrX in sex_x_male and chrY >= sex_y_male_min),
+    female (chrX in sex_x_female and chrY <= sex_y_female_max), else ambiguous; 'unknown'
+    without a chrX ratio. ploidy_sex (expected chrX/chrY copies): the call, or for an
+    ambiguous call the legacy chrX rule (sex_ratio_male); 'female' when unknown. A missing
+    chrY track (y NaN) does not decide: the chrX range alone does."""
+    if not np.isfinite(x_ratio):
+        return "unknown", "female"
+    xm, xf = P["sex_x_male"], P["sex_x_female"]
+    y_ok_m = (not np.isfinite(y_ratio)) or y_ratio >= P["sex_y_male_min"]
+    y_ok_f = (not np.isfinite(y_ratio)) or y_ratio <= P["sex_y_female_max"]
+    if xm[0] <= x_ratio <= xm[1] and y_ok_m:
+        return "male", "male"
+    if xf[0] <= x_ratio <= xf[1] and y_ok_f:
+        return "female", "female"
+    return "ambiguous", ("male" if x_ratio < P["sex_ratio_male"] else "female")
+
+
+def call_sex(coarse, gmed, par, P=DEFAULTS):
+    """dict(sex_call, ploidy_sex, x_ratio, y_ratio) of one genome."""
+    x, y = sex_ratios(coarse, gmed, par)
+    call, pl = classify_sex(x, y, P)
+    return dict(sex_call=call, ploidy_sex=pl, x_ratio=x, y_ratio=y)
+
+
 def normalised(coarse, gmed, sex, par):
     """{contig: depth / genome median / (expected copies / 2)}; NaN where 0 copies expected."""
     out = {}
@@ -168,7 +233,10 @@ def normalised(coarse, gmed, sex, par):
 
 class Pon:
     """Per-bin (median, relative MAD, genomes with data) of one stratum's normalised
-    depth. chrX pools both sexes; chrY is males only."""
+    depth. Autosomes: every member. Sex chromosomes: one reference per sex call, stored
+    under '<contig>|<sex>' (chrX|male, chrX|female, chrY|male); members with another
+    call (ambiguous, unknown) are left out of them. A PoN written before panel-v1.2-r2
+    has a pooled 'chrX' and is read as such (reference(..., sex) falls back to it)."""
 
     def __init__(self, med, rel, n, meta=None):
         self.med, self.rel, self.n, self.meta = med, rel, n, dict(meta or {})
@@ -178,19 +246,29 @@ class Pon:
         """members: list of (normalised {contig: array}, sex)."""
         med, rel, n = {}, {}, {}
         contigs = sorted(set.intersection(*(set(m[0]) for m in members))) if members else []
-        for c in contigs:
-            cols = [m[0][c] for m in members if c != "chrY" or m[1] == "male"]
+
+        def summarise(key, cols):
             if not cols:
-                continue
+                return
             M = np.vstack(cols).T            # bins x genomes
             with np.errstate(all="ignore"):
                 k = np.sum(np.isfinite(M) & (M > 0), axis=1).astype(np.int32)
                 md = np.nanmedian(M, axis=1)
                 mad = 1.4826 * np.nanmedian(np.abs(M - md[:, None]), axis=1)
                 r = mad / md
-            med[c], rel[c], n[c] = md.astype(np.float32), r.astype(np.float32), k
+            med[key], rel[key], n[key] = md.astype(np.float32), r.astype(np.float32), k
+
+        for c in contigs:
+            if c not in SEX_CHROMS:
+                summarise(c, [m[0][c] for m in members])
+                continue
+            for sex in (("male", "female") if c == "chrX" else ("male",)):
+                summarise(f"{c}|{sex}", [m[0][c] for m in members if m[1] == sex])
         m = dict(meta or {})
-        m.update(genomes=len(members), males=sum(1 for x in members if x[1] == "male"))
+        m.update(genomes=len(members), males=sum(1 for x in members if x[1] == "male"),
+                 females=sum(1 for x in members if x[1] == "female"),
+                 sex_ambiguous=sum(1 for x in members if x[1] not in ("male", "female")),
+                 sex_reference="by_sex")
         return cls(med, rel, n, m)
 
     def save(self, path):
@@ -212,8 +290,12 @@ class Pon:
         meta = json.loads(str(z["meta"][0])) if "meta" in z.files else {}
         return cls(med, rel, n, meta)
 
-    def reference(self, contig, nbins):
-        """(median, relative MAD, n) arrays of length nbins (NaN / 0 where absent)."""
+    def reference(self, contig, nbins, sex=None):
+        """(median, relative MAD, n) arrays of length nbins (NaN / 0 where absent). For
+        chrX / chrY the reference of `sex` ('<contig>|<sex>'); a legacy pooled PoN has
+        the contig key itself."""
+        if contig in SEX_CHROMS and f"{contig}|{sex}" in self.med:
+            contig = f"{contig}|{sex}"
         if contig not in self.med:
             return (np.full(nbins, np.nan, np.float32), np.full(nbins, np.nan, np.float32),
                     np.zeros(nbins, np.int32))
@@ -510,7 +592,8 @@ def masked_fraction(coarse, pon, P):
 
 
 def segment_genome(fine, sex, par, pon, P=DEFAULTS):
-    """All abnormal segments of a genome against a stratum PoN; (segments, stats)."""
+    """All abnormal segments of a genome against a stratum PoN; (segments, stats).
+    sex: the ploidy sex (classify_sex); it also picks the chrX / chrY reference."""
     coarse = to_coarse(fine)
     gmed = genome_median(coarse)
     sigma = genome_noise(coarse, gmed, pon, P)
@@ -519,7 +602,7 @@ def segment_genome(fine, sex, par, pon, P=DEFAULTS):
         for c in coarse:
             if c == "chrY" and sex != "male":
                 continue
-            med, rel, n = pon.reference(c, len(coarse[c]))
+            med, rel, n = pon.reference(c, len(coarse[c]), sex)
             pl = ploidy_track(c, len(coarse[c]), sex, par)
             s, _ = segment_contig(c, coarse[c], fine[c], gmed, pl, med, rel, n, sigma, P)
             segs.extend(s)
