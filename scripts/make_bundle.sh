@@ -12,14 +12,17 @@
 #       not by the commit.
 #
 #   scripts/make_bundle.sh bundle --commit REV --release DIR [--out ROOT]
-#           [--bundle-id ID] [--refs DIR] [--resources DIR] [--catalogues DIR] [--literature DIR]
+#           [--bundle-id ID] [--refs DIR] [--resources DIR] [--catalogues DIR]
+#           [--literature DIR | --no-literature]
 #       assemble ROOT/<bundle id>/: repo at the commit (git archive + git
 #       bundle), the image (SIF + Docker archive), hs1 + .fai + MD5 cache,
 #       annotation + scoring resources (verified against resources_manifest.tsv),
 #       the panel release DIR (must verify), the external
 #       catalogue junction-site tables with their manifests (each verified),
-#       the curated literature set (item 11; newest <resources>/literature/<version>/ or
-#       --literature DIR, verified against its MANIFEST.tsv; annotation only),
+#       the curated literature set (item 11; newest <resources>/literature/lit-v*/
+#       directory or --literature DIR, verified against its MANIFEST.tsv; annotation
+#       only; the build stops when none is found unless --no-literature is given,
+#       scripts/lib/literature_select.sh),
 #       run_cxsv.sh, config/bundle_site.yaml, README.md, bundle.json and a
 #       checksum manifest over everything (MANIFEST.sha256, sha256sum -c format;
 #       bundle_manifest.tsv with sizes and components).
@@ -34,11 +37,13 @@
 # =============================================================================
 set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=scripts/lib/literature_select.sh
+source "$REPO/scripts/lib/literature_select.sh"
 MODE="${1:-}"; shift || true
 COMMIT_REV=""; RELEASE=""; OUT=/mnt/sargasso1/CxSV/bundles; BUNDLE_ID=""
 REFS=/mnt/sargasso1/CxSV/refs; RESOURCES=/mnt/sargasso1/CxSV/resources
 CATALOGUES=/mnt/sargasso1/CxSV/datasets/external_catalogues
-LITERATURE=""
+LITERATURE=""; NO_LITERATURE=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --commit) COMMIT_REV="$2"; shift 2 ;;   --release) RELEASE="$2"; shift 2 ;;
@@ -46,11 +51,17 @@ while [ $# -gt 0 ]; do
         --refs) REFS="$2"; shift 2 ;;           --resources) RESOURCES="$2"; shift 2 ;;
         --catalogues) CATALOGUES="$2"; shift 2 ;;
         --literature) LITERATURE="$2"; shift 2 ;;
-        *) echo "unknown option $1"; sed -n '4,30p' "$0"; exit 1 ;;
+        --no-literature) NO_LITERATURE=1; shift ;;
+        *) echo "unknown option $1"; sed -n '4,34p' "$0"; exit 1 ;;
     esac
 done
-[[ "$MODE" == image || "$MODE" == bundle ]] || { sed -n '4,30p' "$0"; exit 1; }
+[[ "$MODE" == image || "$MODE" == bundle ]] || { sed -n '4,34p' "$0"; exit 1; }
 [ -n "$COMMIT_REV" ] || { echo "--commit is required"; exit 1; }
+# literature set chosen before any work is done, so a missing set stops the build at once
+if [ "$MODE" = bundle ]; then
+    LITERATURE=$(cxsv_select_literature "$RESOURCES" "$LITERATURE" "$NO_LITERATURE") \
+        || { echo "make_bundle.sh: stopping (literature set)"; exit 1; }
+fi
 COMMIT=$(git -C "$REPO" rev-parse --verify "${COMMIT_REV}^{commit}")
 C12=${COMMIT:0:12}
 SINGULARITY=$(command -v singularity || command -v apptainer)
@@ -167,14 +178,15 @@ for man in "$CATALOGUES"/*/*/*.manifest.tsv; do
 done
 step catalogues "$t"
 
-# literature set (roadmap item 11): newest <resources>/literature/<version> unless --literature
-if [ -z "$LITERATURE" ] && [ -d "$RESOURCES/literature" ]; then
-    LITERATURE=$(ls -d "$RESOURCES"/literature/lit-v* 2>/dev/null | sort -V | tail -1 || true)
-fi
-LIT_YAML=""
-if [ -n "$LITERATURE" ] && [ -f "$LITERATURE/MANIFEST.tsv" ]; then
+# literature set (roadmap item 11), chosen at the start: newest <resources>/literature/lit-v*/
+# directory unless --literature; none found = stop unless --no-literature
+LIT_YAML=""; LIT_VER=""
+if [ -z "$LITERATURE" ]; then
+    log "literature set: NONE (--no-literature); patient runs get no literature_match annotation"
+    log "  and tests/lab/validate_bundle.sh check 9 will FAIL for this bundle"
+else
     LIT_VER=$(basename "$LITERATURE")
-    awk -F'\t' 'NR>1 {print $3"  "$1}' "$LITERATURE/MANIFEST.tsv" | (cd "$LITERATURE" && sha256sum --quiet -c -) \
+    cxsv_verify_literature "$LITERATURE" \
         || { echo "literature set $LITERATURE does not match its MANIFEST.tsv"; exit 1; }
     mkdir -p "$STAGE/resources/literature/$LIT_VER"
     rsync -a "$LITERATURE/" "$STAGE/resources/literature/$LIT_VER/"
@@ -225,7 +237,7 @@ sed -e "s|@BUNDLE_ID@|$BUNDLE_ID|g" -e "s|@COMMIT@|$COMMIT|g" -e "s|@RELEASE_ID@
 
 TOTAL_SECS=$(( $(date +%s) - T_START ))
 # bundle.json first (sizes from a file walk), so MANIFEST.sha256 covers it too
-python3 - "$STAGE" "$BUNDLE_ID" "$COMMIT" "$RELEASE_ID" "$TEST_RELEASE" "$TOTAL_SECS" \
+CXSV_LIT_VER="$LIT_VER" python3 - "$STAGE" "$BUNDLE_ID" "$COMMIT" "$RELEASE_ID" "$TEST_RELEASE" "$TOTAL_SECS" \
     "repo=${SECS[repo]} container=${SECS[container]} reference=${SECS[reference]} resources=${SECS[resources]} release=${SECS[release]} catalogues=${SECS[catalogues]}" \
     "${CAT_LIST[@]}" <<'PY'
 import json, os, sys, datetime
@@ -254,6 +266,10 @@ meta = {
                       "built_in_image": rel["runtime"].get("image_id"), "built_in_sif": rel["runtime"].get("sif_sha256")},
     "reference": {"fasta": "reference/hs1.fa", "fai": "reference/hs1.fa.fai", "md5_cache": "reference/ref_cache"},
     "resources": "resources/", "catalogues": [f"catalogues/{c}" for c in cats],
+    "literature_set": ({"version": os.environ["CXSV_LIT_VER"],
+                        "path": f"resources/literature/{os.environ['CXSV_LIT_VER']}",
+                        "manifest": f"resources/literature/{os.environ['CXSV_LIT_VER']}/MANIFEST.tsv"}
+                       if os.environ.get("CXSV_LIT_VER") else None),
     "integrity": "MANIFEST.sha256 (sha256sum -c format) over every file but itself and bundle_manifest.tsv "
                  "(the same list with sizes and components)",
     "size_bytes_before_manifests": sum(comp_bytes.values()), "n_files": n + 1,

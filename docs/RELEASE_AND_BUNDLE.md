@@ -279,7 +279,7 @@ the same `singularity exec` / `apptainer exec`, or
 | `source/cxsv-<commit12>.tar.gz`, `source/cxsv-<commit12>.bundle` | the same commit as an archive and as a git bundle (`git clone cxsv-<commit12>.bundle`) |
 | `container/` | `cxsv-pipeline.sif`, `cxsv-pipeline.docker.tar.gz`, `image.env`, `Dockerfile`, `cxsv-pipeline.explicit.txt` |
 | `reference/` | `hs1.fa`, `hs1.fa.fai`, `ref_cache/` (htslib MD5 cache; mtimes kept, so Snakemake sees the cache as up to date) |
-| `resources/` | `genes.final.bed`, `exons.filtered.bed`, `repeats.final.bed`, `segdup.final.bed` |
+| `resources/` | `genes.final.bed`, `exons.filtered.bed`, `repeats.final.bed`, `segdup.final.bed`, `scoring/`; `literature/<version>/` = the curated literature set (item 11, annotation only), verified against its `MANIFEST.tsv` |
 | `panel_release/<release id>/` | the panel release (verified before copying) |
 | `catalogues/<name>/<version>/` | external catalogue junction-site tables (`.tsv.gz` + `.tbi`), each with its manifest, `SOURCES.tsv` and README; every table verified against its manifest's `output_sha256` before copying; `external_catalogues_summary.tsv` |
 | `config/bundle_site.yaml` | site config with in-container paths (`/bundle/...`, `/work/...`) |
@@ -302,6 +302,29 @@ scripts/make_bundle.sh bundle --commit <rev> --release <panel workdir>/results/p
 The builder takes code, Dockerfile and lock from `git archive <commit>`,
 never from the worktree. For `git bundle` it creates a temporary local ref
 and deletes it again; it pushes nothing and makes no tags.
+
+**Literature set.** The bundle ships the newest *directory*
+`<resources>/literature/lit-v*/` that holds a `MANIFEST.tsv`, or the set given
+with `--literature DIR`; it is verified against its manifest and
+`bundle_site.yaml` gets `literature_set.root`. If no set is found the build
+stops before any copying, unless `--no-literature` is given (such a bundle
+fails validation check 9). Selection: `scripts/lib/literature_select.sh`, tests
+in `tests/unit/test_bundle_literature.py`.
+
+*Bug fixed 2026-11-08:* the builder used `ls -d <resources>/literature/lit-v* |
+sort -V | tail -1`, which on the lab NAS returned the file `lit-v1.0.build.log`
+instead of the directory `lit-v1.0`, so the set was skipped without a message.
+Bundles `cxsv-bundle-20261103-33c075a22071`, `cxsv-bundle-20261106-169503679a60`
+(deployed) and `cxsv-bundle-20261108-c40e26528d5f` carry no literature set: their
+patient runs have no `Literature_Match` / `Literature_Events` columns and no
+`private/cxsv_literature_hits.tsv`. Scores and tiers are unaffected (the
+literature match is annotation only).
+
+**Validation** (`tests/lab/validate_bundle.sh`, 9 checks): integrity, release,
+network off, offline Singularity run, offline Docker run, run outside the bundle
+(with the lab copy of the same literature set), records identical, tampered
+release refused, literature set shipped and verified (check 9, added with the fix
+above; earlier records list 8 checks).
 
 ## 5. Running offline
 
