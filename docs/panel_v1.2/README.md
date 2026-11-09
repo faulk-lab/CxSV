@@ -1,8 +1,11 @@
 # panel-v1.2 build record (2026-11-08 to 2026-11-09)
 
-**Release `cxsv-panel-20261108-fdac9ff80401` (panel-v1.2-r2): VERIFIED, not finalised, not tagged.**
-Bundle `cxsv-bundle-20261109-84d380e08cc4`: validated offline 9/9. The positive control L01
-is Tier 1.
+**Release `cxsv-panel-20261108-fdac9ff80401` (panel-v1.2-r2): tagged `panel-v1.2`, finalised,
+VERIFIED.** Tagged bundle `cxsv-bundle-20261109-84d380e08cc4`: validated offline 9/9, positive
+control L01 Tier 1. **Since 2026-11-09 this is the current patient bundle** (it replaces
+`cxsv-bundle-20261106-169503679a60` + panel-v1.1; section 10).
+
+git tag: panel-v1.2 (annotated tag 101023e4a4b4 on 84d380e, created 2026-11-09 by the PI)
 
 The release adds roadmap item 15, the copy-number-anchored track for large DUP-TRP/INV-DUP
 and other copy-number-linked events (docs/CN_LINKAGE.md). It was built twice:
@@ -277,12 +280,11 @@ bind of the literature set):
 
 ## 8. State and next steps
 
-- **Not done here:** no tag, no `--finalise`, nothing deleted. The candidate root
-  `build/panel-v1.2` and bundle `c40e26528d5f` are kept.
-- **For the PI:** tagging panel-v1.2 on this release (then `write_release_metadata.py
-  --finalise` and a bundle rebuild from the tag), and switching patients from
-  `169503679a60` + panel-v1.1.
-- **Follow-ups:** ROADMAP item 16 (a)–(d).
+- Done 2026-11-09: tag, finalise, tagged bundle, patient switch (section 10). Nothing deleted.
+- **For the PI:** deletion of the superseded bundles listed in section 10 (none deleted).
+- **Follow-ups:** ROADMAP item 16 (a)–(d). The `docs/PANEL_BUILD.md` "measured for
+  panel-v1.2" addition is still pending (it was blocked by a safety check); the facts are in
+  section 3.
 
 ## 9. Reproduce
 
@@ -308,3 +310,112 @@ python3 make_figure.py   # this directory
 ```
 NAS outputs: `/mnt/sargasso1/CxSV/calibration/panel_v12_r2/` (`lofo/`, `bound_check/`,
 `design_check_v2/`, `testA_literature/`, `testA_cn/`, `testA_bundle_literature/`, `testA_bundle_cn/`).
+
+## 10. Tag, finalised release, tagged bundle and patient switch (2026-11-09)
+
+**Tag and finalise (PI).**
+- Annotated tag `panel-v1.2`: tag object `101023e4a4b4ce8da654f801a2cfede949bdb94e` on commit
+  `84d380e08cc4a5bfdc6ae0208e74c6c8781577a2`.
+- The release was finalised with `write_release_metadata.py --finalise` (main 71c0416):
+  `source.git_tag` `panel-v1.2`, `git_tag_object` `101023e4…`, `finalised_utc`
+  2026-11-09T17:04:02Z.
+- Only `release.json` and its manifest row changed. Manifest sha256 `0f12e7b42f04…` →
+  `3e46602dfe12b2276e739681b5c33e02bebd7e9c1475b27836d8b9d0a7b0db12`; `release.json` sha256
+  `7f4e597d7cb3…`.
+- The pre-finalise copies are in `build/panel-v1.2-r2/provenance/pre_finalise/`.
+
+**Independent re-verification of the finalised release** (read-only, freya):
+- The sha256 and size of every file listed in `release_manifest.tsv` were recomputed: 1,640
+  files, 2,465,679,568 bytes, 0 mismatches.
+- No file on disk is missing from the manifest.
+- `verify_panel_release.py` reports VERIFIED, with the manifest sha256 `3e46602d…`.
+
+**Tagged bundle.**
+- Built with `scripts/make_bundle.sh bundle --commit panel-v1.2 --release
+  /mnt/sargasso1/CxSV/build/panel-v1.2-r2/results/panel/release`, from a node-local clone
+  checked out at the tag (HEAD 84d380e, clean), in 82 s.
+- As for panel-v1.1, the bundle id is the default and equals the untagged bundle's, because
+  the commit is unchanged. The untagged bundle was renamed first, not deleted, to
+  `cxsv-bundle-20261109-84d380e08cc4.pretag`.
+
+| | |
+|---|---|
+| bundle | `/mnt/sargasso1/CxSV/bundles/cxsv-bundle-20261109-84d380e08cc4` |
+| size | 10,577,419,887 bytes, 2,182 files (2,180 in `MANIFEST.sha256`) |
+| `MANIFEST.sha256` sha256 | `1a5e1719eaa42f4aec83fa9e63f16fa3f675c40f62b284fd6e4d79a36b7daf88` |
+| embedded `release.json` | sha256 `7f4e597d7cb39c998d5611ba564b60683be9b60ba94eccad82d8b9a53c44ce40`, byte-identical to the finalised release's; `source.git_tag` `panel-v1.2`, `git_tag_object` `101023e4…`, `finalised_utc` 2026-11-09T17:04:02Z |
+| embedded `release_manifest.tsv` | sha256 `3e46602dfe12…` (the finalised manifest) |
+| image | SIF sha256 `9f4e049fe5c5eb89717e1f531d284836efc7c306e0103374872c8165c01ff967` (unchanged) |
+| literature set | `lit-v1.0` (verified) |
+| fingerprint | recomputed on the bundle's code in the SIF: `fdac9ff804017b67…` = release, 0 differences |
+| vs the untagged bundle | `repo/` byte-identical (every file). `MANIFEST.sha256` differs only in `bundle.json`, the embedded `release.json` and `release_manifest.tsv` (finalised), and `source/cxsv-84d380e08cc4.bundle` |
+
+Where the tag is recorded:
+- `bundle.json` has no git-tag or release-manifest field (schema `cxsv-offline-bundle/1`; it
+  records `source.commit` 84d380e and the release id and fingerprint).
+- The tag and the finalised manifest are recorded in the embedded `panel_release/…/release.json`
+  and `release_manifest.tsv`, as in the panel-v1.1 tagged bundle.
+- The bundle's `git bundle` holds the commit under a temporary ref
+  (`refs/cxsv-bundle-tmp/84d380e08cc4`), not the tag object.
+
+**Validation of the tagged bundle** (freya, stand-in HG01868, 8,413 s;
+[tag_bundle_validation.log](tag_bundle_validation.log)): **9/9 checks passed, failures 0.**
+- Check 1 verified all 2,180 files. The release has 1,640 files and manifest `3e46602d…`.
+- The offline Singularity, offline Docker and outside-the-bundle runs each finished
+  (2,759 s, 2,783 s and 2,555 s).
+- Records are identical; the tampered release is refused; check 9 found lit-v1.0 shipped and
+  verified, with 1,077 literature rows.
+- **HG01868: 0 Tier 1** (1,077 loci; 4 Tier 2, 25 Tier 3, 1,048 Benign_likely).
+- `cxsv_scores.tsv` is **byte-identical** to the untagged bundle's run in all three runs (md5
+  `c1e9f5fe8cdb…`). So are `cn/stats.json` (sex_call female, x_ratio 0.9714, y_ratio
+  0.0001), `cn/segments.tsv`, `cn/cn_loci.tsv` and `private/cxsv_literature_hits.tsv`.
+- Both `compare_*.tsv` files are also byte-identical
+  ([tag_hg01868_identity_vs_pretag.txt](tag_hg01868_identity_vs_pretag.txt)).
+
+**Positive control** (`tests/lab/pos_control_full_genome.sh`, full genome with callers re-run,
+E01–E13 + L01–L04, tagged bundle, 12 cores, 6,184 s; this is how the panel-v1.1 tagged
+bundle was checked):
+- Byte-identical to the untagged bundle's run: `score.events.tsv`, `score.junctions.tsv`,
+  `score.offtarget.tsv`, `score.txt`, the sample's `scoring/cxsv_scores.tsv`, `cn/cn_loci.tsv`,
+  `cn/cn_candidates.tsv`, `cn/segments.tsv`, `cn/stats.json`,
+  `private/cxsv_literature_hits.tsv`, and the merged VCF body (md5 `a39ffc3325e8…`)
+  ([tag_pc_identity_vs_pretag.txt](tag_pc_identity_vs_pretag.txt),
+  [tag_pc_score_events.tsv](tag_pc_score_events.tsv), [tag_pc_score.txt](tag_pc_score.txt)).
+- **L01: Tier 1, `CN_linked_gain`, score 1.53, rank 11, private.**
+- The bundle's panel release VERIFIED after the run, with manifest `3e46602d…`.
+
+**Patient switch.** The current patient configuration is now:
+
+| | |
+|---|---|
+| bundle | `/mnt/sargasso1/CxSV/bundles/cxsv-bundle-20261109-84d380e08cc4` (tag `panel-v1.2`, commit 84d380e) |
+| panel release | `cxsv-panel-20261108-fdac9ff80401` (panel-v1.2, finalised), embedded in the bundle |
+| replaces | `cxsv-bundle-20261106-169503679a60` + panel-v1.1 `cxsv-panel-20261105-c31ecc9f8fa2` |
+| library QC | unchanged from 169503679a60 (auto-detected group, conservative mode on) |
+| new for patients | copy-number track (CN_* classes, DUP-TRP/INV-DUP), sex-matched chrX/chrY panel frequency, literature annotation (`Literature_Match`, `private/cxsv_literature_hits.tsv`) |
+
+Patient-run instructions (docs/RELEASE_AND_BUNDLE.md section 5):
+
+1. `run_cxsv.sh verify-bundle`, then `run_cxsv.sh verify-release`.
+2. `run_cxsv.sh patient --workdir … --config patient.yaml --bind … --cores N`.
+3. **After every patient run, read `results/patient/samples/<cohort>/<sample>/cn/stats.json`**
+   (`sex_call`, `x_ratio`, `y_ratio`). **If `sex_call` is `ambiguous`**, flag the sample to the
+   analyst as a possible sex-chromosome aneuploidy or mosaicism, and treat all chrX/chrY
+   copy-number calls of the run as unreliable. The report does not show this yet (ROADMAP
+   item 16 (c); docs/CN_LINKAGE.md, "After every patient run").
+
+**Superseded bundles (none deleted; deletion is the PI's decision)**
+([superseded_bundles.tsv](superseded_bundles.tsv); sizes by `du -sb` on the NAS, 2026-11-09;
+NAS `/mnt/sargasso1` is at 87 %, 15 TB free):
+
+| bundle | bytes | files | what it is |
+|---|---|---|---|
+| `cxsv-bundle-20261109-84d380e08cc4.pretag` | 10,577,419,722 | 2,182 | untagged first build of this bundle (same commit and release; release.json/manifest before finalise; validated 9/9; renamed 2026-11-09) |
+| `cxsv-bundle-20261108-c40e26528d5f` | 10,576,350,956 | 2,161 | panel-v1.2 candidate 6001d99ea4d4 (PC L01 failed); no literature set |
+| `cxsv-bundle-20261106-169503679a60` | 10,562,414,920 | 2,124 | previous patient bundle (panel-v1.1 c31ecc9f8fa2 + library QC); no literature set |
+| `cxsv-bundle-20261103-33c075a22071` | 10,524,465,214 | 1,902 | panel-v1.0 validation bundle; no literature set |
+| `cxsv-bundle-20261029-1dcabd9770f7` | 8,089,067,107 | 240 | item 5 bundle, test release TEST-posctrl10slice-…-cd7e1d194cd4 |
+| `cxsv-bundle-20261028-26085cdd9977` | 8,028,013,781 | 218 | item 2 bundle, test release TEST-posctrl10slice-…-ad454c604bdd |
+| **total** | **58,357,731,700** (58.4 GB) | | |
+
+`_images/` (1.5 GB, the shared image cache that every bundle build reuses) is not superseded.
