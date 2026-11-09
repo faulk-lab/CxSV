@@ -1,0 +1,12 @@
+panel release:     /mnt/sargasso1/CxSV/build/panel-v1.2-r2/results/panel/release
+release id:        cxsv-panel-20261108-fdac9ff80401
+test release:      False
+source commit:     84d380e08cc4a5bfdc6ae0208e74c6c8781577a2
+fingerprint:       fdac9ff804017b671528b22bbd44c2babff71eab19f6a64f8ffe4e6d3a6503ed
+manifest sha256:   0f12e7b42f045eae1799d0d050fd4b4e32a22e6977ee3f580fab5676b35a5d5f
+files verified:    1640 (2465679403 bytes)
+runtime image:     none (host environment)
+runtime image id:  -
+runtime SIF:       -
+bundle:            -
+status: VERIFIED

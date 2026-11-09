@@ -1,0 +1,14 @@
+{
+ "genome_median": 30.893,
+ "masked_fraction": 0.0762,
+ "pon_genomes": 212,
+ "pon_sex_reference": "by_sex",
+ "segments": 35,
+ "sex": "female",
+ "sex_call": "female",
+ "sigma": 0.1657,
+ "stratum": "ONT_LRSC_R9",
+ "stratum_source": "library_qc (header)",
+ "x_ratio": 0.9714,
+ "y_ratio": 0.0001
+}

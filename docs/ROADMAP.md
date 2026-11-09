@@ -128,6 +128,11 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
     Phase 1 report: [docs/CN_LINKAGE_PHASE1.md](CN_LINKAGE_PHASE1.md). *Decided 2026-11-06:
     Phase 2 approved* (full-panel depth pass, pipeline integration, panel-v1.2 by a
     downstream-only rebuild). Pipeline: [docs/CN_LINKAGE.md](CN_LINKAGE.md).
+    *Decided 2026-11-09:* the panel-v1.2 candidate `cxsv-panel-20261108-6001d99ea4d4` is
+    superseded. Its pooled-sex chrX reference made spurious male chrX gains, so the positive
+    control L01 was dropped as public. The fix is a sex-stratified chrX/chrY reference with a
+    per-library sex call (PR #38, female chrX bound 1.12). It was rebuilt as panel-v1.2-r2 and
+    bundled ([panel_v1.2/README.md](panel_v1.2/README.md)). Follow-ups: item 16.
 
 ---
 
@@ -150,7 +155,8 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
 | 13 | Oversized-cluster blind spot | **done 2026-11-04** (fix + panel evaluation); first panel-v1.1 build held (healthy Tier 1 +86%) and superseded; fix `svim_lowq` adopted 2026-11-05; panel-v1.1 released 2026-11-05 as `cxsv-panel-20261105-c31ecc9f8fa2` (healthy Tier 1 0.251, bundle validated, tag pending; docs/panel_v1.1/README.md) | `main` (`de23a0e`), `item13-oversized-clusters-2`, docs/OVERSIZED_CLUSTERS.md |
 | – | Small fixes 2026-11 (8 fixes from the panel-v1.0 validation) | done 2026-11-04; merged (PR #21) | `main`, below |
 | 14 | Library-chimerism QC (panel and patient) | **done 2026-11-06**: 24/1,619 panel libraries flagged; conservative mode on by default; no panel exclusion; bundle `cxsv-bundle-20261105-95126e14f036` validated 8/8, positive control unchanged; follow-ups (auto-detected QC group, wording, test-release ids) in bundle `cxsv-bundle-20261106-169503679a60` (commit 1695036), validated 8/8 | `main` (PR #28, #29), docs/LIBRARY_QC.md, docs/library_qc/DEPLOYMENT.md |
-| 15 | Copy-number-anchored detection of large DUP-TRP/INV-DUP and other CN-linked events | **Phase 1 done**; Phase 2 (pipeline integration, panel-v1.2) in progress (decision 18) | docs/DUP_TRP_PLAN.md, docs/CN_LINKAGE_PHASE1.md, docs/CN_LINKAGE.md |
+| 15 | Copy-number-anchored detection of large DUP-TRP/INV-DUP and other CN-linked events | **Phase 2 done 2026-11-09**: panel-v1.2-r2 `cxsv-panel-20261108-fdac9ff80401` (sex-stratified chrX/chrY reference, PR #38), VERIFIED, healthy Tier 1 0.198 per genome, bundle `cxsv-bundle-20261109-84d380e08cc4` validated; tag pending; the first candidate `6001d99ea4d4` was superseded (PC L01 failed) | docs/CN_LINKAGE.md, docs/panel_v1.2/README.md |
+| 16 | panel-v1.3 follow-ups from panel-v1.2 (cn_depth copy, chrX/chrY public counting, sex call in the patient report, CN literature test through the release) | queued 2026-11-09 (PI) | below |
 
 ---
 
@@ -401,6 +407,34 @@ per fix, each with a test. None changes the calling fingerprint
 
 ## Queued
 
+### 16. panel-v1.3 follow-ups from panel-v1.2 — queued 2026-11-09 (PI)
+
+From the panel-v1.2 build record ([panel_v1.2/README.md](panel_v1.2/README.md)). (a)–(c)
+change fingerprinted code or the patient report and need a new release.
+
+- **(a) Copy, not hard-link, the precomputed depth.** In precomputed mode `cn_depth.sh`
+  hard-links each library's depth file from `/mnt/sargasso1/CxSV/build/cn_depth_v1`. When
+  Snakemake updates the output's mtime, it also changes the shared source file. In the
+  first v1.2 rebuild this changed the mtime of the `cn_depth_v1` files (content and sha256
+  intact) and stopped the run once (HG01137). Copy the file instead.
+- **(b) Harden chrX/chrY copy-number public counting.** Today one sex-matched individual
+  makes a chrX/chrY segment public (`public_min_genomes` 1). Whether the PC L01 event is
+  private depends on a single library (NA19238 LRSC, chrX ratio 1.17, ambiguous at the
+  1.12 female bound, female at 1.18). Options: require at least 2 sex-matched individuals
+  on the sex chromosomes, or exclude libraries whose chrX/chrY ratio disagrees with
+  another library of the same individual (NA19238 ONT-1019 is 1.02). Re-run the LOFO.
+- **(c) Show the sex call in the patient report, and use one sex source.** Print
+  `sex_call`, `x_ratio` and `y_ratio` in the report. Add an explicit flag "sex call
+  ambiguous: possible sex-chromosome aneuploidy or mosaicism; chrX/chrY copy-number calls
+  unreliable". Remove the separate flank-depth `infer_sex` (0.75 / 0.85) in
+  `score_cxsv.py` and use the copy-number sex call. Until then the manual check in
+  docs/CN_LINKAGE.md ("After every patient run") applies.
+- **(d) CN literature test A through the release pipeline.**
+  `calibration/cn_linkage/literature_cn.py` still segments with the Phase 1 prototype
+  segmentation and PoN (`calibration/cn_linkage/phase1/seg`). It should use the release's
+  `cn/pon/` and the pipeline's `cn_segment.py`/`cn_linkage.py`, so that the sex reference is
+  tested too.
+
 ### 13. Oversized-cluster blind spot (done 2026-11-04; panel rebuild = decision 14)
 
 `bedtools cluster -d 50000` chains records into clusters; a cluster over
@@ -556,7 +590,7 @@ of healthy Tier 1. Plan:
 4. Measure what flagged genomes contribute to the panel before deciding on
    exclusion.
 
-### 15. Copy-number-anchored detection of large DUP-TRP/INV-DUP — Phase 1 done, Phase 2 awaits the PI (decision 18)
+### 15. Copy-number-anchored detection of large DUP-TRP/INV-DUP — Phase 2 done 2026-11-09 (decision 18)
 
 None of the 26 published DUP-TRP/INV-DUP events (MECP2, PLP1; 0.42–7.4 Mb) is
 called today: their junctions are > 500 kb or > 50 kb apart, and copy number is
@@ -565,6 +599,14 @@ Phase 1 (prototype outside the pipeline, `calibration/cn_linkage/`; 2026-11-06):
 [docs/CN_LINKAGE_PHASE1.md](CN_LINKAGE_PHASE1.md). It passes tests A–E: DUP-TRP literature
 26/26 called, grid 97.5% at ≥ 20x and ≥ 100 kb, PC L01 Tier 1, healthy Tier 1 +0.01 per
 genome on the 100-genome subset, HG01868 0 Tier 1. Recommendation: go for Phase 2.
+
+Phase 2 (2026-11-06 to 2026-11-09): the track is in the shared calling module (PR #33;
+docs/CN_LINKAGE.md). A full-panel depth pass was run (`/mnt/sargasso1/CxSV/build/cn_depth_v1`).
+The first release, candidate `cxsv-panel-20261108-6001d99ea4d4`, was superseded because PC
+L01 was public. After the sex-stratified chrX/chrY reference (PR #38) came panel-v1.2-r2,
+`cxsv-panel-20261108-fdac9ff80401`: healthy Tier 1 0.198 per genome; DUP-TRP literature
+26/26 called (23 Tier 1); bundle validated. Build record: [panel_v1.2/README.md](panel_v1.2/README.md).
+Follow-ups: item 16.
 
 ---
 
