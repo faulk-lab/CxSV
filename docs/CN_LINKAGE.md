@@ -41,10 +41,11 @@ values are the Phase 1 values (`tests/unit/test_cn_track.py` checks that
 ### 1a. Segmentation
 
 1. Depth in 1 kb bins, averaged to 10 kb; genome median over autosomes.
-2. Sex from the chrX / autosome median ratio (`sex_ratio_male` 0.75). Ploidy track:
-   autosomes 2; chrX 2 (female) or 1 (male, PAR 2); chrY 1 in males (PAR 0).
-   A genome without a chrX track is treated as diploid.
-3. Ratio to the stratum PoN median. Bins are masked where the PoN median is below
+2. Sex call from the chrX and chrY depth (section 2a): male, female or ambiguous.
+   Ploidy track from the ploidy sex: autosomes 2; chrX 2 (female) or 1 (male,
+   PAR 2); chrY 1 in males (PAR 0). An ambiguous call gets the legacy chrX rule
+   (`sex_ratio_male` 0.75). A genome without a chrX track is treated as diploid.
+3. Ratio to the stratum PoN median (chrX / chrY: the PoN of the genome's ploidy sex). Bins are masked where the PoN median is below
    0.25, its relative MAD above 0.30 or fewer than 4 PoN genomes have data.
 4. Viterbi HMM over integer copy states 0–6; segments with at least 3 bins and a
    copy change ≥ 0.6; boundaries refined on 1 kb bins (± 15 kb).
@@ -64,7 +65,7 @@ Classes: `DUP-TRP/INV-DUP`, `CN_nested_gain`, `CN_linked_gain`, `CN_linked_loss`
 |---|---|---|
 | `locus` | linked change with ≥ 1 attached junction | written as a CxSV locus (`CxSV_Criteria` starts with `CN_linked`) |
 | `simple_cnv` | one segment explained by one DEL/DUP record | nothing (a simple CNV) |
-| `public_cn` | every segment also seen (≥ 50 % reciprocal) in ≥ 1 other panel individual | nothing (polymorphic) |
+| `public_cn` | every segment also seen (≥ 50 % reciprocal, same direction) in ≥ 1 other panel individual; on chrX / chrY only individuals with the same sex call count | nothing (polymorphic) |
 | `cn_only` | linked change with no junction | listed in `cn/cn_only.tsv`; the patient report lists them untiered |
 
 A copy-number locus whose id equals an existing junction-track locus is not
@@ -77,9 +78,12 @@ One PoN per stratum; the stratum names are the library-QC groups of item 14:
 
 - **Members:** every panel library of the stratum except the 24 library-QC flags
   (`cn_params.pon_exclude`, the list of `calibration/library_qc/flagged_v1.1.tsv`
-  written into `config/calling.yaml`, so the PoN membership is fingerprinted). `pon_members.tsv` lists every library with sex, chrX ratio, genome
-  median and `in_pon`.
-- **chrX** pools both sexes after ploidy normalisation; **chrY** uses males only.
+  written into `config/calling.yaml`, so the PoN membership is fingerprinted). `pon_members.tsv` lists every library with its ploidy sex, sex
+  call, chrX and chrY ratios, genome median, `in_pon` and `in_sex_reference`.
+- **Autosomes** use every member. **chrX** has one reference per sex (`chrX|male`,
+  `chrX|female` in the `.npz`); **chrY** uses males only (`chrY|male`). Members
+  with an ambiguous sex call enter the autosomes only. (panel-v1.2 candidate
+  `cxsv-panel-20261108-6001d99ea4d4` pooled both sexes on chrX; section 2a.)
 - **Content:** per-bin median, relative MAD and genome count only (no per-genome
   data). Panel genomes are segmented against the full PoN of their stratum; the
   public filter compares only with other individuals.
@@ -102,6 +106,79 @@ One PoN per stratum; the stratum names are the library-QC groups of item 14:
   (1,619 libraries; 1,017 / 220 / 247 / 135). `make_panel_strata.py` derives it
   from the lab registry's `chemistry` column and checks it against the item-14
   groups (`lofo_r2_per_genome.tsv`): all 1,619 agree.
+
+### 2a. Sex-stratified chrX / chrY reference (panel-v1.2-r2)
+
+**Why.** The panel-v1.2 candidate pooled both sexes in the chrX PoN. Where male
+chrX depth per copy differs from female depth, males got spurious gains (state 2
+at ploidy 1): ONT-1019 males 4.9 chrX gain segments per genome against 0.2 in
+females. In the full-genome positive control from bundle
+`cxsv-bundle-20261108-c40e26528d5f`, the PLP1 DUP-TRP L01 (a female host) was
+then dropped as `public_cn`; 13 of the 14 panel genomes that matched it were
+males with such gains.
+
+**Sex call** (`cxsv_cn.call_sex`, thresholds in `cn_params.segmentation`):
+
+| Ratio | Definition |
+|---|---|
+| chrX ratio | median non-PAR chrX 10 kb bin (depth > 0) / genome median |
+| chrY ratio | mean non-PAR chrY 10 kb bin / genome median (most of chrY has no mappable depth, so the mean, not the median) |
+
+- **male:** chrX ratio in `sex_x_male` [0.40, 0.60] and chrY ratio ≥ `sex_y_male_min` 0.10;
+- **female:** chrX ratio in `sex_x_female` [0.80, 1.12] and chrY ratio ≤ `sex_y_female_max` 0.05;
+- **ambiguous:** anything else, e.g. aneuploid-looking, mosaic or chrX-wide gains.
+  Ploidy then follows the legacy chrX rule, the library is left out of the chrX/chrY
+  reference, and its chrX/chrY segments count for no one in the public filter.
+
+The thresholds come from the panel survey (`calibration/cn_linkage/sex_survey.py`
+on the 1,619 cn_depth_v1 tracks). Panel medians:
+- males: chrX 0.491 (robust sd 0.008), chrY 0.14–0.28;
+- females: chrX 0.967 (robust sd 0.024), chrY ≤ 0.03.
+
+**Concordance with the registry** ([sex/sex_concordance.tsv](cn_linkage/sex/sex_concordance.tsv)).
+There are 0 discordant definite calls. 799 of 812 registry females are female, 790 of
+794 registry males are male, and the 13 libraries without a registry sex are called
+7 female, 5 male and 1 ambiguous.
+
+The 18 ambiguous libraries are listed in
+[sex/sex_ambiguous.tsv](cn_linkage/sex/sex_ambiguous.tsv):
+- 13 registry females (11 with a chrX ratio of 0.50–0.76 and no chrY, i.e. possible chrX loss; 2 above the female range, including NA19238 at 1.17 with chrX-wide gains);
+- 4 registry males: HG00246 with low chrY, NA19226 without chrY, HG01308 with chrX 0.61, and HG02372 with chrX 0.97 plus chrY (XXY-like);
+- 1 library without a registry sex.
+
+The legacy rule had called 13 of the low-chrX females "male".
+
+**Design check** (`calibration/cn_linkage/sex_design_check.py`, every panel library and
+the positive control re-segmented against the new PoNs built from cn_depth_v1;
+[sex/design_summary_by_sex.tsv](cn_linkage/sex/design_summary_by_sex.tsv),
+[sex/fig_sex_chrx_reference.png](cn_linkage/sex/fig_sex_chrx_reference.png)).
+
+chrX gain segments per genome, pooled reference → sex-specific reference:
+
+| | panel males | panel females |
+|---|---|---|
+| ONT-1019 | 4.89 → 0.01 | 0.22 → 0.56 |
+| LRSC R10 | 3.08 → 1.78 | 0.31 → 0.96 |
+| LRSC R9 | 3.52 → 1.39 | 1.15 → 2.31 |
+| PacBio | 0.19 → 0.14 | 0.08 → 0.22 |
+| all | 4.01 → 0.48 | 0.38 → 0.88 |
+
+- **Male excess:** state 2 at ploidy 1 was 73 % of all panel chrX gains and is now 34 %.
+- **Female gains rose:** about 2.3-fold. The female-only reference has a lower spread
+  (relative MAD about 0.16 vs 0.20 pooled) and is centred on female depth (per copy
+  about 3 % below males), so fewer bins are masked and small deviations reach the
+  copy-change cut.
+- **Autosomes:** identical in all 1,619 genomes.
+- **chrY:** 0.11 → 0.14 segments per male genome.
+
+L01 in the positive control: no panel genome now matches its segment under sex-matched
+counting ([sex/l01_public_design.tsv](cn_linkage/sex/l01_public_design.tsv)), so it is no
+longer public. Without sex matching NA19238 (ambiguous) would match.
+
+The nested TRP level of L01 is not found against the female reference: its nested z is
+5.73, below `nested_min_z` 6.0; it was 6.14 against the pooled reference. L01 is
+therefore one 3-copy segment of 740 kb with its 3 INV records. `nested_min_z` is
+unchanged.
 
 ## 3. Release and patient runs
 
@@ -157,8 +234,12 @@ a record-count check).
 
 ## 6. Tests
 
+- `tests/unit/test_cn_sex.py`: sex calls (panel survey values, ambiguous cases),
+  one chrX reference per sex with ambiguous members on autosomes only, a male-only
+  depth artefact absorbed by the male reference, the legacy pooled PoN still read,
+  sex-matched public counting, the panel table's sex column.
 - `tests/unit/test_cn_track.py`: config = library defaults; sex and PAR ploidy;
-  PoN pooling, save/load round trip and masking of absent contigs; DUP-TRP on a
+  chrX reference per sex, save/load round trip and masking of absent contigs; DUP-TRP on a
   male chrX; an empty PoN gives no segments; `cn_pon.py` (flag exclusion,
   members table) and `cn_segment.py` end to end; the report's untiered section;
   copy-number boundaries in the locus-depth intervals.

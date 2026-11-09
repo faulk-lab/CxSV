@@ -25,7 +25,7 @@ svim_lowq).
                       orientation-changing junction, or >= 2 junctions); a single gain or
                       loss explained by one DUP / DEL is a simple CNV, not a locus;
                       candidates with no attached junction are CN-only (reported, no locus)
-  cn_public           segment-level panel frequency: every abnormal segment of the
+  cn_public           segment-level panel frequency (chrX / chrY: same-sex genomes only): every abnormal segment of the
                       candidate seen (same direction, reciprocal overlap >= 0.5) in at
                       least one genome of another family -> dropped as public
 """
@@ -233,14 +233,24 @@ def is_complex(c):
     return False, "simple_cnv"
 
 
-def cn_public(c, others, P=CN_DEFAULTS):
+SEX_CHROMS = ("chrX", "chrY")
+
+
+def cn_public(c, others, P=CN_DEFAULTS, sex=None):
     """(public?, per-segment counts of other-family genomes carrying it).
-    others: list of (genome, family, [segments]) of the reference genomes."""
+    others: list of (genome, family, [segments]) or (genome, family, [segments], sex_call)
+    of the reference genomes. A segment on chrX / chrY is compared only with genomes of
+    the same sex call as `sex` (the sample's ploidy sex; panel-v1.2-r2: sex-matched
+    counting); genomes with another or an ambiguous call do not count there. Autosomal
+    segments: every genome. sex None (or others without a sex): no sex matching."""
     counts = []
     for s in c["segs"]:
         sign = s["state"] > s["ploidy"]
         n = 0
-        for g, fam, ss in others:
+        for o in others:
+            g, fam, ss = o[0], o[1], o[2]
+            if sex and s["chrom"] in SEX_CHROMS and len(o) > 3 and o[3] != sex:
+                continue
             if any(t["chrom"] == s["chrom"] and (t["state"] > t["ploidy"]) == sign
                    and _recip(s["start"], s["end"], t["start"], t["end"]) >= P["public_overlap"] for t in ss):
                 n += 1
@@ -252,8 +262,9 @@ def long_record(r, P=CN_DEFAULTS):
     return r["svtype"] in ("DEL", "DUP", "INV") and r["chr2"] == r["chrom"] and abs(r["end"] - r["pos"]) > P["span_link_max"]
 
 
-def candidates(segs, recs, others=None, P=CN_DEFAULTS, single_filtered=()):
-    """Every candidate of one genome with its attached records, class and decision."""
+def candidates(segs, recs, others=None, P=CN_DEFAULTS, single_filtered=(), sex=None):
+    """Every candidate of one genome with its attached records, class and decision.
+    sex: the genome's ploidy sex, for sex-matched panel frequency on chrX / chrY."""
     groups = group_segments(segs, P)
     links = attach_records(groups, recs, P)
     cands = merge_linked(groups, links)
@@ -261,7 +272,7 @@ def candidates(segs, recs, others=None, P=CN_DEFAULTS, single_filtered=()):
     for c in cands:
         cls, nested, inverted = classify(c, P)
         cx, why = is_complex(c)
-        pub, counts = cn_public(c, others or [], P)
+        pub, counts = cn_public(c, others or [], P, sex=sex)
         decision = "locus" if cx and not pub else ("public_cn" if cx else why)
         n_long = sum(long_record(r, P) for r in c["records"])
         n_single = sum(r["id"] in single_filtered for r in c["records"])

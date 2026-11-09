@@ -187,7 +187,14 @@ cn_params:
     min_pon_median: 0.25
     max_pon_relmad: 0.30
     min_pon_genomes: 4
-    sex_ratio_male: 0.75
+    sex_ratio_male: 0.75          # legacy chrX rule: ploidy of an ambiguous sex call
+    # sex call (panel-v1.2-r2; calibration/cn_linkage/sex_survey.py on the 1,619 panel libraries):
+    # male = chrX ratio in sex_x_male and chrY ratio >= sex_y_male_min; female = chrX ratio in
+    # sex_x_female and chrY ratio <= sex_y_female_max; else ambiguous (autosomes-only PoN member)
+    sex_x_male: [0.40, 0.60]       # panel males: median 0.491, robust sd 0.008
+    sex_x_female: [0.80, 1.12]     # panel females: median 0.967, robust sd 0.024
+    sex_y_male_min: 0.10
+    sex_y_female_max: 0.05
     p_change: 0.0001
     outlier: 0.01
     max_cn: 6
