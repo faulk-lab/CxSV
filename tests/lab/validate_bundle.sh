@@ -23,7 +23,13 @@
 #   7. records identical: 4 vs 6 and 5 vs 6 (compare_patient_runs.py; files that
 #      differ only by the run's absolute paths are reported as such)
 #   8. tampered release refused: one byte changed / one unlisted file added
-# Env: CORES (default 16), STANDIN_RUN (run label, default standin_HG00130).
+#   9. literature set shipped: bundle_site.yaml names literature_set.root inside the
+#      bundle, its MANIFEST.tsv verifies (sha256 of every listed file), the offline
+#      Singularity run wrote private/cxsv_literature_hits.tsv, and the lab copy used by
+#      check 6 has the same MANIFEST.tsv. A bundle built with --no-literature fails here.
+# Env: CORES (default 16), STANDIN_RUN (run label, default standin_HG00130),
+#      LITERATURE_LAB_ROOT (lab literature sets for check 6, default
+#      /mnt/sargasso1/CxSV/resources/literature).
 # Writes WORKDIR/validation.log and WORKDIR/compare_*.tsv. Exit 0 = all passed.
 # =============================================================================
 set -uo pipefail
@@ -34,6 +40,15 @@ NORMAL_RELEASE="${4:-$BUNDLE/panel_release/$CXSV_RELEASE_ID}"
 CORES="${CORES:-16}"
 STANDIN_RUN="${STANDIN_RUN:-standin_HG00130}"   # patient_runs key (run label) of the stand-in
 RUN="$BUNDLE/run_cxsv.sh"
+# shellcheck source=scripts/lib/literature_select.sh
+source "$REPO/scripts/lib/literature_select.sh"
+# literature set shipped in the bundle (make_bundle.sh writes literature_set.root into bundle_site.yaml)
+LIT_ROOT=$(awk -F'"' '/^literature_set:/ {f=1; next} f && /^[^ ]/ {f=0} f && /root:/ {print $2; exit}' "$BUNDLE/config/bundle_site.yaml")
+LIT_VER=""; LIT_DIR=""; LIT_LAB=""
+if [ -n "$LIT_ROOT" ]; then
+    LIT_VER=$(basename "$LIT_ROOT"); LIT_DIR="$BUNDLE${LIT_ROOT#/bundle}"
+    LIT_LAB="${LITERATURE_LAB_ROOT:-/mnt/sargasso1/CxSV/resources/literature}/$LIT_VER"
+fi
 FAILS=0
 exec > >(tee "$W/validation.log") 2>&1
 pass() { echo "PASS  $*"; }
@@ -46,6 +61,7 @@ echo "bundle $BUNDLE"; echo "bundle id $CXSV_BUNDLE_ID; commit $CXSV_COMMIT; rel
 echo "image $CXSV_IMAGE $CXSV_IMAGE_ID; SIF sha256 $CXSV_SIF_SHA256"
 echo "bundle size $(du -sb "$BUNDLE" | cut -f1) bytes ($(du -sh "$BUNDLE" | cut -f1)), $(wc -l < "$BUNDLE/MANIFEST.sha256") files in MANIFEST.sha256"
 echo "stand-in: $(tail -n +2 "$STANDIN/standin.tsv" | cut -f1,2 | tr '\t' ' ')"
+echo "literature set: ${LIT_VER:-NONE} (${LIT_ROOT:-no literature_set.root in bundle_site.yaml})"
 
 hdr "1. bundle integrity"
 t=$(date +%s); if "$RUN" verify-bundle; then pass "every bundle file matches MANIFEST.sha256 ($(( $(date +%s)-t )) s)"; else fail "bundle checksums"; fi
@@ -120,6 +136,8 @@ annotation:
 panel_release: "$NORMAL_RELEASE"
 patient_results_root: "$W/normal/results/patient"
 YAML
+# the same literature set as the bundle, from the lab copy, so that 4/5 vs 6 compare like with like
+[ -n "$LIT_VER" ] && printf 'literature_set:\n  root: "%s"\n' "$LIT_LAB" >> "$W/normal/site.yaml"
 t=$(date +%s)
 if (cd "$REPO" && snakemake -s workflow/patient/Snakefile --cores "$CORES" --keep-going --printshellcmds \
         --configfile "$W/normal/site.yaml" "$W/standin_run.yaml") > "$W/normal.log" 2>&1; then
@@ -164,6 +182,22 @@ PY
         pass "tampered release ($kind) refused before any job ran: $(grep -m1 "$want" "$T/run.log" | xargs)"
     else fail "tampered run ($kind) failed, but not with '$want' (log $T/run.log)"; tail -10 "$T/run.log"; fi
 done
+
+hdr "9. literature set shipped and verified"
+if [ -z "$LIT_ROOT" ]; then
+    fail "bundle_site.yaml has no literature_set.root: the bundle carries no literature set (built with --no-literature, or before the make_bundle.sh fix)"
+elif [ ! -d "$LIT_DIR" ]; then
+    fail "literature_set.root $LIT_ROOT does not exist in the bundle ($LIT_DIR)"
+elif ! cxsv_verify_literature "$LIT_DIR"; then
+    fail "literature set $LIT_VER in the bundle does not match its MANIFEST.tsv"
+else
+    pass "literature set $LIT_VER shipped: $(awk -F'\t' 'NR>1 && NF>=3' "$LIT_DIR/MANIFEST.tsv" | wc -l) files match MANIFEST.tsv"
+    hits=$(find "$W/offline_singularity/results/patient/samples" -path '*/private/cxsv_literature_hits.tsv' 2>/dev/null | head -1)
+    if [ -n "$hits" ]; then pass "offline Singularity run annotated against it: $(( $(wc -l < "$hits") - 1 )) locus rows in ${hits#"$W"/}"
+    else fail "offline Singularity run wrote no private/cxsv_literature_hits.tsv"; fi
+    if cmp -s "$LIT_DIR/MANIFEST.tsv" "$LIT_LAB/MANIFEST.tsv"; then pass "lab copy $LIT_LAB (check 6) has the same MANIFEST.tsv"
+    else fail "lab copy $LIT_LAB differs from the bundle's literature set (check 6 compared unlike sets)"; fi
+fi
 
 hdr "summary"
 echo "failures: $FAILS"
