@@ -1,0 +1,115 @@
+
+== 0. context (2026-11-09 11:09:03)
+host freya; kernel 7.1.1-76070101-generic; singularity-ce version 4.4.1-jammy; Docker version 29.9.3, build 5457199
+bundle /mnt/sargasso1/CxSV/bundles/cxsv-bundle-20261109-84d380e08cc4
+bundle id cxsv-bundle-20261109-84d380e08cc4; commit 84d380e08cc4a5bfdc6ae0208e74c6c8781577a2; release cxsv-panel-20261108-fdac9ff80401 (test: false)
+image cxsv-pipeline:ba820f7b2bd3 sha256:b6c1bded8b3a9357c63bbe9f44c0e0e60039a9d5fa92731094d93ebbdb2e15d0; SIF sha256 9f4e049fe5c5eb89717e1f531d284836efc7c306e0103374872c8165c01ff967
+bundle size 10577419887 bytes (9.9G), 2180 files in MANIFEST.sha256
+stand-in: HG01868 /home/minknow/scratch/cxsv_validation/standin/HG01868-ONT-WGS_R9-LSK110.dorado050.sup.5mCG.33.phased.bam
+literature set: lit-v1.0 (/bundle/resources/literature/lit-v1.0)
+
+== 1. bundle integrity (2026-11-09 11:09:03)
+bundle cxsv-bundle-20261109-84d380e08cc4: all 2180 files verified
+PASS  every bundle file matches MANIFEST.sha256 (28 s)
+
+== 2. panel release integrity (2026-11-09 11:09:31)
+panel release:     /bundle/panel_release/cxsv-panel-20261108-fdac9ff80401
+release id:        cxsv-panel-20261108-fdac9ff80401
+test release:      False
+source commit:     84d380e08cc4a5bfdc6ae0208e74c6c8781577a2
+fingerprint:       fdac9ff804017b671528b22bbd44c2babff71eab19f6a64f8ffe4e6d3a6503ed
+manifest sha256:   3e46602dfe12b2276e739681b5c33e02bebd7e9c1475b27836d8b9d0a7b0db12
+files verified:    1640 (2465679568 bytes)
+runtime image:     cxsv-pipeline:ba820f7b2bd3
+runtime image id:  sha256:b6c1bded8b3a9357c63bbe9f44c0e0e60039a9d5fa92731094d93ebbdb2e15d0
+runtime SIF:       9f4e049fe5c5eb89717e1f531d284836efc7c306e0103374872c8165c01ff967
+bundle:            cxsv-bundle-20261109-84d380e08cc4
+status: VERIFIED
+PASS  panel release verifies against its manifest
+
+== 3. network off inside the container (2026-11-09 11:09:47)
+--- singularity, as used for runs:
+interfaces: lo 
+tcp 1.1.1.1:443: failed (OSError: [Errno 101] Network is unreachable)
+tcp 140.82.112.3:443: failed (OSError: [Errno 101] Network is unreachable)
+dns github.com: failed ([Errno -3] Temporary failure in name resolution)
+curl: (6) Could not resolve host: github.com
+curl https://github.com: failed (exit 6)
+host path absent: /mnt/sargasso1
+host path absent: /home/minknow/miniforge3
+host path absent: /mnt/sargasso1/CxSV/repo
+/bundle read-only
+snakemake: /opt/cxsv/bin/snakemake; CXSV_IMAGE=cxsv-pipeline:ba820f7b2bd3; HOME=/home/minknow
+PASS  singularity: loopback only, no TCP/DNS/HTTPS, no host repo/conda/NAS, bundle read-only
+--- singularity control with --no-netns:
+interfaces: lo enp5s0 wlp6s0 docker0 tailscale0 
+tcp 1.1.1.1:443: CONNECTED
+tcp 140.82.112.3:443: CONNECTED
+dns github.com: 140.82.114.3
+curl https://github.com: OK
+PASS  singularity control: the probe does detect a network when one exists
+--- docker, as used for runs:
+interfaces: lo 
+tcp 1.1.1.1:443: failed (OSError: [Errno 101] Network is unreachable)
+tcp 140.82.112.3:443: failed (OSError: [Errno 101] Network is unreachable)
+dns github.com: failed ([Errno -3] Temporary failure in name resolution)
+curl: (6) Could not resolve host: github.com
+curl https://github.com: failed (exit 6)
+host path absent: /mnt/sargasso1
+host path absent: /home/minknow/miniforge3
+host path absent: /mnt/sargasso1/CxSV/repo
+/bundle read-only
+snakemake: /opt/cxsv/bin/snakemake; CXSV_IMAGE=cxsv-pipeline:ba820f7b2bd3; HOME=/tmp
+PASS  docker: loopback only, no TCP/DNS/HTTPS, no host repo/conda/NAS, bundle read-only
+--- docker control with --no-netns:
+interfaces: lo eth0 
+tcp 1.1.1.1:443: CONNECTED
+tcp 140.82.112.3:443: CONNECTED
+dns github.com: 140.82.114.3
+curl https://github.com: OK
+PASS  docker control: the probe does detect a network when one exists
+
+== 4. patient run offline: Singularity, bundle only (2026-11-09 11:09:49)
+PASS  offline Singularity run finished (2759 s)
+
+== 5. patient run offline: Docker, image loaded from the bundle archive (2026-11-09 11:55:48)
+removed local cxsv-pipeline:ba820f7b2bd3: run_cxsv.sh must load it from the bundle
+PASS  offline Docker run finished (2783 s)
+loading cxsv-pipeline:ba820f7b2bd3 from the bundle ...
+
+== 6. patient run outside the bundle: repository + conda env + lab paths (2026-11-09 12:42:12)
+repo /home/minknow/scratch/item15/v12r2bundle/repo at 84d380e08cc4a5bfdc6ae0208e74c6c8781577a2 (dirty files: 0); /home/minknow/miniforge3/envs/cxsv-pipeline/bin/snakemake
+PASS  normal run finished (2555 s)
+
+== 7. outputs identical (records) (2026-11-09 13:24:48)
+# 80 files: 74 identical, 4 identical after path normalisation, 2 expected run-record differences, 0 unexpected differences
+PASS  offline_singularity vs normal: no unexpected difference
+# 80 files: 74 identical, 4 identical after path normalisation, 2 expected run-record differences, 0 unexpected differences
+PASS  offline_docker vs normal: no unexpected difference
+release check record (offline Singularity):
+  panel release:     /bundle/panel_release/cxsv-panel-20261108-fdac9ff80401
+  release id:        cxsv-panel-20261108-fdac9ff80401
+  test release:      False
+  source commit:     84d380e08cc4a5bfdc6ae0208e74c6c8781577a2
+  fingerprint:       fdac9ff804017b671528b22bbd44c2babff71eab19f6a64f8ffe4e6d3a6503ed
+  manifest sha256:   3e46602dfe12b2276e739681b5c33e02bebd7e9c1475b27836d8b9d0a7b0db12
+  files verified:    1640 (2465679568 bytes)
+  runtime image:     cxsv-pipeline:ba820f7b2bd3
+  runtime image id:  sha256:b6c1bded8b3a9357c63bbe9f44c0e0e60039a9d5fa92731094d93ebbdb2e15d0
+  runtime SIF:       9f4e049fe5c5eb89717e1f531d284836efc7c306e0103374872c8165c01ff967
+  bundle:            cxsv-bundle-20261109-84d380e08cc4
+  status: VERIFIED
+fingerprint (offline Singularity): this run fingerprint: fdac9ff804017b671528b22bbd44c2babff71eab19f6a64f8ffe4e6d3a6503ed panel fingerprint: fdac9ff804017b671528b22bbd44c2babff71eab19f6a64f8ffe4e6d3a6503ed panel release: /bundle/panel_release/cxsv-panel-20261108-fdac9ff80401 status: COMPATIBLE
+
+== 8. tampered panel release must be refused (2026-11-09 13:28:58)
+changed one digit of pos1 in row 1: chr1:3
+PASS  tampered release (byte) refused before any job ran: sha256 differs: panel_junction_carriers.tsv
+PASS  tampered release (extra) refused before any job ran: not in manifest: extra_sites.tsv
+
+== 9. literature set shipped and verified (2026-11-09 13:29:16)
+PASS  literature set lit-v1.0 shipped: 9 files match MANIFEST.tsv
+PASS  offline Singularity run annotated against it: 1077 locus rows in offline_singularity/results/patient/samples/standin_HG01868/HG01868/private/cxsv_literature_hits.tsv
+PASS  lab copy /mnt/sargasso1/CxSV/resources/literature/lit-v1.0 (check 6) has the same MANIFEST.tsv
+
+== summary (2026-11-09 13:29:16)
+failures: 0

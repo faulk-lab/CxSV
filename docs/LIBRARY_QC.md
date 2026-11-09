@@ -3,7 +3,9 @@
 Status 2026-11-06: deployed in bundle `cxsv-bundle-20261106-169503679a60` (commit 1695036 =
 PR #28, #29 and the follow-ups PR #32: auto-detected group, wording, test-release ids; earlier
 bundle `cxsv-bundle-20261105-95126e14f036`). Validation and end-to-end records:
-[library_qc/DEPLOYMENT.md](library_qc/DEPLOYMENT.md).
+[library_qc/DEPLOYMENT.md](library_qc/DEPLOYMENT.md). Since 2026-11-09 the
+patient bundle is `cxsv-bundle-20261109-84d380e08cc4` (panel-v1.2), with the same library QC
+(record: [panel_v1.2/README.md](panel_v1.2/README.md) section 10).
 PI decision 2026-11-05:
 the flag in every patient report, **conservative mode ON by default** for flagged
 libraries, **no panel exclusion** (panel-v1.1 stays as is).

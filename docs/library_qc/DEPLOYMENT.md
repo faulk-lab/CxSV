@@ -1,7 +1,10 @@
 # Library QC deployment record: bundle `cxsv-bundle-20261105-95126e14f036`
 
-*Current patient bundle: `cxsv-bundle-20261106-169503679a60` (rebuild with the library-QC follow-ups,
-record at the end of this file).*
+*Superseded for patient runs on 2026-11-09 by `cxsv-bundle-20261109-84d380e08cc4` (tag `panel-v1.2`,
+panel-v1.2 release `cxsv-panel-20261108-fdac9ff80401`; library QC unchanged; record in
+[../panel_v1.2/README.md](../panel_v1.2/README.md) section 10). Until then the patient bundle was
+`cxsv-bundle-20261106-169503679a60` (rebuild with the library-QC follow-ups, record at the end of
+this file); it is kept on the NAS until the PI decides on deletion.*
 
 Roadmap item 14, step 2 (2026-11-05/06, freya). PI decision 2026-11-05:
 - report the library-QC flag in every patient report;

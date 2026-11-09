@@ -1,0 +1,12 @@
+score.events.tsv IDENTICAL
+score.junctions.tsv IDENTICAL
+score.offtarget.tsv IDENTICAL
+score.txt IDENTICAL
+scoring/cxsv_scores.tsv IDENTICAL
+cn/cn_loci.tsv IDENTICAL
+cn/cn_candidates.tsv IDENTICAL
+cn/segments.tsv IDENTICAL
+cn/stats.json IDENTICAL
+private/cxsv_literature_hits.tsv IDENTICAL
+merged body tagged a39ffc3325e8b9bef83e90657ac9fe0d  -
+merged body pretag a39ffc3325e8b9bef83e90657ac9fe0d  -

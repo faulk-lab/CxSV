@@ -8,14 +8,18 @@ network, from material whose origin can be checked. This document defines:
 3. the **container image**: one pinned environment for both workflows;
 4. the **offline bundle**: everything needed to score a patient with no network;
 5. how to **build** and **run** each of them;
-6. the **validation records** of the bundles. The current bundle is
-   `cxsv-bundle-20261106-169503679a60` (commit 1695036, panel-v1.1 + library QC with the
-   auto-detected group, conservative mode on; record in
-   [library_qc/DEPLOYMENT.md](library_qc/DEPLOYMENT.md), which also covers the previous
-   bundle `cxsv-bundle-20261105-95126e14f036`). The panel-v1.1 bundle
+6. the **validation records** of the bundles. **The current patient bundle (since 2026-11-09)
+   is `cxsv-bundle-20261109-84d380e08cc4`**: tag `panel-v1.2` (commit 84d380e), panel-v1.2
+   release `cxsv-panel-20261108-fdac9ff80401` (finalised), copy-number track, sex-matched chrX/chrY
+   frequency, literature set lit-v1.0, library QC as before. Record:
+   [panel_v1.2/README.md](panel_v1.2/README.md) section 10. It replaces
+   `cxsv-bundle-20261106-169503679a60` (commit 1695036, panel-v1.1 + library QC; record in
+   [library_qc/DEPLOYMENT.md](library_qc/DEPLOYMENT.md), which also covers
+   `cxsv-bundle-20261105-95126e14f036`). The panel-v1.1 bundle
    `cxsv-bundle-20261105-8fc5bef725bd` (deleted 2026-11-06, PI-approved) is recorded in
-   [panel_v1.1/README.md](panel_v1.1/README.md). Bundles from later commits need a release
-   with their calling fingerprint (item 15 changed it).
+   [panel_v1.1/README.md](panel_v1.1/README.md). A bundle from a later commit needs a release
+   with that commit's calling fingerprint. **After every patient run, check the sex call**
+   (section 5).
    6a–6c below are the earlier bundles.
 
 ## 1. Panel release
@@ -376,6 +380,9 @@ Inside the container, for every process (small fixes 2026-11):
 `tests/lab/check_container_env.sh BUNDLE WORKDIR` checks both settings under
 Singularity and Docker.
 
+**Patient runs with the current bundle** (`cxsv-bundle-20261109-84d380e08cc4`, panel-v1.2):
+`verify-bundle`, `verify-release`, `patient`, then the sex-call check below for every sample.
+
 **After every patient run (interim, panel-v1.2 bundles):** read `cn/stats.json`
 (`sex_call`, `x_ratio`, `y_ratio`). If `sex_call` is `ambiguous`, flag the sample to the
 analyst as a possible sex-chromosome aneuploidy or mosaicism, and treat the run's chrX
@@ -389,9 +396,16 @@ Docker archive.
 
 ## 6. Validation record
 
-### 6-v1.2. Bundle with panel-v1.2-r2, 2026-11-09
+### 6-v1.2. Bundle with panel-v1.2-r2, 2026-11-09 (current patient bundle, tagged)
 
-Record: [panel_v1.2/README.md](panel_v1.2/README.md) (bundle
+**Tagged bundle** `cxsv-bundle-20261109-84d380e08cc4`:
+- Built from tag `panel-v1.2` with the finalised release (manifest `3e46602d…`).
+- Validated 9/9.
+- HG01868 and the full positive control are byte-identical to the untagged build. That build
+  was renamed `….pretag`; nothing was deleted.
+- Record: [panel_v1.2/README.md](panel_v1.2/README.md) section 10.
+
+The untagged build: record [panel_v1.2/README.md](panel_v1.2/README.md) (bundle
 `cxsv-bundle-20261109-84d380e08cc4`, release `cxsv-panel-20261108-fdac9ff80401`, 9 checks
 including check 9 "literature set shipped").
 

@@ -1,0 +1,20 @@
+offline_singularity tagged c1e9f5fe8cdbc907425741a5ed722105 untagged c1e9f5fe8cdbc907425741a5ed722105
+offline_singularity cxsv_scores IDENTICAL
+offline_singularity cn/stats.json IDENTICAL
+offline_singularity private/cxsv_literature_hits.tsv IDENTICAL
+offline_singularity cn/segments.tsv IDENTICAL
+offline_singularity cn/cn_loci.tsv IDENTICAL
+offline_docker tagged c1e9f5fe8cdbc907425741a5ed722105 untagged c1e9f5fe8cdbc907425741a5ed722105
+offline_docker cxsv_scores IDENTICAL
+offline_docker cn/stats.json IDENTICAL
+offline_docker private/cxsv_literature_hits.tsv IDENTICAL
+offline_docker cn/segments.tsv IDENTICAL
+offline_docker cn/cn_loci.tsv IDENTICAL
+normal tagged c1e9f5fe8cdbc907425741a5ed722105 untagged c1e9f5fe8cdbc907425741a5ed722105
+normal cxsv_scores IDENTICAL
+normal cn/stats.json IDENTICAL
+normal private/cxsv_literature_hits.tsv IDENTICAL
+normal cn/segments.tsv IDENTICAL
+normal cn/cn_loci.tsv IDENTICAL
+compare_offline_singularity_vs_normal.tsv IDENTICAL
+compare_offline_docker_vs_normal.tsv IDENTICAL

@@ -1,0 +1,7 @@
+bundle	bytes	files	note
+cxsv-bundle-20261109-84d380e08cc4.pretag	10577419722	2182	untagged first build of this bundle (same commit and release; release.json/manifest before finalise; validated 9/9; renamed 2026-11-09)
+cxsv-bundle-20261108-c40e26528d5f	10576350956	2161	panel-v1.2 candidate 6001d99ea4d4 (PC L01 failed); no literature set
+cxsv-bundle-20261106-169503679a60	10562414920	2124	previous patient bundle (panel-v1.1 c31ecc9f8fa2 + library QC); no literature set
+cxsv-bundle-20261103-33c075a22071	10524465214	1902	panel-v1.0 validation bundle; no literature set
+cxsv-bundle-20261029-1dcabd9770f7	8089067107	240	item 5 bundle, test release TEST-posctrl10slice-…-cd7e1d194cd4
+cxsv-bundle-20261028-26085cdd9977	8028013781	218	item 2 bundle, test release TEST-posctrl10slice-…-ad454c604bdd
