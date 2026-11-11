@@ -68,8 +68,27 @@ Classes: `DUP-TRP/INV-DUP`, `CN_nested_gain`, `CN_linked_gain`, `CN_linked_loss`
 | `public_cn` | every segment also seen (≥ 50 % reciprocal, same direction) in ≥ `public_min_genomes` (1) other panel individuals; on chrX / chrY in ≥ `public_min_genomes_sexchrom` (2) individuals with the same sex call, sex-discordant libraries excluded (section 2b) | nothing (polymorphic) |
 | `cn_only` | linked change with no junction | listed in `cn/cn_only.tsv`; the patient report lists them untiered |
 
-A copy-number locus whose id equals an existing junction-track locus is not
-written again (`cn/cn_loci.tsv`, `written`).
+**Locus coordinates (panel-v1.3, item g).** A `locus` candidate gives one CxSV locus
+per contig that carries one of its segments. Its `Start`–`End` (and `Size`) is the union
+of the candidate's segments on that contig and the attached breakends there
+(`cxsv_cnlink.locus_span`); `cxsv_cnlink.check_locus` stops the step on a zero-length,
+off-contig or out-of-segment locus. Breakends on a contig without a segment (a
+translocation's mate) remain records of the locus (they are in `cxsv_only.vcf` and its
+junctions) but make no locus of their own. panel-v1.2 took the span from the breakends
+alone and wrote one locus per breakend contig: BOC_5883's 17p13.3 loss
+(chr17:10000-2944000 and 3392000-5037000 at 1/2, joined by a translocation end at chr17:1)
+was reported as `chr17:0-2`, and the mates of three candidates became 2 bp loci on chr3,
+chr4, chr5, chr10, chr12 and Sniffles2's `chrN`. Re-running the linkage on the nine test
+genomes (`calibration/cn_linkage/compare_cn_loci.py`, v1.2 public rule): BOC_5883 9 → 3
+CN loci (8 → 2 written; chr17 now `chr17:0-5037000`), the other eight unchanged in number
+and in which loci are written; every CN locus now spans its segments (for example BOC_7308
+chr14:16046045-16046202 → chr14:16037000-16599000). The span feeds the scorer's `size`
+feature (+0.05 at ≥ 100 kb, +0.15 at ≥ 1 Mb) and the subtelomeric context, so CN-locus
+scores can rise by up to 0.15; the v1.3 design check re-scores.
+
+A copy-number locus whose junction-derived span (`cn/cn_loci.tsv` `junction_span`, the
+classifier's coordinates before the segments are added; the v1.2 id) or id equals an
+existing junction-track locus is not written again (`cn/cn_loci.tsv`, `written`).
 
 ## 2. Panel-of-normals and strata
 
@@ -307,6 +326,10 @@ a record-count check).
   sex-discordant libraries (panel values of NA19238 and HG03499) excluded on chrX/chrY
   only, `pon_members.tsv` `sexchrom_public` written by `cn_pon.py` and read (or recomputed
   for an older table) by `cn_linkage.py`.
+- `tests/unit/test_cn_locus_coords.py`: `check_locus` rejects zero-length, out-of-segment,
+  mate-contig and past-the-end loci; the BOC_5883 structure end to end through
+  `cn_linkage.py` gives one locus `chr17:0-5037000` and none on the mate contig; a CN locus
+  with a junction-track locus's span is not written again.
 - `tests/unit/test_cn_depth_precomputed.py`: precomputed depth is copied, the source's
   mtime, inode and link count are unchanged, a wrong sha256 or bin count fails.
 - `tests/unit/test_cn_track.py`: config = library defaults; sex and PAR ploidy;

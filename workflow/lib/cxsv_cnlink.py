@@ -32,6 +32,12 @@ svim_lowq).
                       Counts are distinct individuals. On chrX / chrY only individuals of the
                       sample's sex call count, and libraries excluded by sexchrom_discordant
                       count for no one.
+  locus_span          a "locus" candidate becomes one CxSV locus per contig that carries
+                      one of its segments: Start-End = the union of those segments and the
+                      attached breakends on that contig (panel-v1.3 item g). Breakends on a
+                      contig without a segment (a translocation's mate) stay records of the
+                      locus but make no locus of their own; check_locus rejects a zero-length,
+                      off-contig or out-of-segment locus.
   sexchrom_discordant an individual with > 1 panel library whose libraries disagree on
                       sex (different sex_call, or chrX / chrY ratios differing by more than
                       sexchrom_discordance_x / _y): all its libraries are left out of
@@ -329,6 +335,45 @@ def cn_public(c, others, P=CN_DEFAULTS, sex=None):
         counts.append(len(inds))
     pub = all(n >= min_genomes(s["chrom"], P) for n, s in zip(counts, c["segs"])) if counts else False
     return pub, counts
+
+
+def segment_contigs(c):
+    """Contigs carrying at least one abnormal segment of candidate c (in segment order)."""
+    out = []
+    for s in sorted(c["segs"], key=lambda s: (s["chrom"], s["start"])):
+        if s["chrom"] not in out:
+            out.append(s["chrom"])
+    return out
+
+
+def locus_span(c, chrom, rows=()):
+    """(start, end) of the copy-number locus of candidate c on `chrom`: the union of its
+    segments there and the breakend intervals `rows` ((start, end) of the records' BED
+    rows on that contig, vcf_to_bed.py). panel-v1.2 took the span from the rows alone, so
+    a loss whose only junction was a telomeric translocation end became chr17:0-2
+    (BOC_5883, 17p13.3)."""
+    segs = [s for s in c["segs"] if s["chrom"] == chrom]
+    if not segs:
+        raise ValueError(f"candidate {c.get('id')} has no copy-number segment on {chrom}")
+    lo = min([s["start"] for s in segs] + [int(r[0]) for r in rows])
+    hi = max([s["end"] for s in segs] + [int(r[1]) for r in rows])
+    return max(0, lo), hi
+
+
+def check_locus(chrom, start, end, c, length=None):
+    """Raise ValueError unless chrom:start-end is a well-formed copy-number locus of
+    candidate c: end > start >= 0, inside the contig (length, when known), and overlapping
+    at least one of c's segments on chrom by >= 1 bp."""
+    start, end = int(start), int(end)
+    if start < 0 or end <= start:
+        raise ValueError(f"malformed copy-number locus {chrom}:{start}-{end} (zero or negative length)")
+    if length is not None and end > length:
+        raise ValueError(f"copy-number locus {chrom}:{start}-{end} extends past the contig end ({length})")
+    segs = [s for s in c["segs"] if s["chrom"] == chrom]
+    if not any(min(end, s["end"]) > max(start, s["start"]) for s in segs):
+        raise ValueError(f"copy-number locus {chrom}:{start}-{end} overlaps none of candidate "
+                         f"{c.get('id')}'s segments ({len(segs)} on {chrom})")
+    return start, end
 
 
 def long_record(r, P=CN_DEFAULTS):
