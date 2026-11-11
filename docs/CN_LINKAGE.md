@@ -232,6 +232,47 @@ excluded (4 libraries): NA19238 (ambiguous 1.171 vs female 1.024) and HG03499 (f
 sex calls). The effect on L01 and on public chrX/chrY segments per genome is measured in
 the v1.3 design check (docs/PLAN_panel_v1.3.md, phase 2).
 
+### 2c. Sweeping `nested_min_z` (panel-v1.3, decision D5)
+
+The default stays `cn_params.segmentation.nested_min_z: 6.0`. PC L01's nested TRP reads
+z 5.73 against the female chrX reference, so the v1.3 design check sweeps 5.0–6.0 on the
+healthy panel subset and the positive control and changes the value only if healthy nested
+calls do not rise. No code or committed config is edited for the sweep:
+
+- **Direct runs** (the design check re-segments genomes against a release PoN): the PoN
+  does not depend on `nested_min_z`, so only `cn_segment.py` is re-run per value, then
+  `cn_linkage.py` on its segments:
+
+  ```bash
+  for z in 5.0 5.25 5.5 5.75 6.0; do
+    python workflow/scripts/cn_segment.py --depth <S>/cn/depth.regions.bed.gz \
+        --pon <release>/cn/pon --stratum auto --library-qc <S>/qc/library_qc.tsv \
+        --default-stratum <platform default> --params <S or release>/cn_params.json \
+        --set segmentation.nested_min_z=$z --out sweep/$z/segments.tsv --stats sweep/$z/stats.json
+  done
+  ```
+
+  `--set SECTION.KEY=VALUE` overrides one existing `cn_params` value (JSON-typed; an
+  unknown key stops the run); `stats.json` records `nested_min_z` and the overrides. For
+  the segment-level panel frequency of a swept value, the panel libraries' segments must be
+  re-made with the same value (nested splits change segment boundaries); the release's
+  `panel_cn_segments.tsv` reflects 6.0.
+- **Pipeline runs** (a design-check build): a `--configfile` overlay that sets only the one
+  key. Snakemake merges config recursively, so every other `cn_params` value is kept
+  (`tests/unit/test_cn_nested_sweep.py` checks this with the committed `calling.yaml`):
+
+  ```yaml
+  # nested_5.5.yaml — design-check only; never commit under config/ (test_config_guard)
+  cn_params:
+    segmentation:
+      nested_min_z: 5.5
+  ```
+
+  `snakemake -s workflow/panel/Snakefile --configfile config/sites/<site>_panel.yaml
+  --configfile nested_5.5.yaml ...`. `cn_params` is fingerprinted, so such a build has its
+  own calling fingerprint, and a patient run cannot be paired with a release of another
+  value by accident.
+
 ## 3. Release and patient runs
 
 The panel release gains three components (docs/RELEASE_AND_BUNDLE.md):
@@ -330,6 +371,9 @@ a record-count check).
   mate-contig and past-the-end loci; the BOC_5883 structure end to end through
   `cn_linkage.py` gives one locus `chr17:0-5037000` and none on the mate contig; a CN locus
   with a junction-track locus's span is not written again.
+- `tests/unit/test_cn_nested_sweep.py`: default 6.0 (library = config); the nested call
+  follows the threshold; `cn_segment.py --set segmentation.nested_min_z=…` (recorded in
+  stats.json, unknown keys refused); a Snakemake `--configfile` overlay changes only that key.
 - `tests/unit/test_cn_depth_precomputed.py`: precomputed depth is copied, the source's
   mtime, inode and link count are unchanged, a wrong sha256 or bin count fails.
 - `tests/unit/test_cn_track.py`: config = library defaults; sex and PAR ploidy;
