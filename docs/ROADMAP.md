@@ -3,6 +3,9 @@
 *Regenerated 2026-10-29 after items 1–6 were merged into `main` (cae06a8). Updated 2026-11-03: panel-v1.0
 released and tagged (item 12), items 9 and 10 done, offline bundle rebuilt and re-validated with panel-v1.0,
 whole-genome positive control against the full panel (branch `validation-panel-v1.0`).*
+*Updated 2026-11-11: panel-v1.2 tagged and deployed for patients (item 15); test run on nine
+de-identified genomes (item 17); item 16 extended with the test-run findings; build plan for
+panel-v1.3: [docs/PLAN_panel_v1.3.md](PLAN_panel_v1.3.md) (decision 19).*
 
 Goal (unchanged): separate **public** CxSVs, seen in a background panel of
 presumed-healthy long-read genomes, from **private** CxSVs in a patient. Then
@@ -69,6 +72,13 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
      `datasets/standins/HG01868/` and in freya local scratch;
    - `/mnt/sargasso2/CxSV-old` is scheduled for deletion (nothing to rescue,
      decision 2026-10-28).
+   - bundles on the NAS after the panel-v1.2 switch (2026-11-09): the tagged patient bundle
+     `cxsv-bundle-20261109-84d380e08cc4` and the rollback `cxsv-bundle-20261106-169503679a60`
+     (panel-v1.1). Deleted with PI approval 2026-11-09: `84d380e08cc4.pretag`,
+     `c40e26528d5f`, `33c075a22071`, `1dcabd9770f7`, `26085cdd9977` (manifests in
+     `build/panel-v1.2-r2/provenance/deleted_bundle_<id>/`). `169503679a60` can go once the
+     first v1.2 patient runs are reviewed;
+   - optional: memtest86+ on betsy and a check that its new DIMMs run at stock speed.
 10. **Commit identity.** Agent commits on freya use the global git identity
     (Chris Faulk). Keep it, or set a separate author name for agent commits.
 11. **Merge `validation-panel-v1.0`** (new, 2026-11-03): fix `33c075a` + docs,
@@ -133,6 +143,16 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
     control L01 was dropped as public. The fix is a sex-stratified chrX/chrY reference with a
     per-library sex call (PR #38, female chrX bound 1.12). It was rebuilt as panel-v1.2-r2 and
     bundled ([panel_v1.2/README.md](panel_v1.2/README.md)). Follow-ups: item 16.
+19. **Next build, panel-v1.3 (new, 2026-11-11).** Plan:
+    [docs/PLAN_panel_v1.3.md](PLAN_panel_v1.3.md). It fixes item 16 (a)–(o) in one downstream-only
+    rebuild plus re-scoring, with a design check before the rebuild. Decisions in the plan's
+    section 2: D1 tier ceiling for public loci; D2 sex-chromosome public rule; D3 depth-noise
+    gate; D4 cuteSV maximum size (recommendation: keep 100 kb for v1.3, separate item for an
+    upstream re-run); D5 `nested_min_z` sweep; D6 defer OMIM/HPO, noisy-library exclusion, item 8.
+20. **Test-genome finding for the PI (new, 2026-11-11, item 17).** BOC_4433 carries a private
+    ~165 kb deletion of 5′ *NF1* with read and copy-number support. It needs orthogonal
+    confirmation in an accredited laboratory; inclusion in the manuscript and any return of
+    results are for the PI and the IRB.
 
 ---
 
@@ -156,11 +176,12 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
 | – | Small fixes 2026-11 (8 fixes from the panel-v1.0 validation) | done 2026-11-04; merged (PR #21) | `main`, below |
 | 14 | Library-chimerism QC (panel and patient) | **done 2026-11-06**: 24/1,619 panel libraries flagged; conservative mode on by default; no panel exclusion; bundle `cxsv-bundle-20261105-95126e14f036` validated 8/8, positive control unchanged; follow-ups (auto-detected QC group, wording, test-release ids) in bundle `cxsv-bundle-20261106-169503679a60` (commit 1695036), validated 8/8 | `main` (PR #28, #29), docs/LIBRARY_QC.md, docs/library_qc/DEPLOYMENT.md |
 | 15 | Copy-number-anchored detection of large DUP-TRP/INV-DUP and other CN-linked events | **Phase 2 done 2026-11-09**: panel-v1.2-r2 `cxsv-panel-20261108-fdac9ff80401` (sex-stratified chrX/chrY reference, PR #38), VERIFIED, healthy Tier 1 0.198 per genome, tagged `panel-v1.2` and finalised 2026-11-09; tagged bundle `cxsv-bundle-20261109-84d380e08cc4` validated 9/9 and **deployed for patients** (replaces 169503679a60 + panel-v1.1); the first candidate `6001d99ea4d4` was superseded (PC L01 failed) | docs/CN_LINKAGE.md, docs/panel_v1.2/README.md |
-| 16 | panel-v1.3 follow-ups from panel-v1.2 (cn_depth copy, chrX/chrY public counting, sex call in the patient report, CN literature test through the release) | queued 2026-11-09 (PI) | below |
+| 16 | panel-v1.3 follow-ups: (a)–(d) from panel-v1.2, (e)–(o) from the nine-genome test run | queued; build plan drafted 2026-11-11 (decision 19) | below, docs/PLAN_panel_v1.3.md |
+| 17 | Test run on nine de-identified genomes (monkey_meth children's blood) with clinician-style reports | **done 2026-11-11**: 9/9 offline runs with the tagged v1.2 bundle; 2 Tier 1 in 9 genomes (0.22 per genome; R10 healthy expectation 0.247): private *NF1* deletion (BOC_4433, needs confirmation) and a public *BRSK2* locus (scoring weakness, item 16 e) | below; NAS `patient_test_runs/monkeymeth_20261110/` |
 
 ---
 
-## Background panel and registry (as of 2026-11-03)
+## Background panel and registry (as of 2026-11-11)
 
 All data on `/mnt/sargasso1/CxSV/datasets`, aligned to T2T-CHM13v2 (UCSC `hs1`).
 `acquisition/build_registry.py` rebuilds `registry/` from the files on disk.
@@ -175,9 +196,11 @@ All data on `/mnt/sargasso1/CxSV/datasets`, aligned to T2T-CHM13v2 (UCSC `hs1`).
 17x in at least one file, but the panel has no coverage floor (PI, 2026-10-29). Superpopulation labels (from the 1kGP-LRSC metadata and IGSR):
 AFR 434, SAS 314, EAS 299, EUR 277, AMR 245, unlabelled 13.
 
-**Released panel:** `cxsv-panel-20261102-cd7e1d194cd4` (tag `panel-v1.0`), built from all 1,619 files
-(item 12), at `/mnt/sargasso1/CxSV/build/panel-v1.0/results/panel/release` and inside the
-validated bundle `/mnt/sargasso1/CxSV/bundles/cxsv-bundle-20261103-33c075a22071`.
+**Current released panel (since 2026-11-09):** `cxsv-panel-20261108-fdac9ff80401` (tag `panel-v1.2`,
+calling fingerprint `fdac9ff80401`), at `/mnt/sargasso1/CxSV/build/panel-v1.2-r2/results/panel/release`
+and inside the patient bundle `/mnt/sargasso1/CxSV/bundles/cxsv-bundle-20261109-84d380e08cc4`.
+Earlier releases: panel-v1.0 `cxsv-panel-20261102-cd7e1d194cd4` (item 12), panel-v1.1
+`cxsv-panel-20261105-c31ecc9f8fa2` (item 13).
 
 ---
 
@@ -374,7 +397,7 @@ Open at the release, fixed since on `small-fixes-2026-11` (below):
 
 ---
 
-### Small fixes 2026-11 — done 2026-11-04, awaiting merge
+### Small fixes 2026-11 — done 2026-11-04, merged (PR #21)
 
 PI-approved 2026-11-04 (decision 13). Branch `small-fixes-2026-11`, one commit
 per fix, each with a test. None changes the calling fingerprint
@@ -434,6 +457,41 @@ change fingerprinted code or the patient report and need a new release.
   segmentation and PoN (`calibration/cn_linkage/phase1/seg`). It should use the release's
   `cn/pon/` and the pipeline's `cn_segment.py`/`cn_linkage.py`, so that the sex reference is
   tested too.
+
+Added 2026-11-11 from the nine-genome test run (item 17); details and evidence in
+[PLAN_panel_v1.3.md](PLAN_panel_v1.3.md) section 1:
+
+- **(e) Public loci can reach Tier 1.** BOC_2057 *BRSK2* (65/1,582 panel carriers, HPRC AF 0.52)
+  scored 1.06; one public Tier 1 locus also in the healthy LOFO. Proposed: public loci capped at Tier 2.
+- **(f) Depth-noise QC gate.** BOC_5883 (CN sigma 0.32) and BOC_7308 (0.24) pass library QC but
+  give long, unreliable CN-only lists. Proposed: per-platform sigma threshold from the panel,
+  conservative mode for CN classes, shown in the report.
+- **(g) Malformed CN locus id** (`chr17:0-2` in BOC_5883).
+- **(h) Caller agreement across SV type labels.** The BOC_4433 *NF1* deletion is DEL in Sniffles2 and
+  INV in SVIM, so it scores 0/2 agreed junctions.
+- **(i) cuteSV maximum size** is its 100 kb default, so it misses larger events (BOC_4433). Raising it
+  re-runs an upstream caller on the whole panel (decision D4).
+- **(j) Nested gain threshold** on the female chrX reference (L01 z 5.73 < 6.0).
+- **(k) Patient intake**: harmonise any input to an hs1 CRAM with the panel recipe.
+- **(l) Clinician report** produced by the patient workflow.
+- **(m) SVIM memory** (`std::bad_alloc` once on athena).
+- **(n) `bundle.json`** to record the git tag and release-manifest sha256.
+- **(o) `docs/PANEL_BUILD.md`** panel-v1.2 measurements (edit blocked 2026-11-08, pending approval).
+
+### 17. Test run on nine de-identified genomes — done 2026-11-11
+
+Nine peripheral-blood genomes of presumed-healthy children from the lab's monkey_meth project
+(ONT R10.4.1, dorado sup v5.0.0) were realigned to hs1 with the panel recipe (BOC_3559 reuses the
+positive-control host CRAM) and run offline with the tagged v1.2 bundle. All nine were
+fingerprint-compatible, in QC group LRSC R10, library-QC PASS, with unambiguous sex calls (4 male,
+5 female). Tier 1: 2 loci in 9 genomes (0.22 per genome; the healthy LOFO rate for R10 genomes is
+0.247). BOC_4433: private ~165 kb DEL+INV at chr17:31,902,782–32,067,453 removing 5′ *NF1*
+(16 split reads, depth 0.6 of the flanks, CN-1 segment); needs orthogonal confirmation (decision 20).
+BOC_2057: public *BRSK2* locus (item 16 e). Tier 2 is mostly recurrent public loci (*MYT1L*/*PXDN*
+8/9 genomes, *ANKRD11* 7/9). Outputs and clinician reports: NAS
+`/mnt/sargasso1/CxSV/patient_test_runs/monkeymeth_20261110/` and Drive
+`CxSV-v2/patient_test_runs/monkeymeth_20261110/`. The manuscript draft (Drive
+`CxSV-v2/manuscript/MANUSCRIPT_DRAFT.0.3.docx`) reports this run.
 
 ### 13. Oversized-cluster blind spot (done 2026-11-04; panel rebuild = decision 14)
 
