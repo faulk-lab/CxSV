@@ -65,7 +65,7 @@ Classes: `DUP-TRP/INV-DUP`, `CN_nested_gain`, `CN_linked_gain`, `CN_linked_loss`
 |---|---|---|
 | `locus` | linked change with ≥ 1 attached junction | written as a CxSV locus (`CxSV_Criteria` starts with `CN_linked`) |
 | `simple_cnv` | one segment explained by one DEL/DUP record | nothing (a simple CNV) |
-| `public_cn` | every segment also seen (≥ 50 % reciprocal, same direction) in ≥ 1 other panel individual; on chrX / chrY only individuals with the same sex call count | nothing (polymorphic) |
+| `public_cn` | every segment also seen (≥ 50 % reciprocal, same direction) in ≥ `public_min_genomes` (1) other panel individuals; on chrX / chrY in ≥ `public_min_genomes_sexchrom` (2) individuals with the same sex call, sex-discordant libraries excluded (section 2b) | nothing (polymorphic) |
 | `cn_only` | linked change with no junction | listed in `cn/cn_only.tsv`; the patient report lists them untiered |
 
 A copy-number locus whose id equals an existing junction-track locus is not
@@ -180,6 +180,39 @@ The nested TRP level of L01 is not found against the female reference: its neste
 therefore one 3-copy segment of 740 kb with its 3 INV records. `nested_min_z` is
 unchanged.
 
+### 2b. chrX / chrY public rule (panel-v1.3, decision D2)
+
+**Why.** Under the v1.2-r2 rule one sex-matched panel library was enough to make a
+chrX/chrY segment public. PC L01 (the PLP1 DUP-TRP in a female) stays private only while
+the female chrX bound is 1.12: at 1.18 or 1.25 the LRSC library of NA19238 (chrX ratio
+1.17, chrX-wide gains; its ONT-1019 library is 1.02) becomes female and makes L01 public
+on its own.
+
+**Rule** (`cxsv_cnlink.cn_public`, `cxsv_cnlink.sexchrom_discordant`; `cn_params.linkage`):
+
+- a chrX / chrY segment is public only when ≥ `public_min_genomes_sexchrom` (2) other
+  individuals of the sample's sex call carry it; autosomes keep `public_min_genomes` (1);
+- counts are distinct individuals (two libraries of one individual count once);
+- an individual with more than one panel library whose libraries disagree on sex
+  (different `sex_call`, or chrX ratios differing by more than `sexchrom_discordance_x`
+  0.10, or chrY ratios by more than `sexchrom_discordance_y` 0.10) counts for no one on
+  chrX / chrY; its autosomal segments still count. All of its libraries are excluded,
+  since depth alone cannot tell which one is wrong.
+
+`cn_pon.py` records the decision per library in `pon/pon_members.tsv`, column
+`sexchrom_public` (`yes`, or `no: discordant libraries of <ID>: <ratios>`). The PoN itself
+is unchanged by this column. `cn_linkage.py --pon-members` reads that column; for a release
+made before v1.3 (no column) it recomputes the same rule from `sex_call`, `x_ratio` and
+`y_ratio`.
+
+**Calibration on panel-v1.2-r2** (`pon_members.tsv`, 1,619 libraries): 35 individuals have
+more than one library. The chrX ratio difference has median 0.018, p95 0.078, p99 0.135 and
+maximum 0.146; the chrY ratio difference has maximum 0.046. At 0.10 two individuals are
+excluded (4 libraries): NA19238 (ambiguous 1.171 vs female 1.024) and HG03499 (female
+0.856 vs 0.970). At 0.05 four individuals would be excluded, at 0.15 only NA19238 (by its
+sex calls). The effect on L01 and on public chrX/chrY segments per genome is measured in
+the v1.3 design check (docs/PLAN_panel_v1.3.md, phase 2).
+
 ## 3. Release and patient runs
 
 The panel release gains three components (docs/RELEASE_AND_BUNDLE.md):
@@ -269,7 +302,13 @@ a record-count check).
 - `tests/unit/test_cn_sex.py`: sex calls (panel survey values, ambiguous cases),
   one chrX reference per sex with ambiguous members on autosomes only, a male-only
   depth artefact absorbed by the male reference, the legacy pooled PoN still read,
-  sex-matched public counting, the panel table's sex column.
+  sex-matched public counting, the panel table's sex column; panel-v1.3 D2: two
+  sex-matched individuals on chrX/chrY (one on autosomes), distinct-individual counting,
+  sex-discordant libraries (panel values of NA19238 and HG03499) excluded on chrX/chrY
+  only, `pon_members.tsv` `sexchrom_public` written by `cn_pon.py` and read (or recomputed
+  for an older table) by `cn_linkage.py`.
+- `tests/unit/test_cn_depth_precomputed.py`: precomputed depth is copied, the source's
+  mtime, inode and link count are unchanged, a wrong sha256 or bin count fails.
 - `tests/unit/test_cn_track.py`: config = library defaults; sex and PAR ploidy;
   chrX reference per sex, save/load round trip and masking of absent contigs; DUP-TRP on a
   male chrX; an empty PoN gives no segments; `cn_pon.py` (flag exclusion,

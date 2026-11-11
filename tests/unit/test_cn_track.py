@@ -138,7 +138,8 @@ def test_pon_and_segment_scripts(tmp_path):
     assert pon.meta["genomes"] == 4                     # n4 (params) and n5 (--exclude) left out
     mem = (tmp_path / "pon" / "pon_members.tsv").read_text()
     assert "c/n5\tI5\tT\tmale\tmale" in mem and "no: library-QC flag" in mem
-    assert mem.splitlines()[0].split("\t")[-1] == "in_sex_reference"
+    assert mem.splitlines()[0].split("\t")[-2:] == ["in_sex_reference", "sexchrom_public"]
+    assert all(l.endswith("\tyes") for l in mem.splitlines()[1:])   # one library per individual
     case = tmp_path / "case.bed.gz"
     _write_bins(case, _fine(rng, 30, "female", [("chr1", 2000, 2300, 3)]))
     subprocess.run([sys.executable, S / "cn_segment.py", "--depth", case, "--pon", tmp_path / "pon" / "T.npz",

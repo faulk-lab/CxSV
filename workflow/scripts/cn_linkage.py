@@ -6,7 +6,8 @@ removes none.
   cn_linkage.py --vcf merged_sv.vcf --clusters cxsv/junction_clusters.bed \\
       --summary cxsv/junction_summary.tsv --cxsv-vcf cxsv/junction_only.vcf \\
       --single cxsv/single_caller_filtered.tsv --segments cn/segments.tsv \\
-      --panel-segments panel_cn_segments.tsv --individual ID --stats cn/stats.json --fai ref.fa.fai \\
+      --panel-segments panel_cn_segments.tsv --pon-members pon/pon_members.tsv --individual ID \\
+      --stats cn/stats.json --fai ref.fa.fai \\
       --calling calling_params.json --scripts workflow/scripts --work cn/work \\
       --out-clusters cxsv/clusters.bed --out-summary cxsv/cxsv_summary.tsv \\
       --out-vcf cxsv/cxsv_only.vcf --out-candidates cn/cn_candidates.tsv \\
@@ -17,8 +18,9 @@ removes none.
    discovery sets aside as long spans or svim_lowq included), structure class, the
    complexity rule and the segment-level panel frequency (segments of every OTHER
    individual in --panel-segments; on chrX / chrY only individuals of the sample's sex,
-   from --stats; a candidate whose every segment is seen there is public_cn and gets no
-   locus).
+   from --stats, at least public_min_genomes_sexchrom of them, and none of the libraries
+   that --pon-members marks as sex-discordant (panel-v1.3 D2); a candidate whose every
+   segment is seen there is public_cn and gets no locus).
 2. A candidate with decision "locus" becomes one locus per contig: its records go
    through vcf_to_bed.py (--span-link-max 0, every record kept) and classify_cxsv.py
    (--max-cluster-size 0) exactly as discovery runs them; the row is then IsCxSV=YES,
@@ -61,10 +63,27 @@ def read_segments(path):
     return out
 
 
-def others(path, individual):
-    """[(key, individual, [segments], sex_call)] of every other individual's panel library;
-    sex_call from the table's sex column (panel-v1.2-r2 and later: male / female / ambiguous)."""
+def sexchrom_excluded(path, P=cl.CN_DEFAULTS):
+    """{key: reason} of the panel libraries left out of chrX / chrY public counting.
+    pon_members.tsv of panel-v1.3 and later records the decision (column sexchrom_public,
+    'yes' or 'no: <reason>', cn_pon.py); for an older table it is recomputed from the
+    sex_call / x_ratio / y_ratio columns with the same rule (cxsv_cnlink.sexchrom_discordant).
+    No table ('none'): nothing is excluded."""
+    if not path or path == "none" or not os.path.exists(path):
+        return {}
+    rows = read_tsv(path)
+    if rows and "sexchrom_public" in rows[0]:
+        return {r["key"]: r["sexchrom_public"][4:] if r["sexchrom_public"].startswith("no: ") else r["sexchrom_public"]
+                for r in rows if (r.get("sexchrom_public") or "yes").strip() != "yes"}
+    return cl.sexchrom_discordant(rows, P)
+
+
+def others(path, individual, excluded=None):
+    """[(key, individual, [segments], sex_call, sexchrom_ok)] of every other individual's
+    panel library; sex_call from the table's sex column (panel-v1.2-r2 and later: male /
+    female / ambiguous); sexchrom_ok False for the libraries in `excluded` (sexchrom_excluded)."""
     by, sex = {}, {}
+    excluded = excluded or {}
     if not path or path == "none" or not os.path.exists(path):
         return []
     for r in read_tsv(path):
@@ -74,7 +93,7 @@ def others(path, individual):
         sex[k] = (r.get("sex") or "").strip()
         by.setdefault(k, []).append(
             dict(chrom=r["chrom"], start=int(r["start"]), end=int(r["end"]), state=int(r["state"]), ploidy=int(r["ploidy"])))
-    return [(k, ind, s, sex[(k, ind)]) for (k, ind), s in by.items()]
+    return [(k, ind, s, sex[(k, ind)], k not in excluded) for (k, ind), s in by.items()]
 
 
 def sh(cmd, log):
@@ -94,6 +113,8 @@ def main():
               "out-clusters", "out-summary", "out-vcf", "out-candidates", "out-loci", "out-cn-only"):
         ap.add_argument(f"--{k}", required=True)
     ap.add_argument("--panel-segments", default="none")
+    ap.add_argument("--pon-members", default="none", help="pon/pon_members.tsv of the panel / release: "
+                    "sex-discordant libraries are left out of chrX/chrY public counting")
     ap.add_argument("--individual", default="")
     ap.add_argument("--stats", default="none", help="cn/stats.json: its sex (ploidy sex) selects the "
                     "same-sex panel genomes for chrX/chrY segments")
@@ -108,7 +129,12 @@ def main():
     recs = cl.read_records(a.vcf)
     single = {r["ID"] for r in read_tsv(a.single)} if os.path.exists(a.single) else set()
     sex = json.load(open(a.stats)).get("sex") if a.stats != "none" and os.path.exists(a.stats) else None
-    cands = cl.candidates(segs, recs, others(a.panel_segments, a.individual), P, single_filtered=single, sex=sex)
+    excluded = sexchrom_excluded(a.pon_members, P)
+    if excluded:
+        print(f"{len(excluded)} panel libraries left out of chrX/chrY public counting (sex-discordant): "
+              + ", ".join(sorted(excluded)), file=sys.stderr)
+    cands = cl.candidates(segs, recs, others(a.panel_segments, a.individual, excluded), P,
+                          single_filtered=single, sex=sex)
     summ0 = read_tsv(a.summary)
     header = open(a.summary).readline().rstrip("\n").split("\t")
     existing = {f"{r['Chr']}:{r['Start']}-{r['End']}" for r in summ0 if r.get("IsCxSV") == "YES"}
