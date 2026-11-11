@@ -247,8 +247,12 @@ release file.
   `aggregate.yaml` must set `cn_depth_precomputed` (the full-panel depth pass,
   `<root>/<cohort>/<sample>/depth.regions.bed.gz` + `depth.ok` + `depth.sha256`)
   and `cn_strata_table`; the script stops otherwise. `cn_depth.sh` verifies the
-  sha256 and bin count of each precomputed file and hard-links it; a missing file
-  fails the job rather than reading the alignment on the aggregate host.
+  sha256 and bin count of each precomputed file and copies it (`cp --reflink=auto`),
+  then checks the copy's sha256 against the recorded one; a missing file fails the job
+  rather than reading the alignment on the aggregate host. panel-v1.3 (item a): the
+  source is never hard-linked, so a rebuild cannot change `cn_depth_v1` mtimes (in v1.2
+  the shared inodes changed 1,619 of them and stopped the run once); the precomputed
+  depth costs ~1,619 × the size of one 1 kb depth file of disk per build.
 
 ### Full-panel depth pass (cn_depth_v1)
 

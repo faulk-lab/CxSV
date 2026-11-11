@@ -14,8 +14,11 @@
 #
 # PRECOMPUTED_DIR (optional; the full-panel pass of cn_depth_v1, docs/CN_LINKAGE.md):
 # a directory with the same files from the same pass (depth.ok, depth.sha256). Its
-# files are hard-linked (copied if the filesystem refuses) after the sha256 and the
-# bin count are checked, instead of reading the alignment again.
+# files are copied (cp --reflink=auto: a reflink where the filesystem supports it, else
+# a plain copy) after the source's sha256 and bin count are checked, and the copy's
+# sha256 must equal the recorded one, instead of reading the alignment again. The
+# source is only read: never hard-linked (panel-v1.3 item a; a hard link shares the
+# inode, so a rebuild touching its outputs changed cn_depth_v1 mtimes in v1.2).
 # For CRAMs, REF_PATH / REF_CACHE must point at the MD5 cache (HTS_ENV).
 # =============================================================================
 set -euo pipefail
@@ -34,10 +37,14 @@ if [ -n "$PRE" ] && [ "$PRE" != "none" ]; then
     [ "$sha" = "$(cat "$PRE/depth.sha256")" ] || { say "ERROR: sha256 of $PRE/depth.regions.bed.gz differs from depth.sha256" >&2; exit 1; }
     check "$PRE/depth.regions.bed.gz"
     for f in depth.regions.bed.gz depth.regions.bed.gz.csi depth.mosdepth.summary.txt; do
-        rm -f "$OUT/$f"; ln "$PRE/$f" "$OUT/$f" 2>/dev/null || cp "$PRE/$f" "$OUT/$f"
+        rm -f "$OUT/$f" "$OUT/$f.tmp"
+        cp --reflink=auto "$PRE/$f" "$OUT/$f.tmp" 2>/dev/null || cp "$PRE/$f" "$OUT/$f.tmp"
+        mv -f "$OUT/$f.tmp" "$OUT/$f"
     done
+    got=$(sha256sum "$OUT/depth.regions.bed.gz" | awk '{print $1}')
+    [ "$got" = "$sha" ] || { say "ERROR: sha256 of the copy $OUT/depth.regions.bed.gz ($got) differs from $PRE/depth.sha256 ($sha)" >&2; exit 1; }
     echo "$sha" > "$OUT/depth.sha256"
-    say "precomputed depth from $PRE (sha256 $sha)"
+    say "precomputed depth copied from $PRE (sha256 $sha, copy verified)"
     exit 0
 fi
 cram_version() { local b; b=$(head -c 6 "$1" | od -An -tu1); set -- $b
