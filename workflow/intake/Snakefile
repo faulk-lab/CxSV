@@ -1,0 +1,118 @@
+"""
+CxSV PATIENT INTAKE
+===================
+Brings every patient input to an hs1 CRAM aligned with the panel recipe, so the
+patient scorer (workflow/patient/Snakefile) compares like with like
+(roadmap item 16k; docs/INTAKE.md):
+
+    samtools fastq -T MM,ML,MN,qs | minimap2 2.24-r1122 -y -ax map-ont --eqx -k 17 -K <batch>
+        | samtools sort | CRAM against hs1, indexed, read-count checked
+
+Accepted inputs: unaligned BAM / dorado modBAM, FASTQ (.fastq/.fq, optionally
+gzipped), or a BAM/CRAM from another aligner or another reference naming.
+The read group SM is the sample sheet's sample_id.
+
+Run (lab fleet, from the project root):
+    snakemake -s workflow/intake/Snakefile --cores 32 --configfile config/sites/<site>_intake.yaml
+or from the offline bundle (network off, inside the container):
+    ./run_cxsv.sh intake --workdir DIR --config intake.yaml --bind /path/to/inputs
+
+Config (config/intake.yaml defaults; later files override):
+    reference                 hs1 FASTA with .fai (the bundle sets /bundle/reference/hs1.fa)
+    intake.sheet              intake sheet: sample_id, input [, individual_id, platform,
+                              input_reference, description]
+    intake.results_root       output root (default results/intake)
+    intake.minimap2_index     prebuilt k17 map-ont index of the same hs1, or null to build
+                              one in <results_root>/ref (about 9 GB, a few minutes)
+    intake.minibatch          minimap2 -K (memory/speed only; 4g ~ 72 GB, 2g ~ 54 GB with sort)
+
+Outputs:
+    <results_root>/<sample>/<sample>.hs1.cram(.crai), intake.json, provenance.tsv, logs/
+    <results_root>/patient_sheet.tsv     ready for patient_runs: {<run>: {samples: ...}}
+    <results_root>/intake_summary.tsv    one line per sample: reads in/out, md5, verdict
+"""
+
+import os
+import sys
+
+PROJECT_DIR = os.path.abspath(os.path.join(workflow.basedir, "..", ".."))
+configfile: os.path.join(PROJECT_DIR, "config", "intake.yaml")
+sys.path.insert(0, os.path.join(PROJECT_DIR, "workflow", "lib"))
+import cxsv_intake  # noqa: E402
+
+SCRIPTS   = os.path.join(PROJECT_DIR, "workflow", "scripts")
+INTAKE    = config.get("intake") or {}
+REFERENCE = config["reference"]
+ROOT      = INTAKE.get("results_root", "results/intake")
+if not INTAKE.get("sheet"):
+    raise ValueError("[intake] set intake.sheet (tab-separated: sample_id, input, ...) -- see config/intake.yaml")
+RECORDS = {r.sample_id: r for r in cxsv_intake.read_intake_sheet(INTAKE["sheet"])}
+print(f"[intake] {len(RECORDS)} sample(s) from {INTAKE['sheet']}", file=sys.stderr)
+MMI = INTAKE.get("minimap2_index") or f"{ROOT}/ref/hs1.map-ont.k17.mmi"
+ALIGN = INTAKE.get("align") or {}
+
+wildcard_constraints:
+    sample="|".join(sorted(RECORDS)) or "NONE"
+
+
+rule all:
+    input:
+        f"{ROOT}/patient_sheet.tsv",
+        f"{ROOT}/intake_summary.tsv",
+
+
+if not INTAKE.get("minimap2_index"):
+    rule intake_minimap2_index:
+        """k=17 map-ont index of the run's hs1 (the panel index parameters)."""
+        input: REFERENCE
+        output: f"{ROOT}/ref/hs1.map-ont.k17.mmi"
+        threads: 4
+        resources: mem_mb=int(INTAKE.get("index_mem_mb", 24000))
+        log: f"{ROOT}/ref/build_index.log"
+        shell:
+            "minimap2 -x map-ont -k 17 -t {threads} -d {output}.tmp {input} > {log} 2>&1 && "
+            "python3 {SCRIPTS}/intake_tool.py mmi-check {output}.tmp --fai {input}.fai >> {log} && "
+            "mv {output}.tmp {output}"
+
+
+rule intake_align:
+    """One sample: inputs -> hs1 CRAM with the panel recipe, verified (intake_align.sh)."""
+    input:
+        reads  = lambda wc: list(RECORDS[wc.sample].inputs),
+        mmi    = MMI,
+        ref    = REFERENCE,
+        script = f"{SCRIPTS}/intake_align.sh",
+    output:
+        cram = f"{ROOT}/{{sample}}/{{sample}}.hs1.cram",
+        crai = f"{ROOT}/{{sample}}/{{sample}}.hs1.cram.crai",
+        json = f"{ROOT}/{{sample}}/intake.json",
+    params:
+        out         = lambda wc: f"{ROOT}/{wc.sample}",
+        input_ref   = lambda wc: RECORDS[wc.sample].input_reference,
+        platform    = lambda wc: RECORDS[wc.sample].platform,
+        description = lambda wc: RECORDS[wc.sample].description,
+        batch       = INTAKE.get("minibatch", "4g"),
+        sort_threads = int(ALIGN.get("sort_threads", 8)),
+        sort_mem    = ALIGN.get("sort_mem", "2G"),
+    threads: int(ALIGN.get("threads", 26))
+    resources:
+        mem_mb = int(ALIGN.get("mem_mb", 72000))
+    log: f"{ROOT}/{{sample}}/logs/intake_align.log"
+    shell:
+        "REF_FA={input.ref:q} REF_MMI={input.mmi:q} INPUT_REF={params.input_ref:q} THREADS={threads} "
+        "MM_BATCH={params.batch} SORT_THREADS={params.sort_threads} SORT_MEM={params.sort_mem} "
+        "PLATFORM={params.platform} DESCRIPTION={params.description:q} "
+        "bash {input.script} {wildcards.sample} {params.out:q} {input.reads:q} > {log} 2>&1"
+
+
+rule intake_sheets:
+    """Patient sample sheet for the intake CRAMs plus a one-line-per-sample summary."""
+    input:
+        expand(f"{ROOT}/{{sample}}/intake.json", sample=sorted(RECORDS)),
+        sheet = INTAKE["sheet"],
+    output:
+        patient_sheet = f"{ROOT}/patient_sheet.tsv",
+        summary       = f"{ROOT}/intake_summary.tsv",
+    shell:
+        "python3 {SCRIPTS}/intake_tool.py sheets --intake-sheet {input.sheet} --root {ROOT} "
+        "--patient-sheet {output.patient_sheet} --summary {output.summary}"

@@ -11,6 +11,7 @@ The repository holds two Snakemake workflows that share one calling module:
 | Workflow | Runs where | Input | Product |
 |---|---|---|---|
 | **Panel builder** `workflow/panel/Snakefile` | lab fleet | background cohorts (hundreds–thousands of genomes) | a **panel release**: CxSV loci with carrier counts, denominators, and the calling fingerprint |
+| **Patient intake** `workflow/intake/Snakefile` | anywhere, incl. a restricted environment | uBAM / modBAM / FASTQ, or a BAM/CRAM from another aligner | hs1 CRAMs aligned with the panel recipe (minimap2 2.24 `-y -ax map-ont --eqx -k 17`), read-count checked, and a patient sample sheet ([docs/INTAKE.md](docs/INTAKE.md)) |
 | **Patient scorer** `workflow/patient/Snakefile` | anywhere, incl. a restricted environment | one patient run (or a family) + a panel release | every patient CxSV labelled public/private with its panel carrier count |
 
 The patient scorer never needs the background reads, only the panel release,
@@ -61,6 +62,7 @@ config/
   panel.yaml              panel builder: cohorts, output root, panel_individuals, panel_sites,
                           release (name/date/test flag), panel_callability
   patient.yaml            patient scorer: runs, panel_release, panel_match (junction matching)
+  intake.yaml             patient intake: sheet, minimap2 index, minibatch, memory (docs/INTAKE.md)
   scoring.yaml            patient scorer: external catalogues, scoring resources, weights, tiers,
                           patient info (sex, HPO terms, parents) — docs/SCORING.md
   sites/                  site overlays (paths, cohort sheets), e.g. faulk_lab_panel.yaml
@@ -75,6 +77,7 @@ container/
 workflow/
   panel/Snakefile         panel builder entry point
   patient/Snakefile       patient scorer entry point
+  intake/Snakefile        patient intake: any input -> hs1 CRAM with the panel recipe
   lib/                    plain-Python modules (unit-tested): sample discovery, fingerprint,
                           junction model (cxsv_junctions), site clustering + matching (cxsv_matching),
                           release identity + manifest verification (cxsv_release), callability
@@ -115,6 +118,7 @@ docs/
   ROADMAP.md
   JUNCTIONS.md            junction model, shared junction-site schema, panel sites, patient matching
   RELEASE_AND_BUNDLE.md   panel release format, callability, container image, offline bundle, validation
+  INTAKE.md               patient intake: recipe, accepted inputs, checks, memory
   PANEL_BUILD.md          full panel build on the lab fleet: measured cost, shards, runner, ledger, estimate
   POSITIVE_CONTROL.md     the planted-CxSV catalogue, how it is built, latest regression result
   EXTERNAL_CATALOGUES.md  CoLoRSdb, HGSVC3, HPRC r2, gnomAD-SV: licences, builds, fields, conversion counts,
@@ -179,6 +183,15 @@ bash scripts/run_pipeline.sh panel --extra-config config/sites/<site>_panel.yaml
 ```
 
 ### 4. Score a patient
+
+Patient reads that are not yet an hs1 alignment made with the panel recipe
+(uBAM, dorado modBAM, FASTQ, or a BAM/CRAM from another aligner or reference
+naming) go through the intake first; it writes the patient sample sheet
+([docs/INTAKE.md](docs/INTAKE.md)):
+
+```bash
+snakemake -s workflow/intake/Snakefile --cores 32 --configfile config/sites/<site>_intake.yaml
+```
 
 ```yaml
 # config/sites/<site>_patient.yaml
@@ -412,6 +425,7 @@ class concordance before and after.
 |---|---|---|---|
 | Unit | none | CI + anywhere | `pytest tests/unit` |
 | Synthetic end to end | seeded artificial 1.2 Mb genome, 3 panel genomes + 1 patient | CI on every push | `bash tests/synthetic/run_synthetic.sh` |
+| Patient intake | 4 synthetic samples (modBAM, FASTQ, BAMs and a CRAM from another reference naming) | CI on every push | `bash tests/synthetic/check_intake.sh` |
 | Offline bundle | the bundle + a public stand-in patient slice | lab fleet, network off | `bash tests/lab/validate_bundle.sh BUNDLE WORKDIR STANDIN_DIR [RELEASE]` |
 | Positive control | sample 3559 with 12 planted heterozygous events + the E13 public spike-in (also in 3 background genomes) (~105 GB CRAM on the lab NAS) | lab fleet | `bash tests/lab/pos_control_regression.sh [WORKDIR] [N_BACKGROUND]` |
 

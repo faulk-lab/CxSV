@@ -35,7 +35,19 @@ Write a run config, e.g. `family_042.yaml`:
         samples: /data/family_042/sheet.tsv   # sample_id, alignment[, index][, individual_id][, platform]
     threads: {samtools: 4, sv_callers: 16}
 
-Alignments must be against hs1 (CRAM or BAM, indexed). Then
+Alignments must be against hs1 (CRAM or BAM, indexed), made with the panel
+recipe. Anything else (uBAM, dorado modBAM, FASTQ, or a BAM/CRAM from another
+aligner or reference naming) goes through the intake first, in the same work
+directory; it writes `results/intake/patient_sheet.tsv` (repo/docs/INTAKE.md):
+
+    # intake.yaml:  intake: {sheet: /data/family_042/intake_sheet.tsv, minibatch: "4g"}
+    #   intake_sheet.tsv: sample_id, input[, individual_id, input_reference, description]
+    ./run_cxsv.sh intake --workdir /scratch/family_042 --config intake.yaml \
+        --bind /data/family_042 --cores 32
+    # then in family_042.yaml:  samples: /work/results/intake/patient_sheet.tsv
+
+The intake builds the minimap2 index (9 GB) in the work directory once and needs
+about 72 GB of memory at minibatch 4g (54 GB at 2g). Then
 
     ./run_cxsv.sh patient --workdir /scratch/family_042 --config family_042.yaml \
         --bind /data/family_042 --cores 16

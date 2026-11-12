@@ -291,7 +291,8 @@ the same `singularity exec` / `apptainer exec`, or
 Nothing in the bundle refers to a path outside it. Inside the container the
 bundle is `/bundle` (read-only), the run directory is `/work`, and the input
 directories are mounted read-only at their own paths. The minimap2 index
-(`hs1.map-ont.k17.mmi`, 9 GB) is not included: patients arrive aligned.
+(`hs1.map-ont.k17.mmi`, 9 GB) is not included: `run_cxsv.sh intake` builds it in the
+work directory when patient reads need aligning (docs/INTAKE.md).
 
 ### Build
 
@@ -337,6 +338,8 @@ B=/path/to/cxsv-bundle-...
 $B/run_cxsv.sh verify-bundle            # every file against MANIFEST.sha256
 $B/run_cxsv.sh verify-release           # the panel release against its manifest
 $B/run_cxsv.sh netcheck                 # loopback only inside the container
+$B/run_cxsv.sh intake  --workdir /scratch/run1 --config intake.yaml \
+    --bind /data/patient1 --cores 32           # only if the reads are not yet a panel-recipe hs1 alignment
 $B/run_cxsv.sh patient --workdir /scratch/run1 --config patient.yaml \
     --bind /data/patient1 --cores 16 [--runtime singularity|apptainer|docker]
 ```

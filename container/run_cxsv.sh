@@ -4,6 +4,9 @@
 # networking disabled. Copied to the bundle root by scripts/make_bundle.sh;
 # everything it uses lives in the bundle directory it sits in.
 #
+#   ./run_cxsv.sh intake  --workdir DIR --config intake.yaml  [--bind PATH]... [--cores N]
+#                                          align uBAM/modBAM/FASTQ/other-aligner BAM or CRAM
+#                                          to hs1 with the panel recipe (docs/INTAKE.md)
 #   ./run_cxsv.sh patient --workdir DIR --config patient.yaml [--bind PATH]... [--cores N]
 #   ./run_cxsv.sh panel   --workdir DIR --config panel.yaml   [--bind PATH]... [--cores N]
 #   ./run_cxsv.sh verify-bundle            sha256 of every bundle file (MANIFEST.sha256)
@@ -69,7 +72,7 @@ fi
 [ -n "$RUNTIME" ] || { echo "no container runtime found (singularity, apptainer or docker)"; exit 1; }
 
 case "$CMD" in
-    patient|panel|shell)
+    intake|patient|panel|shell)
         [ -n "$WORKDIR" ] || { echo "--workdir is required"; exit 1; }
         mkdir -p "$WORKDIR/config" "$WORKDIR/.tmp"; WORKDIR="$(cd "$WORKDIR" && pwd)" ;;
     verify-release|netcheck) WORKDIR="$(mktemp -d)"; mkdir -p "$WORKDIR/.tmp"; trap 'rm -rf "$WORKDIR"' EXIT ;;
@@ -97,7 +100,7 @@ ENVS=(CXSV_BUNDLE_ID="$CXSV_BUNDLE_ID" CXSV_COMMIT="$CXSV_COMMIT" CXSV_IMAGE_ID=
       REF_PATH="$REF_CACHE_DIR/%2s/%2s/%s" REF_CACHE="$REF_CACHE_DIR/%2s/%2s/%s")
 
 case "$CMD" in
-    patient|panel)
+    intake|patient|panel)
         INNER=(snakemake -s "/bundle/repo/workflow/$CMD/Snakefile" --directory /work --cores "$CORES"
                --keep-going --printshellcmds --configfile "${CFG_IN[@]}")
         $DRY && INNER+=(--dry-run)
