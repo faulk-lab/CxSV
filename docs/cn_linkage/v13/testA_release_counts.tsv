@@ -1,0 +1,10 @@
+source	group	events	junction_called	junction_tier1	cn_called	cn_tier1	cn_locus_written	cn_class_dup_trp
+prototype (literature_cn.py)	all	63	8	7	41	34	35	19
+prototype (literature_cn.py)	dup_trp	26	0	0	26	23	26	17
+prototype (literature_cn.py)	other	37	8	7	15	11	9	2
+release pipeline, v13	all	63	8	7	40	34	33	19
+release pipeline, v13	dup_trp	26	0	0	26	23	26	17
+release pipeline, v13	other	37	8	7	14	11	7	2
+release pipeline, v12rule	all	63	8	7	38	32	31	19
+release pipeline, v12rule	dup_trp	26	0	0	24	21	24	17
+release pipeline, v12rule	other	37	8	7	14	11	7	2

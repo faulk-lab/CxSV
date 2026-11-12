@@ -13,8 +13,12 @@ flag list) or in --exclude (TSV cohort, sample_id) do not enter the PoN. Per str
 median, relative MAD and genome count of normalised depth (cxsv_cn.Pon; autosomes from
 every member; chrX one reference per sex, chrY males only; ambiguous calls enter the
 autosomes only). DIR/pon_members.tsv lists every library with its sex call, ploidy sex,
-chrX and chrY ratios, genome median, whether it is in the PoN (and why not) and whether
-it is in its sex's chrX/chrY reference.
+chrX and chrY ratios, genome median, whether it is in the PoN (and why not), whether
+it is in its sex's chrX/chrY reference, and whether its chrX/chrY segments count towards
+the segment-level panel frequency (sexchrom_public: 'no: discordant libraries of <ID>: ...'
+when another library of the same individual disagrees on sex; cxsv_cnlink.
+sexchrom_discordant, cn_params.linkage sexchrom_discordance_x / _y; panel-v1.3 D2). That
+column does not change the PoN.
 """
 import argparse
 import csv
@@ -25,6 +29,7 @@ from concurrent.futures import ProcessPoolExecutor
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lib"))
 import cxsv_cn as cn  # noqa: E402
+import cxsv_cnlink as cl  # noqa: E402
 
 PAR = {}
 P = {}
@@ -91,8 +96,15 @@ def main():
         pon.save(f"{a.out_dir}/{s}.npz")
         print(f"{s}: {pon.meta['genomes']} genomes in the PoN ({pon.meta['males']} male, "
               f"{pon.meta['females']} female, {pon.meta['sex_ambiguous']} ambiguous: autosomes only)", file=sys.stderr)
+    link = {**cl.CN_DEFAULTS, **(cnp.get("linkage") or {})}
+    disc = cl.sexchrom_discordant([dict(key=m["key"], individual_id=m["individual_id"], **info[m["key"]][0])
+                                   for m in members], link)
+    if disc:
+        print(f"{len(disc)} libraries left out of chrX/chrY public counting (sex-discordant): "
+              + ", ".join(sorted(disc)), file=sys.stderr)
     with open(f"{a.out_dir}/pon_members.tsv", "w") as fh:
-        fh.write("key\tindividual_id\tstratum\tsex\tsex_call\tx_ratio\ty_ratio\tgenome_median\tin_pon\tin_sex_reference\n")
+        fh.write("key\tindividual_id\tstratum\tsex\tsex_call\tx_ratio\ty_ratio\tgenome_median\tin_pon\t"
+                 "in_sex_reference\tsexchrom_public\n")
         for m in members:
             sx, gmed = info[m["key"]]
             why = ("no: library-QC flag" if m["key"] in excl else
@@ -100,7 +112,8 @@ def main():
             sexref = "yes" if why == "yes" and sx["sex_call"] in ("male", "female") else \
                      ("no: sex " + sx["sex_call"] if why == "yes" else "no")
             fh.write(f"{m['key']}\t{m['individual_id']}\t{m['stratum']}\t{sx['ploidy_sex']}\t{sx['sex_call']}\t"
-                     f"{sx['x_ratio']}\t{sx['y_ratio']}\t{round(gmed, 3)}\t{why}\t{sexref}\n")
+                     f"{sx['x_ratio']}\t{sx['y_ratio']}\t{round(gmed, 3)}\t{why}\t{sexref}\t"
+                     f"{('no: ' + disc[m['key']]) if m['key'] in disc else 'yes'}\n")
 
 
 if __name__ == "__main__":

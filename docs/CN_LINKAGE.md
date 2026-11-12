@@ -65,11 +65,30 @@ Classes: `DUP-TRP/INV-DUP`, `CN_nested_gain`, `CN_linked_gain`, `CN_linked_loss`
 |---|---|---|
 | `locus` | linked change with ≥ 1 attached junction | written as a CxSV locus (`CxSV_Criteria` starts with `CN_linked`) |
 | `simple_cnv` | one segment explained by one DEL/DUP record | nothing (a simple CNV) |
-| `public_cn` | every segment also seen (≥ 50 % reciprocal, same direction) in ≥ 1 other panel individual; on chrX / chrY only individuals with the same sex call count | nothing (polymorphic) |
+| `public_cn` | every segment also seen (≥ 50 % reciprocal, same direction) in ≥ `public_min_genomes` (1) other panel individuals; on chrX / chrY in ≥ `public_min_genomes_sexchrom` (2) individuals with the same sex call, sex-discordant libraries excluded (section 2b) | nothing (polymorphic) |
 | `cn_only` | linked change with no junction | listed in `cn/cn_only.tsv`; the patient report lists them untiered |
 
-A copy-number locus whose id equals an existing junction-track locus is not
-written again (`cn/cn_loci.tsv`, `written`).
+**Locus coordinates (panel-v1.3, item g).** A `locus` candidate gives one CxSV locus
+per contig that carries one of its segments. Its `Start`–`End` (and `Size`) is the union
+of the candidate's segments on that contig and the attached breakends there
+(`cxsv_cnlink.locus_span`); `cxsv_cnlink.check_locus` stops the step on a zero-length,
+off-contig or out-of-segment locus. Breakends on a contig without a segment (a
+translocation's mate) remain records of the locus (they are in `cxsv_only.vcf` and its
+junctions) but make no locus of their own. panel-v1.2 took the span from the breakends
+alone and wrote one locus per breakend contig: BOC_5883's 17p13.3 loss
+(chr17:10000-2944000 and 3392000-5037000 at 1/2, joined by a translocation end at chr17:1)
+was reported as `chr17:0-2`, and the mates of three candidates became 2 bp loci on chr3,
+chr4, chr5, chr10, chr12 and Sniffles2's `chrN`. Re-running the linkage on the nine test
+genomes (`calibration/cn_linkage/compare_cn_loci.py`, v1.2 public rule): BOC_5883 9 → 3
+CN loci (8 → 2 written; chr17 now `chr17:0-5037000`), the other eight unchanged in number
+and in which loci are written; every CN locus now spans its segments (for example BOC_7308
+chr14:16046045-16046202 → chr14:16037000-16599000). The span feeds the scorer's `size`
+feature (+0.05 at ≥ 100 kb, +0.15 at ≥ 1 Mb) and the subtelomeric context, so CN-locus
+scores can rise by up to 0.15; the v1.3 design check re-scores.
+
+A copy-number locus whose junction-derived span (`cn/cn_loci.tsv` `junction_span`, the
+classifier's coordinates before the segments are added; the v1.2 id) or id equals an
+existing junction-track locus is not written again (`cn/cn_loci.tsv`, `written`).
 
 ## 2. Panel-of-normals and strata
 
@@ -180,6 +199,80 @@ The nested TRP level of L01 is not found against the female reference: its neste
 therefore one 3-copy segment of 740 kb with its 3 INV records. `nested_min_z` is
 unchanged.
 
+### 2b. chrX / chrY public rule (panel-v1.3, decision D2)
+
+**Why.** Under the v1.2-r2 rule one sex-matched panel library was enough to make a
+chrX/chrY segment public. PC L01 (the PLP1 DUP-TRP in a female) stays private only while
+the female chrX bound is 1.12: at 1.18 or 1.25 the LRSC library of NA19238 (chrX ratio
+1.17, chrX-wide gains; its ONT-1019 library is 1.02) becomes female and makes L01 public
+on its own.
+
+**Rule** (`cxsv_cnlink.cn_public`, `cxsv_cnlink.sexchrom_discordant`; `cn_params.linkage`):
+
+- a chrX / chrY segment is public only when ≥ `public_min_genomes_sexchrom` (2) other
+  individuals of the sample's sex call carry it; autosomes keep `public_min_genomes` (1);
+- counts are distinct individuals (two libraries of one individual count once);
+- an individual with more than one panel library whose libraries disagree on sex
+  (different `sex_call`, or chrX ratios differing by more than `sexchrom_discordance_x`
+  0.10, or chrY ratios by more than `sexchrom_discordance_y` 0.10) counts for no one on
+  chrX / chrY; its autosomal segments still count. All of its libraries are excluded,
+  since depth alone cannot tell which one is wrong.
+
+`cn_pon.py` records the decision per library in `pon/pon_members.tsv`, column
+`sexchrom_public` (`yes`, or `no: discordant libraries of <ID>: <ratios>`). The PoN itself
+is unchanged by this column. `cn_linkage.py --pon-members` reads that column; for a release
+made before v1.3 (no column) it recomputes the same rule from `sex_call`, `x_ratio` and
+`y_ratio`.
+
+**Calibration on panel-v1.2-r2** (`pon_members.tsv`, 1,619 libraries): 35 individuals have
+more than one library. The chrX ratio difference has median 0.018, p95 0.078, p99 0.135 and
+maximum 0.146; the chrY ratio difference has maximum 0.046. At 0.10 two individuals are
+excluded (4 libraries): NA19238 (ambiguous 1.171 vs female 1.024) and HG03499 (female
+0.856 vs 0.970). At 0.05 four individuals would be excluded, at 0.15 only NA19238 (by its
+sex calls). The effect on L01 and on public chrX/chrY segments per genome is measured in
+the v1.3 design check (docs/PLAN_panel_v1.3.md, phase 2).
+
+### 2c. Sweeping `nested_min_z` (panel-v1.3, decision D5)
+
+The default stays `cn_params.segmentation.nested_min_z: 6.0`. PC L01's nested TRP reads
+z 5.73 against the female chrX reference, so the v1.3 design check sweeps 5.0–6.0 on the
+healthy panel subset and the positive control and changes the value only if healthy nested
+calls do not rise. No code or committed config is edited for the sweep:
+
+- **Direct runs** (the design check re-segments genomes against a release PoN): the PoN
+  does not depend on `nested_min_z`, so only `cn_segment.py` is re-run per value, then
+  `cn_linkage.py` on its segments:
+
+  ```bash
+  for z in 5.0 5.25 5.5 5.75 6.0; do
+    python workflow/scripts/cn_segment.py --depth <S>/cn/depth.regions.bed.gz \
+        --pon <release>/cn/pon --stratum auto --library-qc <S>/qc/library_qc.tsv \
+        --default-stratum <platform default> --params <S or release>/cn_params.json \
+        --set segmentation.nested_min_z=$z --out sweep/$z/segments.tsv --stats sweep/$z/stats.json
+  done
+  ```
+
+  `--set SECTION.KEY=VALUE` overrides one existing `cn_params` value (JSON-typed; an
+  unknown key stops the run); `stats.json` records `nested_min_z` and the overrides. For
+  the segment-level panel frequency of a swept value, the panel libraries' segments must be
+  re-made with the same value (nested splits change segment boundaries); the release's
+  `panel_cn_segments.tsv` reflects 6.0.
+- **Pipeline runs** (a design-check build): a `--configfile` overlay that sets only the one
+  key. Snakemake merges config recursively, so every other `cn_params` value is kept
+  (`tests/unit/test_cn_nested_sweep.py` checks this with the committed `calling.yaml`):
+
+  ```yaml
+  # nested_5.5.yaml — design-check only; never commit under config/ (test_config_guard)
+  cn_params:
+    segmentation:
+      nested_min_z: 5.5
+  ```
+
+  `snakemake -s workflow/panel/Snakefile --configfile config/sites/<site>_panel.yaml
+  --configfile nested_5.5.yaml ...`. `cn_params` is fingerprinted, so such a build has its
+  own calling fingerprint, and a patient run cannot be paired with a release of another
+  value by accident.
+
 ## 3. Release and patient runs
 
 The panel release gains three components (docs/RELEASE_AND_BUNDLE.md):
@@ -214,10 +307,13 @@ does not appear in the report. After every patient run, the analyst reads
   reference of its ploidy sex (`sex_ratio_male` 0.75) and is never counted for
   sex-matched panel frequency. A 45,X sample gets male ploidy and no chrX loss. An
   XXY sample gets female ploidy and its chrY is not segmented. Neither case is
-  reported as a finding.
-- `score_cxsv.py` infers sex separately from flank depth (`infer_sex`, cut-offs
-  0.75 / 0.85; a sample-sheet sex overrides it). That call can disagree with
-  `sex_call`. When the two disagree, `cn/stats.json` is the reference.
+  reported as a finding (from panel-v1.3 the reports print the flag).
+- From panel-v1.3 (roadmap item 16c) `score_cxsv.py` has no sex inference of its own:
+  locus copy number uses the ploidy sex of `cn/stats.json`, and the score report and
+  the clinician report print `sex_call`, `x_ratio`, `y_ratio` with the ambiguous-sex
+  flag. A sample-sheet sex is reported and compared with the call, not used for
+  ploidy (docs/SCORING.md section 6e). Before v1.3 the scorer used a flank-depth
+  `infer_sex` (0.75 / 0.85), overridden by the sample sheet, which could disagree.
 
 Panel evidence that this case is real: 18 of 1,619 panel libraries are ambiguous.
 Nine of them are registry females with a male-range chrX ratio (0.50-0.66) and
@@ -247,8 +343,12 @@ release file.
   `aggregate.yaml` must set `cn_depth_precomputed` (the full-panel depth pass,
   `<root>/<cohort>/<sample>/depth.regions.bed.gz` + `depth.ok` + `depth.sha256`)
   and `cn_strata_table`; the script stops otherwise. `cn_depth.sh` verifies the
-  sha256 and bin count of each precomputed file and hard-links it; a missing file
-  fails the job rather than reading the alignment on the aggregate host.
+  sha256 and bin count of each precomputed file and copies it (`cp --reflink=auto`),
+  then checks the copy's sha256 against the recorded one; a missing file fails the job
+  rather than reading the alignment on the aggregate host. panel-v1.3 (item a): the
+  source is never hard-linked, so a rebuild cannot change `cn_depth_v1` mtimes (in v1.2
+  the shared inodes changed 1,619 of them and stopped the run once); the precomputed
+  depth costs ~1,619 × the size of one 1 kb depth file of disk per build.
 
 ### Full-panel depth pass (cn_depth_v1)
 
@@ -265,7 +365,20 @@ a record-count check).
 - `tests/unit/test_cn_sex.py`: sex calls (panel survey values, ambiguous cases),
   one chrX reference per sex with ambiguous members on autosomes only, a male-only
   depth artefact absorbed by the male reference, the legacy pooled PoN still read,
-  sex-matched public counting, the panel table's sex column.
+  sex-matched public counting, the panel table's sex column; panel-v1.3 D2: two
+  sex-matched individuals on chrX/chrY (one on autosomes), distinct-individual counting,
+  sex-discordant libraries (panel values of NA19238 and HG03499) excluded on chrX/chrY
+  only, `pon_members.tsv` `sexchrom_public` written by `cn_pon.py` and read (or recomputed
+  for an older table) by `cn_linkage.py`.
+- `tests/unit/test_cn_locus_coords.py`: `check_locus` rejects zero-length, out-of-segment,
+  mate-contig and past-the-end loci; the BOC_5883 structure end to end through
+  `cn_linkage.py` gives one locus `chr17:0-5037000` and none on the mate contig; a CN locus
+  with a junction-track locus's span is not written again.
+- `tests/unit/test_cn_nested_sweep.py`: default 6.0 (library = config); the nested call
+  follows the threshold; `cn_segment.py --set segmentation.nested_min_z=…` (recorded in
+  stats.json, unknown keys refused); a Snakemake `--configfile` overlay changes only that key.
+- `tests/unit/test_cn_depth_precomputed.py`: precomputed depth is copied, the source's
+  mtime, inode and link count are unchanged, a wrong sha256 or bin count fails.
 - `tests/unit/test_cn_track.py`: config = library defaults; sex and PAR ploidy;
   chrX reference per sex, save/load round trip and masking of absent contigs; DUP-TRP on a
   male chrX; an empty PoN gives no segments; `cn_pon.py` (flag exclusion,
@@ -275,3 +388,57 @@ a record-count check).
 - Synthetic CI: the chr20-only synthetic genomes have no chrX and a small panel,
   so the track runs end to end (depth, PoN, segmentation, linkage) and must leave
   the expected results unchanged.
+
+
+### 6a. CN literature test A through the release pipeline (panel-v1.3, item d)
+
+`calibration/cn_linkage/literature_cn_release.py` replaces the Phase 1 path of
+`literature_cn.py` (prototype `cnlib`/`cnlink`, the 110-genome `phase1/seg` PoN). Per
+lit-v1.0 junction-level event (63; 26 DUP-TRP/INV-DUP):
+
+1. the junction track of item 11 test A (`score_literature_set.py`, mode `main`);
+2. the whole-genome 1 kb depth of a healthy donor of the carrier's sex (HG02026 male,
+   HG02181 female; LRSC R10, `cn_depth_v1`), scaled inside the event by
+   (ploidy + Δ) / ploidy from `literature_cn_segments.tsv`;
+3. `workflow/scripts/cn_segment.py` against `<release>/cn/pon` (stratum ONT_LRSC_R10,
+   sex-stratified chrX/chrY reference; all 63 runs used `pon_sex_reference` by_sex);
+4. `workflow/scripts/cn_linkage.py` with `<release>/cn/panel_cn_segments.tsv` and
+   `pon_members.tsv` (`--individual` = the donor), then `extract_junctions.py`,
+   `annotate_cxsv.py` and the patient scoring chain with `--cn-loci`, `--cn-only`,
+   `--cn-stats` (locus depth synthesised from the curated copy number, as before).
+
+Variant `v13` uses the branch's `cn_params`; `v12rule` the same with the panel-v1.2-r2
+chrX/chrY public rule, isolating D2. `--cn-set` passes `cn_segment.py --set` overrides
+(e.g. the D5 sweep).
+
+**Run against panel-v1.2-r2** (`cxsv-panel-20261108-fdac9ff80401`, code 1748631, freya,
+8 workers, 9 min 19 s; tables
+[testA_release_counts.tsv](cn_linkage/v13/testA_release_counts.tsv),
+[testA_release_summary.tsv](cn_linkage/v13/testA_release_summary.tsv),
+[testA_release_scores.tsv](cn_linkage/v13/testA_release_scores.tsv),
+[testA_release_vs_prototype.tsv](cn_linkage/v13/testA_release_vs_prototype.tsv)):
+
+| | junction level: called / Tier 1 | CN track: called / Tier 1 | DUP-TRP called / Tier 1 | other called / Tier 1 |
+|---|---|---|---|---|
+| prototype (`literature_cn.py`, v1.2 bundle) | 8 / 7 | 41 / 34 | 26 / 23 | 15 / 11 |
+| release pipeline, this branch (`v13`) | 8 / 7 | 40 / 34 | 26 / 23 | 14 / 11 |
+| release pipeline, v1.2 chrX/chrY rule (`v12rule`) | 8 / 7 | 38 / 32 | 24 / 21 | 14 / 11 |
+
+![Test A, release pipeline vs prototype](cn_linkage/v13/fig_testA_release_vs_prototype.png)
+
+- **D2:** GRO24_BAB2727 and GRO24_BAB3274 (male chrX DUP-TRP) are public under the v1.2
+  rule (one sex-matched panel individual carries the segment) and Tier 1 under D2.
+- **Not called, against the prototype:** NP18_P4855_512 is `public_cn`; its two chr21 gains
+  are carried by 3 and 2 other individuals of the full 1,619-library table (the prototype
+  filtered against its 110-genome subset). NP18_P2046_133: against the release PoN, the
+  small chr5 gain next to the loss is not segmented, so it is one loss with one DEL
+  (`simple_cnv`).
+- **Other tier changes:** 10 of 63 events change best tier against the prototype (both
+  directions; for example GRO24_BAB15428 Tier 2 → 1 and GRO24_BAB15705 Tier 1 → 3). The
+  causes are the PoN (release stratum vs Phase 1 subset), the sex-specific reference, and
+  the segment-anchored locus span (item g, the `size` feature). COL17_UTR22 stays Tier 1
+  through its junction locus. Its CN locus is no longer written: the prototype's was a
+  TRA-mate locus, and the chr2 locus has the junction-track locus's span.
+- **Remaining differences from the prototype design:** the donors are members of the
+  release ONT_LRSC_R10 PoN (`in_pon` yes), not left out with their family,
+  and only the donor's own libraries are left out of the public filter (patient semantics).

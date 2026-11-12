@@ -68,6 +68,33 @@ def tier_of(total, tiers):
     return tiers[-1]["name"] if tiers else "NA"
 
 
+def tier_rank(name, tiers):
+    """Rank of a tier name: 0 = lowest (smallest min) ... len - 1 = top."""
+    order = [t["name"] for t in sorted(tiers, key=lambda t: t["min"])]
+    if name not in order:
+        raise ValueError(f"unknown tier {name!r}; configured tiers: {order}")
+    return order.index(name)
+
+
+def tier_label(name):
+    """'Tier1_high_priority' -> 'Tier 1', 'Tier2' -> 'Tier 2', 'Benign_likely' -> 'likely benign'."""
+    m = re.match(r"Tier(\d+)", str(name))
+    if m:
+        return f"Tier {m.group(1)}"
+    return "likely benign" if name == "Benign_likely" else str(name)
+
+
+def tier_ceiling(tier, panel_status, ceilings, tiers):
+    """(tier, ceiling or None): a locus whose panel status has a configured ceiling
+    (scoring.yaml tier_ceiling_by_status, e.g. {public: Tier2}; roadmap item 16e,
+    PI decision D1) is never reported above that tier. The points are unchanged;
+    only the reported tier is capped. Returns the ceiling when it acted."""
+    cap = (ceilings or {}).get(panel_status)
+    if not cap or tier_rank(tier, tiers) <= tier_rank(cap, tiers):
+        return tier, None
+    return cap, cap
+
+
 class IntervalIndex:
     """Sorted intervals per chromosome (0-based half-open BED) with labels."""
 
@@ -216,20 +243,83 @@ def ploidy(chrom, pos, sex, par):
     return 2
 
 
-def infer_sex(flank_depths, par, ratio_male=0.75, ratio_female=0.85):
-    """('male'|'female'|'unknown', chrX/autosome depth ratio) from locus flank depths
-    [(chrom, start, end, mean_depth)]."""
-    auto = sorted(d for c, s, e, d in flank_depths if c.lower().removeprefix("chr").isdigit() and d > 0)
-    xs = sorted(d for c, s, e, d in flank_depths if c == "chrX" and d > 0
-                and not any(pc == c and ps <= s < pe for pc, ps, pe in par))
-    if not auto or not xs:
-        return "unknown", None
-    ra = xs[len(xs) // 2] / auto[len(auto) // 2]
-    if ra < ratio_male:
-        return "male", ra
-    if ra > ratio_female:
-        return "female", ra
-    return "unknown", ra
+AMBIGUOUS_SEX_FLAG = ("possible sex-chromosome aneuploidy or mosaicism; chrX/chrY copy-number "
+                      "calls unreliable")
+
+
+def resolve_sex(cn_stats, given=None):
+    """The one sex of a scoring run (roadmap item 16c): the copy-number track's call.
+
+    cn_stats: cn/stats.json of the sample (cn_segment.py; cxsv_cn.call_sex), or None.
+    given: the sample-sheet / config sex, reported and compared, never used for ploidy
+    when the copy-number track has a call.
+    Returns dict(sex, sex_call, x_ratio, y_ratio, source, ambiguous, discordant, note):
+      sex        ploidy sex for chrX/chrY copy number ('male' | 'female' | 'unknown'):
+                 the track's ploidy sex ('sex' in stats.json; for an ambiguous call it
+                 follows the legacy chrX rule there); without a track the given sex,
+                 else 'unknown' (chrX counted as two copies, chrY as one)
+      ambiguous  True when the track's call is neither male nor female
+      discordant True when a given male/female disagrees with a male/female track call
+    """
+    given = (given or "").strip().lower() or None
+    given = given if given in ("male", "female") else None
+    st = cn_stats or {}
+    call = st.get("sex_call")
+    if call:
+        sex = st.get("sex") if st.get("sex") in ("male", "female") else "unknown"
+        src = "copy-number track"
+    elif st.get("sex") in ("male", "female"):          # stats.json written before the sex call
+        call, sex, src = st["sex"], st["sex"], "copy-number track (ploidy sex; no sex call)"
+    elif given:
+        call, sex, src = None, given, "sample sheet (no copy-number track)"
+    else:
+        call, sex, src = None, "unknown", "none (no copy-number track, no sample-sheet sex)"
+    ambiguous = call is not None and call not in ("male", "female")
+    discordant = bool(given and call in ("male", "female") and given != call)
+    xr, yr = st.get("x_ratio"), st.get("y_ratio")
+    note = (f"sex {sex} ({src}" + (f"; call {call}" if call and call != sex else "")
+            + (f"; chrX ratio {fnum(xr, 4)}, chrY ratio {fnum(yr, 4)}" if xr is not None or yr is not None else "")
+            + ")")
+    return dict(sex=sex, sex_call=call or "NA", x_ratio=xr, y_ratio=yr, source=src, given=given,
+                ambiguous=ambiguous, discordant=discordant, note=note)
+
+
+def depth_noise(cn_stats, cfg):
+    """Depth-noise gate (roadmap item 16f, PI decision D3).
+
+    The copy-number segmentation noise of the sample (sigma in cn/stats.json, robust
+    sd of the PoN-normalised autosomal bins) is compared with the per-stratum
+    threshold depth_noise.sigma_max[stratum] (else default_sigma_max). A threshold
+    of null means not calibrated: the gate does not act and the report says so.
+    Returns dict(state, sigma, threshold, stratum, text):
+      state 'high' | 'normal' | 'not_calibrated' | 'not_assessed' | 'off'"""
+    cfg = cfg or {}
+    st = cn_stats or {}
+    sigma, stratum = st.get("sigma"), st.get("stratum", "NA")
+    thr = (cfg.get("sigma_max") or {}).get(stratum, cfg.get("default_sigma_max"))
+    if not cfg.get("enabled", False):
+        state = "off"
+    elif sigma is None:
+        state = "not_assessed"
+    elif thr is None:
+        state = "not_calibrated"
+    else:
+        state = "high" if float(sigma) > float(thr) else "normal"
+    s = fnum(sigma, 3)
+    text = {"high": f"Depth noise high: copy-number-derived calls unreliable (CN sigma {s} > {fnum(thr, 3)}, "
+                    f"stratum {stratum})",
+            "normal": f"depth noise normal (CN sigma {s} <= {fnum(thr, 3)}, stratum {stratum})",
+            "not_calibrated": f"depth noise not assessed: no calibrated CN-sigma threshold for stratum {stratum} "
+                              f"(CN sigma {s}; gate inactive)",
+            "not_assessed": "depth noise not assessed: no copy-number segmentation sigma",
+            "off": f"depth-noise gate off (CN sigma {s}, stratum {stratum})"}[state]
+    return dict(state=state, sigma=sigma, threshold=thr, stratum=stratum, text=text)
+
+
+def is_cn_derived(row, cn_classes=()):
+    """True for a locus built or classed by the copy-number track: CxSV_Criteria
+    'CN_linked;...' (cn_linkage.py) or a class in depth_noise.cn_classes."""
+    return str(row.get("CxSV_Criteria", "")).startswith("CN_linked") or row.get("Cmplx_Class") in set(cn_classes)
 
 
 def cn_segments(depth_rows, sex, par, p):
@@ -649,9 +739,47 @@ def f_size(span, w):
     return Feature("size", "event", span, pts, "locus span (bp)")
 
 
-def f_caller_agreement(supp_vecs, w):
-    n = len(supp_vecs)
-    multi = sum(1 for s in supp_vecs if s.count("1") >= 2)
+def supp_callers(supp_vec):
+    """Caller bit positions set in a SURVIVOR SUPP_VEC string ('101' -> {0, 2})."""
+    return {i for i, b in enumerate(str(supp_vec)) if b == "1"}
+
+
+def _ends_match(a, b, tol):
+    """Both breakends of junction a lie within tol bp of those of b, in either order,
+    whatever the SV type label."""
+    same = a.chrom1 == b.chrom1 and a.chrom2 == b.chrom2 and \
+        abs(int(a.pos1) - int(b.pos1)) <= tol and abs(int(a.pos2) - int(b.pos2)) <= tol
+    swap = a.chrom1 == b.chrom2 and a.chrom2 == b.chrom1 and \
+        abs(int(a.pos1) - int(b.pos2)) <= tol and abs(int(a.pos2) - int(b.pos1)) <= tol
+    return same or swap
+
+
+def junction_callers(kept, pool, tol):
+    """Callers supporting each kept junction, type-agnostic (roadmap item 16h).
+
+    The merged VCF keeps records of different SV types apart (SURVIVOR merges by
+    type), so one rearrangement called a DEL by Sniffles2 and an INV/BND by SVIM
+    becomes two single-caller junctions. Here a junction is supported by its own
+    callers plus the callers of every junction in `pool` (the locus's junctions,
+    composite records included) whose two breakends match its two breakends within
+    `tol` bp (the panel junction-matching tolerance), regardless of SV type.
+    Returns [set of caller bit positions] in the order of `kept`."""
+    out = []
+    for j in kept:
+        c = set(supp_callers(j.supp_vec))
+        for p in pool:
+            if p is not j and _ends_match(j, p, tol):
+                c |= supp_callers(p.supp_vec)
+        out.append(c)
+    return out
+
+
+def f_caller_agreement(callers, w, tol=None):
+    """callers: per junction a set of supporting caller positions (junction_callers)
+    or, as before item 16h, a SUPP_VEC string (type-aware, own record only)."""
+    sets = [supp_callers(c) if isinstance(c, str) else set(c) for c in callers]
+    n = len(sets)
+    multi = sum(1 for s in sets if len(s) >= 2)
     frac = multi / n if n else 0.0
     if n and frac >= float(w["multi_fraction"]):
         pts, why = float(w["multi"]), f">= {w['multi_fraction']:.0%} of junctions with >= 2 callers"
@@ -659,7 +787,8 @@ def f_caller_agreement(supp_vecs, w):
         pts, why = float(w["none"]), "every junction from a single caller"
     else:
         pts, why = 0.0, "mixed caller support"
-    return Feature("caller_agreement", "evidence", f"{multi}/{n} junctions with >= 2 callers", pts, why)
+    how = f" (breakends within {tol} bp, any SV type)" if tol is not None else ""
+    return Feature("caller_agreement", "evidence", f"{multi}/{n} junctions with >= 2 callers{how}", pts, why)
 
 
 def f_read_support(min_reads, w):

@@ -6,7 +6,8 @@ removes none.
   cn_linkage.py --vcf merged_sv.vcf --clusters cxsv/junction_clusters.bed \\
       --summary cxsv/junction_summary.tsv --cxsv-vcf cxsv/junction_only.vcf \\
       --single cxsv/single_caller_filtered.tsv --segments cn/segments.tsv \\
-      --panel-segments panel_cn_segments.tsv --individual ID --stats cn/stats.json --fai ref.fa.fai \\
+      --panel-segments panel_cn_segments.tsv --pon-members pon/pon_members.tsv --individual ID \\
+      --stats cn/stats.json --fai ref.fa.fai \\
       --calling calling_params.json --scripts workflow/scripts --work cn/work \\
       --out-clusters cxsv/clusters.bed --out-summary cxsv/cxsv_summary.tsv \\
       --out-vcf cxsv/cxsv_only.vcf --out-candidates cn/cn_candidates.tsv \\
@@ -17,13 +18,21 @@ removes none.
    discovery sets aside as long spans or svim_lowq included), structure class, the
    complexity rule and the segment-level panel frequency (segments of every OTHER
    individual in --panel-segments; on chrX / chrY only individuals of the sample's sex,
-   from --stats; a candidate whose every segment is seen there is public_cn and gets no
-   locus).
-2. A candidate with decision "locus" becomes one locus per contig: its records go
-   through vcf_to_bed.py (--span-link-max 0, every record kept) and classify_cxsv.py
+   from --stats, at least public_min_genomes_sexchrom of them, and none of the libraries
+   that --pon-members marks as sex-discordant (panel-v1.3 D2); a candidate whose every
+   segment is seen there is public_cn and gets no locus).
+2. A candidate with decision "locus" becomes one locus per contig that carries one of
+   its segments: its records go through vcf_to_bed.py (--span-link-max 0, every record
+   kept) and the breakend rows on that contig through classify_cxsv.py
    (--max-cluster-size 0) exactly as discovery runs them; the row is then IsCxSV=YES,
-   CxSV_Criteria "CN_linked;<criteria>", Cmplx_Class = the structure class. A locus
-   whose id (Chr:Start-End) equals a junction-track locus is not added.
+   CxSV_Criteria "CN_linked;<criteria>", Cmplx_Class = the structure class, and
+   Start/End/Size = the union of the segments and breakends on that contig
+   (cxsv_cnlink.locus_span; checked by cxsv_cnlink.check_locus). Breakend rows on a
+   contig without a segment (a translocation's mate) make no locus of their own (panel-v1.2
+   wrote them as 2 bp loci, and BOC_5883's 17p13.3 loss as chr17:0-2; panel-v1.3 item g).
+   A locus whose junction-derived span (the classifier's Chr:Start-End before the
+   segments are added; cn_loci.tsv junction_span) or id equals a junction-track locus is
+   not added, as in panel-v1.2.
 3. clusters.bed / cxsv_summary.tsv = junction track + CN loci; cxsv_only.vcf =
    junction track + the records of the CN loci. Every candidate is listed in
    cn_candidates.tsv; the CN loci with their segments in cn_loci.tsv (read by
@@ -61,10 +70,27 @@ def read_segments(path):
     return out
 
 
-def others(path, individual):
-    """[(key, individual, [segments], sex_call)] of every other individual's panel library;
-    sex_call from the table's sex column (panel-v1.2-r2 and later: male / female / ambiguous)."""
+def sexchrom_excluded(path, P=cl.CN_DEFAULTS):
+    """{key: reason} of the panel libraries left out of chrX / chrY public counting.
+    pon_members.tsv of panel-v1.3 and later records the decision (column sexchrom_public,
+    'yes' or 'no: <reason>', cn_pon.py); for an older table it is recomputed from the
+    sex_call / x_ratio / y_ratio columns with the same rule (cxsv_cnlink.sexchrom_discordant).
+    No table ('none'): nothing is excluded."""
+    if not path or path == "none" or not os.path.exists(path):
+        return {}
+    rows = read_tsv(path)
+    if rows and "sexchrom_public" in rows[0]:
+        return {r["key"]: r["sexchrom_public"][4:] if r["sexchrom_public"].startswith("no: ") else r["sexchrom_public"]
+                for r in rows if (r.get("sexchrom_public") or "yes").strip() != "yes"}
+    return cl.sexchrom_discordant(rows, P)
+
+
+def others(path, individual, excluded=None):
+    """[(key, individual, [segments], sex_call, sexchrom_ok)] of every other individual's
+    panel library; sex_call from the table's sex column (panel-v1.2-r2 and later: male /
+    female / ambiguous); sexchrom_ok False for the libraries in `excluded` (sexchrom_excluded)."""
     by, sex = {}, {}
+    excluded = excluded or {}
     if not path or path == "none" or not os.path.exists(path):
         return []
     for r in read_tsv(path):
@@ -74,7 +100,7 @@ def others(path, individual):
         sex[k] = (r.get("sex") or "").strip()
         by.setdefault(k, []).append(
             dict(chrom=r["chrom"], start=int(r["start"]), end=int(r["end"]), state=int(r["state"]), ploidy=int(r["ploidy"])))
-    return [(k, ind, s, sex[(k, ind)]) for (k, ind), s in by.items()]
+    return [(k, ind, s, sex[(k, ind)], k not in excluded) for (k, ind), s in by.items()]
 
 
 def sh(cmd, log):
@@ -94,6 +120,8 @@ def main():
               "out-clusters", "out-summary", "out-vcf", "out-candidates", "out-loci", "out-cn-only"):
         ap.add_argument(f"--{k}", required=True)
     ap.add_argument("--panel-segments", default="none")
+    ap.add_argument("--pon-members", default="none", help="pon/pon_members.tsv of the panel / release: "
+                    "sex-discordant libraries are left out of chrX/chrY public counting")
     ap.add_argument("--individual", default="")
     ap.add_argument("--stats", default="none", help="cn/stats.json: its sex (ploidy sex) selects the "
                     "same-sex panel genomes for chrX/chrY segments")
@@ -108,12 +136,19 @@ def main():
     recs = cl.read_records(a.vcf)
     single = {r["ID"] for r in read_tsv(a.single)} if os.path.exists(a.single) else set()
     sex = json.load(open(a.stats)).get("sex") if a.stats != "none" and os.path.exists(a.stats) else None
-    cands = cl.candidates(segs, recs, others(a.panel_segments, a.individual), P, single_filtered=single, sex=sex)
+    excluded = sexchrom_excluded(a.pon_members, P)
+    if excluded:
+        print(f"{len(excluded)} panel libraries left out of chrX/chrY public counting (sex-discordant): "
+              + ", ".join(sorted(excluded)), file=sys.stderr)
+    cands = cl.candidates(segs, recs, others(a.panel_segments, a.individual, excluded), P,
+                          single_filtered=single, sex=sex)
     summ0 = read_tsv(a.summary)
     header = open(a.summary).readline().rstrip("\n").split("\t")
     existing = {f"{r['Chr']}:{r['Start']}-{r['End']}" for r in summ0 if r.get("IsCxSV") == "YES"}
     # 2. one locus per contig of every "locus" candidate
     cn_rows, meta, nid = [], {}, ID_BASE
+    mates_dropped = {}                         # candidate id -> breakend contigs without a segment
+    lengths = {l.split("\t")[0]: int(l.split("\t")[1]) for l in open(a.fai) if l.strip()}
     for k in [x for x in cands if x["decision"] == "locus"]:
         mini, bed = f"{a.work}/cand{k['id']}.vcf", f"{a.work}/cand{k['id']}.bed"
         ids = {r["id"] for r in k["records"]}
@@ -130,7 +165,12 @@ def main():
             f = line.rstrip("\n").split("\t")
             if len(f) >= 6:
                 by_chr.setdefault(f[0], []).append(f[:6])
-        for chrom, rows in by_chr.items():
+        seg_contigs = cl.segment_contigs(k)
+        off = sorted(x for x in by_chr if x not in seg_contigs)
+        if off:
+            mates_dropped[k["id"]] = off
+        for chrom in [x for x in seg_contigs if x in by_chr]:
+            rows = by_chr[chrom]
             nid += 1
             for f in sorted(rows, key=lambda x: int(x[1])):
                 cn_rows.append(f + [str(nid)])
@@ -148,20 +188,30 @@ def main():
             "--chromoanag-min-sv", str(c["chromoanag_min_svs"]), "--extreme-min-breakends", str(c["extreme_min_breakends"]),
             "--min-interleaved", str(c["min_interleaved"]), "--interleave-alt-min-intra", str(c["interleave_alt_min_intra"]),
             "--interleave-alt-min-inter", str(c["interleave_alt_min_inter"]), "--max-cluster-size", "0"], log)
+        rows_of = {}
+        for f in cn_rows:
+            rows_of.setdefault(f[6], []).append((int(f[1]), int(f[2])))
         for r in read_tsv(cn_sum):
             k, chrom = meta[r["ClusterID"]]
+            if r["Chr"] != chrom:
+                raise ValueError(f"classify_cxsv.py put CN cluster {r['ClusterID']} on {r['Chr']}, expected {chrom}")
+            jid = f"{r['Chr']}:{r['Start']}-{r['End']}"       # junction-derived id (the v1.2 locus id)
+            s0, e0 = cl.check_locus(chrom, *cl.locus_span(k, chrom, rows_of[r["ClusterID"]], lengths.get(chrom)),
+                                     k, lengths.get(chrom))
+            r["Start"], r["End"], r["Size"] = str(s0), str(e0), str(e0 - s0)
             lid = f"{r['Chr']}:{r['Start']}-{r['End']}"
-            row = dict(locus_id=lid, candidate=k["id"], cn_class=k["cls"], classifier_class=r.get("Cmplx_Class", "NA"),
+            row = dict(locus_id=lid, junction_span=jid, candidate=k["id"], cn_class=k["cls"],
+                       classifier_class=r.get("Cmplx_Class", "NA"),
                        n_records=len(k["records"]), n_long=k["n_long"], n_single_filtered=k["n_single_filtered"],
                        segments=seg_str([s for s in k["segs"] if s["chrom"] == chrom]))
-            if lid in existing:
+            if jid in existing or lid in existing:      # the same junctions as a junction-track locus
                 row["written"] = "no: same id as a junction-track locus"
             else:
                 r["IsCxSV"] = "YES"
                 r["CxSV_Criteria"] = "CN_linked;" + (r.get("CxSV_Criteria") or "")
                 r["Cmplx_Class"] = k["cls"].replace("/", "_")
                 keep.add(r["ClusterID"])
-                existing.add(lid)
+                existing.update((lid, jid))
                 row["written"] = "yes"
                 summ0.append(r)
             written.append(row)
@@ -199,7 +249,7 @@ def main():
             fh.write(line)
             if k["decision"] == "cn_only":
                 fo.write(line)
-    lcols = ["locus_id", "candidate", "cn_class", "classifier_class", "n_records", "n_long", "n_single_filtered",
+    lcols = ["locus_id", "junction_span", "candidate", "cn_class", "classifier_class", "n_records", "n_long", "n_single_filtered",
              "segments", "written"]
     with open(a.out_loci, "w") as fh:
         fh.write("\t".join(lcols) + "\n")
@@ -208,6 +258,9 @@ def main():
     n = {d: sum(k["decision"] == d for k in cands) for d in ("locus", "cn_only", "simple_cnv", "public_cn")}
     print(f"{len(segs)} segments, {len(cands)} candidates {n}; CN loci written {sum(r['written'] == 'yes' for r in written)}",
           file=sys.stderr)
+    for cid, cs in sorted(mates_dropped.items()):
+        print(f"candidate {cid}: breakends on {', '.join(cs)} (no copy-number segment there) stay records of "
+              "its locus, no locus of their own", file=sys.stderr)
 
 
 if __name__ == "__main__":

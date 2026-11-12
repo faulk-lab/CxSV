@@ -67,8 +67,9 @@ copy_number:
   min_segment_bp: 1000      # shorter segments get no copy-number call
   min_baseline_depth: 5
   min_cn_delta: 0.6         # |CN - ploidy| needed to call a change (het loss/gain = 1)
-  sex_ratio_male: 0.75      # chrX/autosome flank-depth ratio below which sex is inferred male
-  sex_ratio_female: 0.85
+  # Sex (chrX/chrY ploidy) is the copy-number track's call, cn/stats.json (cxsv_cn.call_sex;
+  # thresholds in calling.yaml cn_params). The flank-depth inference (sex_ratio_male 0.75 /
+  # sex_ratio_female 0.85) was removed in panel-v1.3 (roadmap item 16c): one sex source.
 
 # ─── Breakpoint clustering (criterion 7; descriptive) ───────────────────────
 clustering:
@@ -132,7 +133,11 @@ weights:
     Nested_SV: 0.10
     default: 0.05
   size: {"100000": 0.05, "1000000": 0.15}     # locus span (bp) at least ...
-  caller_agreement: {multi_fraction: 0.5, multi: 0.10, none: -0.10}
+  # A junction counts as multi-caller when >= 2 callers report breakends within
+  # tolerance_bp of both its ends, whatever SV type each caller gave (roadmap item 16h:
+  # Sniffles2 DEL + SVIM INV of one deletion). null = the panel matching tolerance
+  # (patient.yaml panel_match.tolerance, 500 bp).
+  caller_agreement: {multi_fraction: 0.5, multi: 0.10, none: -0.10, tolerance_bp: null}
   read_support: {min_reads: 5, weak: -0.15}
   artefact_context: {segdup: -0.30, low_complexity: -0.15, window_bp: 50,
                      low_complexity_classes: [Simple_repeat, Low_complexity, Satellite]}
@@ -151,3 +156,38 @@ tiers:
   - {name: Tier2,               min: 0.50}
   - {name: Tier3,               min: 0.00}
   - {name: Benign_likely,       min: -1000}
+
+# ─── Tier ceiling by panel status (roadmap item 16e, PI decision D1, panel-v1.3) ─
+# A locus seen in presumed-healthy panel individuals (Panel_Status public) is never
+# reported above Tier 2, whatever its points (BOC_2057 BRSK2: 65/1,582 carriers,
+# 1.06 points). The points are unchanged; the report says "capped at Tier 2: seen in N
+# healthy panel individuals". {} = no ceiling.
+tier_ceiling_by_status:
+  public: Tier2
+
+# ─── Depth-noise gate (roadmap item 16f, PI decision D3, panel-v1.3) ──────────
+# The copy-number segmentation noise of the sample (sigma in cn/stats.json: robust sd
+# of the PoN-normalised depth ratio over unmasked autosomal bins) is compared with a
+# per-PoN-stratum threshold. Above it the report prints "Depth noise high:
+# copy-number-derived calls unreliable" and conservative mode applies to loci built or
+# classed by the copy-number track (CxSV_Criteria CN_linked;..., or a class below): a
+# Tier-1 such locus needs more than min_multi_caller_fraction of its junctions with
+# >= 2 callers, else it is reported at demote_to (points unchanged). Copy-number-only
+# candidates are listed as unreliable.
+# Thresholds (panel-v1.3 design check D3, docs/design_check_v13/): per PoN stratum,
+# median + 3.5 x scaled MAD (robust z 3.5) of the CN sigma of the 1,619 panel-v1.2-r2
+# libraries (cn/stats.json). Panel libraries above: ONT_1kGP_1019 22/1,017 (mostly
+# < 5x depth), PacBio_HiFi 10/135, ONT_LRSC_R10 0/247, ONT_LRSC_R9 0/220. Nine test
+# genomes (all R10): BOC_5883 (0.322) and BOC_7308 (0.237) above, the others 0.16-0.21.
+# Every PoN stratum is listed, so default_sigma_max (strata without a PoN) stays null.
+depth_noise:
+  enabled: true
+  sigma_max:
+    ONT_LRSC_R10: 0.233    # median 0.1629, scaled MAD 0.0200, n 247
+    ONT_LRSC_R9: 0.220     # median 0.1558, scaled MAD 0.0185, n 220
+    ONT_1kGP_1019: 0.401   # median 0.2330, scaled MAD 0.0480, n 1,017
+    PacBio_HiFi: 0.198     # median 0.1586, scaled MAD 0.0111, n 135
+  default_sigma_max: null     # strata not listed above
+  conservative: {min_multi_caller_fraction: 0.5, demote_to: Tier2}
+  cn_classes: [DUP-TRP_INV-DUP, DUP-TRP/INV-DUP, CN_nested_gain, CN_linked_gain, CN_linked_loss,
+               CN_linked_gain_loss]

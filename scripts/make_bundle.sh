@@ -73,7 +73,13 @@ EXPORT=$(mktemp -d "${TMPDIR:-/tmp}/cxsv_export.XXXXXX"); trap 'rm -rf "$EXPORT"
 git -C "$REPO" archive --format=tar "$COMMIT" | tar -x -C "$EXPORT"
 LOCK_SHA=$(sha256sum "$EXPORT/envs/cxsv-pipeline.explicit.txt" | cut -c1-64)
 DOCKERFILE_SHA=$(sha256sum "$EXPORT/container/Dockerfile" | cut -c1-64)
-IMAGE_KEY=$(printf '%s\n%s\n' "$DOCKERFILE_SHA" "$LOCK_SHA" | sha256sum | cut -c1-12)
+# the PyPI wheels of the clinician report (envs/cxsv-pipeline.pip.txt, panel-v1.3) are part of the image
+PIP_SHA=$( [ -f "$EXPORT/envs/cxsv-pipeline.pip.txt" ] && sha256sum "$EXPORT/envs/cxsv-pipeline.pip.txt" | cut -c1-64 || true )
+if [ -n "$PIP_SHA" ]; then
+    IMAGE_KEY=$(printf '%s\n%s\n%s\n' "$DOCKERFILE_SHA" "$LOCK_SHA" "$PIP_SHA" | sha256sum | cut -c1-12)
+else
+    IMAGE_KEY=$(printf '%s\n%s\n' "$DOCKERFILE_SHA" "$LOCK_SHA" | sha256sum | cut -c1-12)
+fi
 IMG_DIR="$OUT/_images/img-$IMAGE_KEY"
 IMAGE_TAG="cxsv-pipeline:$IMAGE_KEY"
 
@@ -91,6 +97,7 @@ build_image() {
         "docker-archive://$IMG_DIR.partial/cxsv-pipeline.docker.tar" > "$IMG_DIR.partial/sif_build.log" 2>&1
     gzip -n "$IMG_DIR.partial/cxsv-pipeline.docker.tar"
     cp "$EXPORT/container/Dockerfile" "$EXPORT/envs/cxsv-pipeline.explicit.txt" "$IMG_DIR.partial/"
+    [ -n "$PIP_SHA" ] && cp "$EXPORT/envs/cxsv-pipeline.pip.txt" "$IMG_DIR.partial/"
     cat > "$IMG_DIR.partial/image.env" <<EOF
 CXSV_IMAGE=$IMAGE_TAG
 CXSV_IMAGE_ID=$id
@@ -98,6 +105,7 @@ CXSV_SIF_SHA256=$(sha256sum "$IMG_DIR.partial/cxsv-pipeline.sif" | cut -c1-64)
 CXSV_DOCKER_ARCHIVE_SHA256=$(sha256sum "$IMG_DIR.partial/cxsv-pipeline.docker.tar.gz" | cut -c1-64)
 CXSV_ENV_LOCK_SHA256=$LOCK_SHA
 CXSV_DOCKERFILE_SHA256=$DOCKERFILE_SHA
+CXSV_PIP_LOCK_SHA256=${PIP_SHA:-none}
 CXSV_IMAGE_BASE=$(grep -m1 '^FROM ' "$EXPORT/container/Dockerfile" | cut -d' ' -f2)
 CXSV_IMAGE_BUILT_FROM_COMMIT=$COMMIT
 CXSV_IMAGE_BUILD_SECONDS=$(( $(date +%s) - t0 ))

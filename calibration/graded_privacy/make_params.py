@@ -3,7 +3,8 @@
 
 Weights, tiers, copy-number, clustering, fold-back settings and resources come
 from config/scoring.yaml; matching from config/patient.yaml; collapse distance
-and composite fraction from config/calling.yaml; the library-QC switch and gate
+and composite fraction from config/calling.yaml; the tier ceiling and depth-noise gate
+(tier_ceiling_by_status, depth_noise) from config/scoring.yaml; the library-QC switch and gate
 (conservative_mode, conservative, k) from config/library_qc.yaml, as rule
 scoring_params passes them (all in this checkout). Patient
 information: the sample's registry sex only (no HPO terms, no parents).
@@ -47,6 +48,8 @@ def main():
     body = {
         "weights": W, "tiers": cfg["tiers"], "copy_number": cfg["copy_number"],
         "clustering": cfg["clustering"], "foldback": cfg["foldback"],
+        "tier_ceiling_by_status": cfg.get("tier_ceiling_by_status") or {},
+        "depth_noise": cfg.get("depth_noise") or {"enabled": False},
         "scoring_resources": {k: v for k, v in (cfg.get("scoring_resources") or {}).items() if v},
         "panel_match": {"tolerance": m.get("tolerance", 500), "ins_len_ratio": m.get("ins_len_ratio", 0.5),
                         "min_junction_fraction": m.get("min_junction_fraction", 0.75)},

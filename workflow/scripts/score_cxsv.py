@@ -30,6 +30,9 @@ import cxsv_matching as cm     # noqa: E402
 import cxsv_scoring as sc      # noqa: E402
 
 CALLERS = ("cuteSV", "SVIM", "Sniffles2")      # SURVIVOR sample-column order
+# Used when scoring_params.json has no tier_ceiling_by_status key (params written before
+# roadmap item 16e): PI decision D1, a public locus is never reported above Tier 2.
+DEFAULT_TIER_CEILING = {"public": "Tier2"}
 
 
 def read_tsv(path):
@@ -228,14 +231,12 @@ def main():
         role, path = spec.split("=", 1)
         parents[role] = cm.SiteIndex(cm.junction_point_sites(cj.read_table(path), role))
 
-    # sex: given, or inferred from the chrX / autosome depth of the locus flanks
-    flanks = [(c, s, e, d) for rows in depth.values() for c, s, e, k, d in rows if k.startswith("flank")]
-    sex = (P["patient"].get("sex") or "").lower()
-    if sex in ("male", "female"):
-        sex_note = f"sex {sex} (given)"
-    else:
-        sex, ratio = sc.infer_sex(flanks, par, P["copy_number"]["sex_ratio_male"], P["copy_number"]["sex_ratio_female"])
-        sex_note = f"sex {sex} (inferred, chrX/autosome depth {sc.fnum(ratio)})"
+    # sex: one source, the copy-number track's call (cn/stats.json; roadmap item 16c).
+    # The sample-sheet sex is reported and compared, and used only without a CN track.
+    cn_stats = load_cn_stats(a.cn_stats)
+    SX = sc.resolve_sex(cn_stats, P["patient"].get("sex"))
+    sex, sex_note = SX["sex"], SX["note"]
+    ca_tol = int(W["caller_agreement"].get("tolerance_bp") or P["panel_match"]["tolerance"])
 
     # chromosome breakend sets for criterion 7: non-public junctions, segdups masked
     eff = {}
@@ -266,7 +267,9 @@ def main():
     for row in status:
         L = f"{row['Chr']}:{row['Start']}-{row['End']}"
         jr = by_locus.get(L, [])
-        kept, comp = cc.distinct_junctions([junction_obj(r) for r in jr], order, cls_p)
+        pool = [junction_obj(r) for r in jr]
+        kept, comp = cc.distinct_junctions(pool, order, cls_p)
+        callers = sc.junction_callers(kept, pool, ca_tol)
         bk = cc.breakends(kept, tol)
         orients = []
         reads = []
@@ -336,7 +339,8 @@ def main():
             k, n, _ = cm.match_fraction(jr, idx, int(P["panel_match"]["tolerance"]),
                                         float(P["panel_match"]["ins_len_ratio"]))
             par_res[role] = bool(n) and k / n >= mjf - 1e-9
-        loci.append(dict(L=L, row=row, kept=kept, comp=comp, bk=bk, orients=orients, reads=reads, segs=segs,
+        loci.append(dict(L=L, row=row, kept=kept, comp=comp, callers=callers,
+                         n_multi=sum(1 for c in callers if len(c) >= 2), bk=bk, orients=orients, reads=reads, segs=segs,
                          affected=affected, reg_hits=reg_hits, n_exons=len(ex), n_genes=n_genes, f_sd=f_sd,
                          f_lc=f_lc, clus=clus,
                          counts=counts, p_bal=p_bal, fb=fb, n_inv=n_inv, subtel=subtel, par_res=par_res))
@@ -364,7 +368,7 @@ def main():
         feats.append(sc.f_no_genes(x["n_genes"], x["n_exons"], W["no_genes"]))
         feats.append(sc.f_class(row["Cmplx_Class"], W["complexity_class"]))
         feats.append(sc.f_size(int(row["End"]) - int(row["Start"]), W["size"]))
-        feats.append(sc.f_caller_agreement([j.supp_vec for j in x["kept"]], W["caller_agreement"]))
+        feats.append(sc.f_caller_agreement(x["callers"], W["caller_agreement"], ca_tol))
         known = [r for r in x["reads"] if r is not None]
         feats.append(sc.f_read_support(min(known) if known else None, W["read_support"]))
         feats.append(sc.f_artefact(x["f_sd"], x["f_lc"], W["artefact_context"]))
@@ -385,17 +389,76 @@ def main():
         x["feats"] = feats
         x["ct"] = round(sum(f.points for f in feats if f.group == "chromothripsis"), 4)
         x["total"] = round(sum(f.points for f in feats), 4)
-        x["tier"] = sc.tier_of(x["total"], P["tiers"])
+        x["score_tier"] = sc.tier_of(x["total"], P["tiers"])
         x["q"] = q
+    apply_tier_ceiling(loci, P)
 
     qc = (read_tsv(a.library_qc) or [{}])[0] if a.library_qc else {}
     apply_library_qc_gate(loci, qc, P)
+    dn = sc.depth_noise(cn_stats, P.get("depth_noise"))
+    apply_depth_noise_gate(loci, dn, P)
 
     lit = {r["Locus_ID"]: r for r in read_tsv(a.literature_hits)} if a.literature_hits else None
     for x in loci:
         x["lit"] = (lit or {}).get(x["L"], {})
     loci.sort(key=lambda x: (-x["total"], x["L"]))
-    write_outputs(a, P, loci, cat_names, sex_note, lit is not None, qc)
+    write_outputs(a, P, loci, cat_names, SX, lit is not None, qc, dn)
+
+
+def load_cn_stats(path):
+    """cn/stats.json of the copy-number track, or None when absent."""
+    if not path or not os.path.exists(path):
+        return None
+    with open(path) as fh:
+        return json.load(fh)
+
+
+def ceiling_config(P):
+    """tier_ceiling_by_status of the params; DEFAULT_TIER_CEILING when the key is absent,
+    no ceiling when it is set to null or {}."""
+    return P["tier_ceiling_by_status"] if "tier_ceiling_by_status" in P else DEFAULT_TIER_CEILING
+
+
+def apply_tier_ceiling(loci, P):
+    """Tier by points, then the ceiling of the locus's panel status (roadmap item 16e,
+    PI decision D1: a public locus is not reported above Tier 2). Points unchanged.
+    Sets x['tier'], x['ceiling'] (None or the capping tier) and x['ceiling_note']."""
+    cfg = ceiling_config(P)
+    for x in loci:
+        r = x["row"]
+        x["tier"], x["ceiling"] = sc.tier_ceiling(x["score_tier"], r.get("Panel_Status"), cfg, P["tiers"])
+        x["ceiling_note"] = (f"capped at {sc.tier_label(x['ceiling'])}: seen in {r.get('Panel_Carriers', 'NA')} "
+                             f"healthy panel individuals (panel status {r.get('Panel_Status')}; "
+                             f"{sc.tier_label(x['score_tier'])} by points)") if x["ceiling"] else ""
+
+
+def apply_depth_noise_gate(loci, dn, P):
+    """Conservative mode for copy-number-derived loci of a noisy-depth sample (roadmap
+    item 16f, PI decision D3). When the gate state is 'high', a top-tier locus built or
+    classed by the copy-number track (sc.is_cn_derived) is kept only if more than
+    depth_noise.conservative.min_multi_caller_fraction of its junctions have >= 2
+    callers (type-agnostic; read depth does not count as support), else it is reported
+    at depth_noise.conservative.demote_to. Points unchanged. Sets x['dn_gate']."""
+    D = P.get("depth_noise") or {}
+    w = D.get("conservative") or {"min_multi_caller_fraction": 0.5, "demote_to": "Tier2"}
+    classes = D.get("cn_classes") or ()
+    top = max(P["tiers"], key=lambda t: t["min"])["name"]
+    for x in loci:
+        x["cn_derived"] = sc.is_cn_derived(x["row"], classes)
+        x["dn_gate"] = "not_applied"
+        if dn["state"] != "high" or not x["cn_derived"]:
+            continue
+        if x["tier"] != top:
+            x["dn_gate"] = "flagged: copy-number-derived locus in a noisy-depth sample"
+            continue
+        n = len(x["kept"])
+        frac = x["n_multi"] / n if n else 0.0
+        why = f"{x['n_multi']}/{n} junctions with >= 2 callers"
+        if n and frac > float(w["min_multi_caller_fraction"]):
+            x["dn_gate"] = "kept: " + why
+        else:
+            x["dn_gate"] = "demoted: " + why + "; depth noise high"
+            x["tier"] = w.get("demote_to", "Tier2")
 
 
 def apply_library_qc_gate(loci, qc, P):
@@ -410,7 +473,7 @@ def apply_library_qc_gate(loci, qc, P):
         x["tier_before_qc"] = x["tier"]
         if not on or x["tier"] != top:
             continue
-        multi = sum(1 for j in x["kept"] if j.supp_vec.count("1") >= 2)
+        multi = x["n_multi"] if "n_multi" in x else sum(1 for j in x["kept"] if j.supp_vec.count("1") >= 2)
         changed = sum(1 for s in x["segs"] if s[6]) if x["segs"] else 0
         keep, why = sc.library_qc_gate(multi, len(x["kept"]), changed, LQ["conservative"])
         x["qc_gate"] = ("kept: " if keep else "demoted: ") + why
@@ -493,8 +556,10 @@ def cn_track_line(path):
     with open(path) as fh:
         s = json.load(fh)
     return [f"- copy-number track: PoN stratum {s.get('stratum', 'NA')} ({s.get('stratum_source', 'NA')}; "
-            f"{s.get('pon_genomes', 'NA')} genomes), sex {s.get('sex', 'NA')} (chrX ratio {s.get('x_ratio', 'NA')}), "
-            f"masked fraction {s.get('masked_fraction', 'NA')}, segments {s.get('segments', 'NA')}"]
+            f"{s.get('pon_genomes', 'NA')} genomes), sex {s.get('sex', 'NA')} (call {s.get('sex_call', 'NA')}; "
+            f"chrX ratio {s.get('x_ratio', 'NA')}, chrY ratio {s.get('y_ratio', 'NA')}), "
+            f"CN sigma {s.get('sigma', 'NA')}, masked fraction {s.get('masked_fraction', 'NA')}, "
+            f"segments {s.get('segments', 'NA')}"]
 
 
 def cn_only_report(path):
@@ -516,7 +581,7 @@ def cn_only_report(path):
     return summary, S
 
 
-def write_outputs(a, P, loci, cat_names, sex_note, with_literature=False, qc=None):
+def write_outputs(a, P, loci, cat_names, SX, with_literature=False, qc=None, dn=None):
     base = ["Rank", "Locus_ID", "Chr", "Start", "End", "Size", "Cmplx_Class", "SV_Types", "CxSV_Criteria",
             "Complexity_Tier", "N_Junctions", "N_Breakends", "Max_Interleaved", "Panel_Status", "Panel_Carriers",
             "Panel_Callable", "Panel_Individuals", "Catalogues_Containing", "Catalogue_Max_AF"]
@@ -524,6 +589,8 @@ def write_outputs(a, P, loci, cat_names, sex_note, with_literature=False, qc=Non
     cols = base + cats + (list(LIT_COLS) if with_literature else []) + \
         ["Genes_Affected", "Total_Score", "Tier", "Library_QC_Gate", "Chromothripsis_Points", "Top_Features"]
     cols += [f"{n}_{k}" for n in sc.FEATURE_ORDER for k in ("value", "points")]
+    # appended last (roadmap item 16): readers select columns by name
+    cols += ["Score_Tier", "Tier_Ceiling", "Depth_Noise_Gate", "CN_Derived"]
     with open(a.out_tsv, "w", newline="") as fh, open(a.out_features, "w", newline="") as ff:
         w = csv.writer(fh, delimiter="\t", lineterminator="\n")
         wf = csv.writer(ff, delimiter="\t", lineterminator="\n")
@@ -544,6 +611,10 @@ def write_outputs(a, P, loci, cat_names, sex_note, with_literature=False, qc=Non
             out["Library_QC_Gate"] = x.get("qc_gate", "not_applied")
             out["Chromothripsis_Points"] = f"{x['ct']:.2f}"
             out["Top_Features"] = top3(x["feats"])
+            out["Score_Tier"] = x.get("score_tier", x["tier"])
+            out["Tier_Ceiling"] = x.get("ceiling_note") or "not_applied"
+            out["Depth_Noise_Gate"] = x.get("dn_gate", "not_applied")
+            out["CN_Derived"] = "yes" if x.get("cn_derived") else "no"
             for n in sc.FEATURE_ORDER:
                 out[f"{n}_value"] = fm[n].value
                 out[f"{n}_points"] = f"{fm[n].points:.2f}"
@@ -551,7 +622,7 @@ def write_outputs(a, P, loci, cat_names, sex_note, with_literature=False, qc=Non
             for n in sc.FEATURE_ORDER:
                 f = fm[n]
                 wf.writerow([x["L"], rank, f.name, f.group, f.value, f"{f.points:.2f}", f.rule])
-    write_report(a, P, loci, sex_note, qc or {})
+    write_report(a, P, loci, SX, qc or {}, dn)
 
 
 def panel_release_line(P):
@@ -564,7 +635,43 @@ def panel_release_line(P):
             f"{P['panel_match']['tolerance']} bp, min junction fraction {P['panel_match']['min_junction_fraction']}")
 
 
-def write_report(a, P, loci, sex_note, qc=None):
+def sample_qc_section(SX, dn, loci, P):
+    """'Sample QC and sex check' lines of the score report (roadmap items 16c, 16e, 16f)."""
+    S = ["\n## Sample QC and sex check\n"]
+    S.append(f"- sex_call {SX['sex_call']}, x_ratio {sc.fnum(SX['x_ratio'], 4)}, y_ratio {sc.fnum(SX['y_ratio'], 4)} "
+             f"(copy-number track, cn/stats.json); ploidy for copy number: {SX['sex']} ({SX['source']}); "
+             f"sample-sheet sex: {SX['given'] or 'not given'}")
+    if SX["ambiguous"]:
+        S.append(f"  - **Sex-chromosome check: {SX['sex_call']} — {sc.AMBIGUOUS_SEX_FLAG}.**")
+    if SX["discordant"]:
+        S.append(f"  - **Sample-sheet sex {SX['given']} disagrees with the read-depth sex call {SX['sex_call']}: "
+                 "check sample identity.**")
+    if SX["sex_call"] == "NA":
+        S.append("  - No copy-number sex call: chrX/chrY copy number uses the ploidy above.")
+    dn = dn or {"state": "off", "text": "depth-noise gate not configured"}
+    if dn["state"] == "high":
+        cn = [x for x in loci if x.get("cn_derived")]
+        dem = sum(1 for x in cn if str(x.get("dn_gate", "")).startswith("demoted"))
+        kept = sum(1 for x in cn if str(x.get("dn_gate", "")).startswith("kept"))
+        w = (P.get("depth_noise") or {}).get("conservative") or {}
+        S.append(f"- **{dn['text']}.**")
+        S.append(f"  - Conservative mode for copy-number-derived loci ({len(cn)} in this sample): a Tier-1 locus needs "
+                 f"more than {w.get('min_multi_caller_fraction', 0.5)} of its junctions called by >= 2 callers, "
+                 f"otherwise it is reported as {w.get('demote_to', 'Tier2')} (points unchanged): {dem} demoted, "
+                 f"{kept} kept. Copy-number-only candidates are unreliable.")
+    else:
+        S.append(f"- {dn['text']}")
+    capped = [x for x in loci if x.get("ceiling")]
+    cfg = ceiling_config(P) or {}
+    if cfg:
+        S.append("- tier ceiling by panel status: " + ", ".join(f"{k} at most {sc.tier_label(v)}" for k, v in cfg.items())
+                 + f"; {len(capped)} locus/loci capped")
+    S.append("")
+    return S
+
+
+def write_report(a, P, loci, SX, qc=None, dn=None):
+    sex_note = SX["note"] if isinstance(SX, dict) else str(SX)
     L = []
     L.append(f"# CxSV score report: {a.sample}\n")
     L.append("Explicit points system modelled on ACMG/ClinGen CNV scoring plus computed chromothripsis "
@@ -572,6 +679,10 @@ def write_report(a, P, loci, sex_note, qc=None):
              "cohort-specific choice, not a validated cutoff.** This report is research output for review by "
              "qualified clinical scientists; it is not a diagnosis.\n")
     L.append(f"- loci scored: {len(loci)}; {sex_note}")
+    if isinstance(SX, dict) and SX["ambiguous"]:
+        L.append(f"- **sex-chromosome check ambiguous: {sc.AMBIGUOUS_SEX_FLAG}**")
+    if dn and dn["state"] == "high":
+        L.append(f"- **{dn['text']}**")
     L.append(panel_release_line(P))
     vers = resource_versions(P.get("scoring_resources", {}).get("manifest"))
     if vers:
@@ -590,6 +701,8 @@ def write_report(a, P, loci, sex_note, qc=None):
     L.extend(cn_track_line(getattr(a, "cn_stats", None)))
     L.extend(cn_summary)
     L.append("- tiers: " + ", ".join(f"{t['name']} {tiers[t['name']]}" for t in P["tiers"]) + "\n")
+    if isinstance(SX, dict):
+        L.extend(sample_qc_section(SX, dn, loci, P))
     L.extend(qc_section)
     L.append("## Ranking\n")
     L.append("| Rank | Locus | Class | Panel | Genes | Total | Tier | Top contributions |")
@@ -598,12 +711,16 @@ def write_report(a, P, loci, sex_note, qc=None):
         g = ",".join(sorted(x["affected"])) or "-"
         L.append(f"| {x['rank']} | {x['L']} | {x['row']['Cmplx_Class']} | {x['row']['Panel_Status']} "
                  f"({x['row']['Panel_Carriers']}/{x['row']['Panel_Individuals']}) | {g} | {x['total']:.2f} | "
-                 f"{x['tier']} | {top3(x['feats'])} |")
+                 f"{x['tier']}{' (capped)' if x.get('ceiling') else ''} | {top3(x['feats'])} |")
     for x in loci:
         r = x["row"]
         L.append(f"\n## {x['rank']}. {x['L']}: {r['Cmplx_Class']}, total {x['total']:.2f} ({x['tier']})\n")
+        if x.get("ceiling"):
+            L.append(f"- {x['ceiling_note']}")
         if x.get("qc_gate", "not_applied") != "not_applied":
             L.append(f"- library QC gate: {x['qc_gate']}")
+        if x.get("dn_gate", "not_applied") != "not_applied":
+            L.append(f"- depth-noise gate: {x['dn_gate']}")
         L.append(f"- junctions {r.get('N_Junctions', 'NA')} ({len(x['comp'])} composite records not counted), "
                  f"breakends {r.get('N_Breakends', 'NA')} ({r.get('Complexity_Tier', 'NA')}), "
                  f"types {r.get('SV_Types', 'NA')}, criteria {r.get('CxSV_Criteria', 'NA')}")
@@ -621,6 +738,8 @@ def write_report(a, P, loci, sex_note, qc=None):
         for f in x["feats"]:
             L.append(f"| {f.name} | {str(f.value).replace('|', '/')} | {f.points:+.2f} | {f.rule} |")
         L.append(f"| **total** | | **{x['total']:+.2f}** | chromothripsis points {x['ct']:+.2f} |")
+    if cn_section and dn and dn["state"] == "high":
+        cn_section.insert(1, f"**{dn['text']}.** The candidates below are unreliable.\n")
     L.extend(cn_section)
     with open(a.out_report, "w") as fh:
         fh.write("\n".join(L) + "\n")

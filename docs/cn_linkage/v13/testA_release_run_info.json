@@ -1,0 +1,29 @@
+{
+ "release_id": "cxsv-panel-20261108-fdac9ff80401",
+ "release": "/mnt/sargasso1/CxSV/build/panel-v1.2-r2/results/panel/release",
+ "repo": "/home/minknow/scratch/v13/cn-fixes",
+ "donors": {
+  "male": {
+   "key": "1kGP_LRSC_ONT_CHM13/HG02026",
+   "individual": "HG02026",
+   "stratum": "ONT_LRSC_R10",
+   "in_pon": "yes",
+   "sex_call": "male",
+   "depth": "/mnt/sargasso1/CxSV/build/cn_depth_v1/1kGP_LRSC_ONT_CHM13/HG02026/depth.regions.bed.gz"
+  },
+  "female": {
+   "key": "1kGP_LRSC_ONT_CHM13/HG02181",
+   "individual": "HG02181",
+   "stratum": "ONT_LRSC_R10",
+   "in_pon": "yes",
+   "sex_call": "female",
+   "depth": "/mnt/sargasso1/CxSV/build/cn_depth_v1/1kGP_LRSC_ONT_CHM13/HG02181/depth.regions.bed.gz"
+  }
+ },
+ "variants": [
+  "v13",
+  "v12rule"
+ ],
+ "cn_set": [],
+ "events": 63
+}

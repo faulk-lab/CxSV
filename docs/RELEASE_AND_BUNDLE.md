@@ -194,7 +194,12 @@ CE and Apptainer.
   `micromamba create -p /opt/cxsv --file envs/cxsv-pipeline.explicit.txt`.
   That is the explicit package list (URL + MD5 per package) of the freya env
   that built the panels. No solver runs, so the image holds exactly those
-  package files.
+  package files. From panel-v1.3 the image also gets the hash-pinned PyPI wheels of
+  `envs/cxsv-pipeline.pip.txt` (`pip install --no-deps --require-hashes`): python-docx,
+  reportlab, lxml and chardet for the clinician report (roadmap item 16l). They cannot be
+  added from conda-forge to the frozen env (pandas 3.1.0 constrains lxml >= 6, which needs
+  libzlib >= 1.3.1; k8 pins libzlib < 1.3), and the manylinux lxml wheel bundles its own
+  libraries. `scripts/make_bundle.sh` keys the image on the pip lock too.
 - **Runtime settings:** no entrypoint, tools on `PATH`, `LC_ALL=C.UTF-8`, no
   bytecode writes. `CXSV_IMAGE` and `CXSV_ENV_LOCK_SHA256` are recorded by the
   workflows.
@@ -208,7 +213,9 @@ The three env files must agree, and `tests/unit/test_env_lock.py` checks it:
 
 - `envs/cxsv-pipeline.yaml`: the pins;
 - `envs/cxsv-pipeline.lock.yaml`: the solved versions;
-- `envs/cxsv-pipeline.explicit.txt`: the package files.
+- `envs/cxsv-pipeline.explicit.txt`: the package files;
+- `envs/cxsv-pipeline.pip.txt` (panel-v1.3): the hash-pinned PyPI wheels, which must equal
+  the `pip:` section of the yaml.
 
 They had drifted: the committed lock predated a 2026-10-28 11:15
 `mamba install minimap2=2.24 numpy` that re-solved the env (Python

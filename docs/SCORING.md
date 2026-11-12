@@ -66,7 +66,7 @@ Positive points weigh towards pathogenic. Totals are sums. Every weight is in
 | genes | `no_genes` | no gene broken, lost or gained, and no exon: −0.60 | ClinGen 1B |
 | event | `complexity_class` | Chromothripsis_like +0.30, DEL+DUP+INV +0.20, BND_cluster +0.15, DEL+INV / DUP+INV / INS+DEL / Complex_inversion / Multi_breakpoint_cluster / Nested_SV +0.10, other +0.05 | |
 | event | `size` | locus span ≥ 100 kb +0.05, ≥ 1 Mb +0.15 | |
-| evidence | `caller_agreement` | ≥ 50% of junctions with ≥ 2 callers (SUPP_VEC) +0.10; all single-caller −0.10 | |
+| evidence | `caller_agreement` | ≥ 50% of junctions with ≥ 2 callers +0.10; all single-caller −0.10. Callers agree on a junction when their breakends match within the matching tolerance (500 bp), whatever SV type each gave (panel-v1.3, section 6e) | |
 | evidence | `read_support` | a junction with < 5 supporting reads (max over the callers' SUPPORT / RE) −0.15 | |
 | evidence | `artefact_context` | −0.30 × fraction of breakends (± 50 bp) in segmental duplications − 0.15 × fraction in simple repeats / low complexity / satellites (rebuilt per-element RepeatMasker) | artefact penalty |
 | chromothripsis | `ct_interleaving` | largest interleaved junction component ≥ 3 +0.20, ≥ 6 +0.30 | PI criterion 1 |
@@ -532,6 +532,60 @@ fingerprint.
   test release, and the sha256 of its `release_manifest.tsv`.
 - **Effect.** On the 24 flagged panel genomes, Tier 1 went from 168 to 55. Every
   positive-control event stays Tier 1 with the mode forced on.
+
+## 6e. panel-v1.3 scoring and report changes (roadmap item 16 c, e, f, h, l)
+
+Not fingerprinted: re-scoring and a LOFO rerun, no panel rebuild (docs/PLAN_panel_v1.3.md).
+
+- **Tier ceiling for public loci (16e, PI decision D1).** `tier_ceiling_by_status:
+  {public: Tier2}` in `config/scoring.yaml`. The tier from the points is computed
+  first (`Score_Tier`); a locus whose panel status is `public` is then reported at
+  most as Tier 2. The points are unchanged. The report and the `Tier_Ceiling` column
+  say "capped at Tier 2: seen in N healthy panel individuals". Motivating case:
+  BOC_2057 chr11:1,465,980–1,509,727 (*BRSK2*), 65/1,582 carriers, 1.06 points. A
+  `scoring_params.json` without the key (older runs, calibration scripts) gets the
+  same default (`score_cxsv.DEFAULT_TIER_CEILING`); `{}` switches it off.
+- **Type-agnostic caller agreement (16h).** SURVIVOR merges records of one SV type,
+  so one deletion called DEL by Sniffles2 and INV/BND by SVIM became two
+  single-caller junctions (BOC_4433 *NF1*: 0/2, −0.10). Now each kept junction is
+  supported by its own callers plus those of every junction of the locus (composite
+  records included) whose two breakends lie within `caller_agreement.tolerance_bp`
+  (null = `panel_match.tolerance`, 500 bp) of its two breakends, in either order
+  (`cxsv_scoring.junction_callers`). The library-QC conservative gate counts
+  multi-caller junctions the same way.
+- **One sex source (16c).** The flank-depth `infer_sex` (0.75 / 0.85) is removed.
+  Ploidy for locus copy number is the copy-number track's ploidy sex
+  (`cn/stats.json` `sex`, from `cxsv_cn.call_sex`); the sample-sheet sex is reported
+  and compared, and used only when a run has no copy-number track. The score report
+  has a section "Sample QC and sex check" with `sex_call`, `x_ratio`, `y_ratio`; an
+  ambiguous call prints "possible sex-chromosome aneuploidy or mosaicism; chrX/chrY
+  copy-number calls unreliable", and a sheet sex that disagrees with a male/female
+  call is flagged.
+- **Depth-noise gate (16f, PI decision D3).** `depth_noise` in `config/scoring.yaml`:
+  the CN segmentation sigma of the sample (`cn/stats.json` `sigma`) against a
+  per-PoN-stratum threshold `sigma_max[stratum]`. Above it the report prints
+  "Depth noise high: copy-number-derived calls unreliable", and a Tier-1 locus built
+  or classed by the copy-number track (`CxSV_Criteria` `CN_linked;…` or a class in
+  `cn_classes`) stays Tier 1 only with more than half of its junctions multi-caller
+  (read depth does not count as support); otherwise it is reported as Tier 2 with its
+  points unchanged (`Depth_Noise_Gate` column). The thresholds are **placeholders
+  (null = not calibrated, gate inactive, the report says so)** until the panel-v1.3
+  design check sets them from the panel distribution per stratum.
+- **New score columns** (appended after the feature columns): `Score_Tier`,
+  `Tier_Ceiling`, `Depth_Noise_Gate`, `CN_Derived`. Order of the tier decisions:
+  points → ceiling → library-QC gate → depth-noise gate.
+- **Clinician report (16l).** Rule `clinician_report` (workflow/rules/clinician_report.smk)
+  writes `report/<sample>.clinician_report.{docx,pdf}` and the Tier 1 points graphic
+  `report/<sample>.tier1_points.png` from the run's outputs only
+  (`workflow/scripts/clinician_report.py`, `workflow/lib/cxsv_report_figure.py`; prose
+  in `config/clinician_report.yaml`). Sections: header (bundle, panel release,
+  fingerprint), result box, sample quality (coverage, read length, library QC, sex
+  check, depth noise, panel compatibility), every Tier 1 locus in full with every
+  non-zero feature, the Tier 1 points graphic (manuscript Figure 3c/3d style; at most
+  `figure_max_rows` loci, a note when there is none), a Tier 2 table, Tier 3 /
+  likely-benign counts, what the tiers mean, limitations and the research-use footer.
+  It needs python-docx and reportlab, which come from PyPI with hashes
+  (`envs/cxsv-pipeline.pip.txt`): **the container image changes in panel-v1.3**.
 
 ## 7. Known limitations and open findings
 

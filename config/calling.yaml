@@ -225,6 +225,14 @@ cn_params:
     min_cn_record_bp: 10000
     rec_overlap: 0.5
     public_overlap: 0.5
-    public_min_genomes: 1
+    public_min_genomes: 1              # autosomes: other individuals carrying the segment
+    # chrX / chrY (panel-v1.3 D2): >= 2 sex-matched individuals, and an individual whose
+    # libraries disagree on sex (different sex_call, or chrX / chrY ratio difference above
+    # these tolerances) counts for no one there. Panel-v1.2-r2 libraries: 35 individuals have
+    # > 1 library; chrX ratio difference p99 0.135, max 0.146; chrY max 0.046; flagged at
+    # 0.10: NA19238 (ambiguous 1.171 vs female 1.024) and HG03499 (0.856 vs 0.970).
+    public_min_genomes_sexchrom: 2
+    sexchrom_discordance_x: 0.10
+    sexchrom_discordance_y: 0.10
     adjacent_bp: 20000
     inv_other_slack: 100000

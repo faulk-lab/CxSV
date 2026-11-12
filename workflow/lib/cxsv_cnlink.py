@@ -25,9 +25,24 @@ svim_lowq).
                       orientation-changing junction, or >= 2 junctions); a single gain or
                       loss explained by one DUP / DEL is a simple CNV, not a locus;
                       candidates with no attached junction are CN-only (reported, no locus)
-  cn_public           segment-level panel frequency (chrX / chrY: same-sex genomes only): every abnormal segment of the
+  cn_public           segment-level panel frequency: every abnormal segment of the
                       candidate seen (same direction, reciprocal overlap >= 0.5) in at
-                      least one genome of another family -> dropped as public
+                      least public_min_genomes (autosomes, 1) or public_min_genomes_sexchrom
+                      (chrX / chrY, 2; panel-v1.3 D2) other individuals -> dropped as public.
+                      Counts are distinct individuals. On chrX / chrY only individuals of the
+                      sample's sex call count, and libraries excluded by sexchrom_discordant
+                      count for no one.
+  locus_span          a "locus" candidate becomes one CxSV locus per contig that carries
+                      one of its segments: Start-End = the union of those segments and the
+                      attached breakends on that contig (panel-v1.3 item g). Breakends on a
+                      contig without a segment (a translocation's mate) stay records of the
+                      locus but make no locus of their own; check_locus rejects a zero-length,
+                      off-contig or out-of-segment locus.
+  sexchrom_discordant an individual with > 1 panel library whose libraries disagree on
+                      sex (different sex_call, or chrX / chrY ratios differing by more than
+                      sexchrom_discordance_x / _y): all its libraries are left out of
+                      chrX / chrY public counting (panel-v1.3 D2; NA19238: LRSC chrX 1.17 vs
+                      ONT-1019 1.02). Recorded in pon_members.tsv (sexchrom_public).
 """
 import re
 from collections import defaultdict
@@ -38,7 +53,11 @@ CN_DEFAULTS = dict(
     min_cn_record_bp=10_000,  # DEL/DUP shorter than this are not CN records
     rec_overlap=0.5,          # DEL/DUP vs loss/gain segment, reciprocal
     public_overlap=0.5,       # segment vs another genome's segment, reciprocal
-    public_min_genomes=1,     # other-family genomes needed to call a segment public
+    public_min_genomes=1,     # other individuals needed to call an autosomal segment public
+    public_min_genomes_sexchrom=2,   # ... a chrX / chrY segment (sex-matched; panel-v1.3 D2)
+    sexchrom_discordance_x=0.10,     # chrX ratio difference between two libraries of one
+                                     # individual above which both leave chrX/chrY counting
+    sexchrom_discordance_y=0.10,     # the same for the chrY ratio
     adjacent_bp=20_000,       # nested-gain adjacency
     span_link_max=500_000,    # long records (calling.yaml cxsv_params.span_link_max)
     inv_other_slack=100_000,  # INV with one end at a boundary: other end within the candidate
@@ -236,26 +255,129 @@ def is_complex(c):
 SEX_CHROMS = ("chrX", "chrY")
 
 
+def _ratio(v):
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return None
+    return v if v == v else None              # NaN -> None
+
+
+def sexchrom_discordant(libs, P=CN_DEFAULTS):
+    """{key: reason} of panel libraries left out of chrX / chrY public counting.
+
+    libs: iterable of dicts with key, individual_id, sex_call, x_ratio, y_ratio (the
+    columns of pon_members.tsv). An individual with more than one library is discordant
+    when two of its libraries have different sex calls, or chrX ratios differing by more
+    than sexchrom_discordance_x, or chrY ratios by more than sexchrom_discordance_y (a
+    missing ratio is not compared). Then every library of that individual is excluded:
+    which one is wrong cannot be told from depth alone."""
+    by = defaultdict(list)
+    for r in libs:
+        by[str(r["individual_id"])].append(r)
+    out = {}
+    for ind, rs in sorted(by.items()):
+        if len(rs) < 2:
+            continue
+        why = []
+        for i, a in enumerate(rs):
+            for b in rs[i + 1:]:
+                ka, kb = a["key"], b["key"]
+                ca, cb = (a.get("sex_call") or "").strip(), (b.get("sex_call") or "").strip()
+                if ca != cb:
+                    why.append(f"sex call {ca} ({ka}) vs {cb} ({kb})")
+                for ax, tol in (("x", P["sexchrom_discordance_x"]), ("y", P["sexchrom_discordance_y"])):
+                    va, vb = _ratio(a.get(f"{ax}_ratio")), _ratio(b.get(f"{ax}_ratio"))
+                    if va is not None and vb is not None and abs(va - vb) > tol:
+                        why.append(f"chr{ax.upper()} ratio {va:.3f} ({ka}) vs {vb:.3f} ({kb}), "
+                                   f"|diff| {abs(va - vb):.3f} > {tol}")
+        if why:
+            reason = "discordant libraries of " + ind + ": " + "; ".join(why)
+            for r in rs:
+                out[r["key"]] = reason
+    return out
+
+
+def min_genomes(chrom, P=CN_DEFAULTS):
+    """Other individuals needed to call a segment on `chrom` public."""
+    if chrom in SEX_CHROMS:
+        return P.get("public_min_genomes_sexchrom", P["public_min_genomes"])
+    return P["public_min_genomes"]
+
+
 def cn_public(c, others, P=CN_DEFAULTS, sex=None):
-    """(public?, per-segment counts of other-family genomes carrying it).
-    others: list of (genome, family, [segments]) or (genome, family, [segments], sex_call)
-    of the reference genomes. A segment on chrX / chrY is compared only with genomes of
-    the same sex call as `sex` (the sample's ploidy sex; panel-v1.2-r2: sex-matched
-    counting); genomes with another or an ambiguous call do not count there. Autosomal
-    segments: every genome. sex None (or others without a sex): no sex matching."""
+    """(public?, per-segment counts of other individuals carrying it).
+    others: list of (genome, individual, [segments]), (..., sex_call) or
+    (..., sex_call, sexchrom_ok) of the reference libraries. Counts are distinct
+    individuals (two libraries of one individual count once). A segment on chrX / chrY is
+    compared only with libraries of the same sex call as `sex` (the sample's ploidy sex;
+    panel-v1.2-r2) and never with a library whose sexchrom_ok is False (sexchrom_discordant;
+    panel-v1.3 D2); it is public at >= public_min_genomes_sexchrom individuals, an
+    autosomal segment at >= public_min_genomes (every sex). sex None (or others without a
+    sex): no sex matching."""
     counts = []
     for s in c["segs"]:
         sign = s["state"] > s["ploidy"]
-        n = 0
+        sexchrom = s["chrom"] in SEX_CHROMS
+        inds = set()
         for o in others:
-            g, fam, ss = o[0], o[1], o[2]
-            if sex and s["chrom"] in SEX_CHROMS and len(o) > 3 and o[3] != sex:
+            g, ind, ss = o[0], o[1], o[2]
+            if sexchrom:
+                if sex and len(o) > 3 and o[3] != sex:
+                    continue
+                if len(o) > 4 and not o[4]:
+                    continue
+            if ind in inds:
                 continue
             if any(t["chrom"] == s["chrom"] and (t["state"] > t["ploidy"]) == sign
                    and _recip(s["start"], s["end"], t["start"], t["end"]) >= P["public_overlap"] for t in ss):
-                n += 1
-        counts.append(n)
-    return (all(n >= P["public_min_genomes"] for n in counts) if counts else False), counts
+                inds.add(ind)
+        counts.append(len(inds))
+    pub = all(n >= min_genomes(s["chrom"], P) for n, s in zip(counts, c["segs"])) if counts else False
+    return pub, counts
+
+
+def segment_contigs(c):
+    """Contigs carrying at least one abnormal segment of candidate c (in segment order)."""
+    out = []
+    for s in sorted(c["segs"], key=lambda s: (s["chrom"], s["start"])):
+        if s["chrom"] not in out:
+            out.append(s["chrom"])
+    return out
+
+
+def locus_span(c, chrom, rows=(), length=None):
+    """(start, end) of the copy-number locus of candidate c on `chrom`: the union of its
+    segments there and the breakend intervals `rows` ((start, end) of the records' BED
+    rows on that contig, vcf_to_bed.py). panel-v1.2 took the span from the rows alone, so
+    a loss whose only junction was a telomeric translocation end became chr17:0-2
+    (BOC_5883, 17p13.3). With `length` (the contig length) the end is clamped to it: segments
+    are built on 1 kb bins, so one that reaches the last, partial bin ends past the contig
+    (HG03667 chr2, design check panel-v1.3)."""
+    segs = [s for s in c["segs"] if s["chrom"] == chrom]
+    if not segs:
+        raise ValueError(f"candidate {c.get('id')} has no copy-number segment on {chrom}")
+    lo = min([s["start"] for s in segs] + [int(r[0]) for r in rows])
+    hi = max([s["end"] for s in segs] + [int(r[1]) for r in rows])
+    if length is not None:
+        hi = min(hi, int(length))
+    return max(0, lo), hi
+
+
+def check_locus(chrom, start, end, c, length=None):
+    """Raise ValueError unless chrom:start-end is a well-formed copy-number locus of
+    candidate c: end > start >= 0, inside the contig (length, when known), and overlapping
+    at least one of c's segments on chrom by >= 1 bp."""
+    start, end = int(start), int(end)
+    if start < 0 or end <= start:
+        raise ValueError(f"malformed copy-number locus {chrom}:{start}-{end} (zero or negative length)")
+    if length is not None and end > length:
+        raise ValueError(f"copy-number locus {chrom}:{start}-{end} extends past the contig end ({length})")
+    segs = [s for s in c["segs"] if s["chrom"] == chrom]
+    if not any(min(end, s["end"]) > max(start, s["start"]) for s in segs):
+        raise ValueError(f"copy-number locus {chrom}:{start}-{end} overlaps none of candidate "
+                         f"{c.get('id')}'s segments ({len(segs)} on {chrom})")
+    return start, end
 
 
 def long_record(r, P=CN_DEFAULTS):

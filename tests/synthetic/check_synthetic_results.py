@@ -147,6 +147,24 @@ def main(expected_json, patient_root, run, sample):
                                         and tier_rank[r["Tier"]] > tier_rank[x["Tier"]] for x in ref),
                       f"{name}: total {r['Total_Score']} ({r['Tier']}) below {want['tier_below']} "
                       f"({', '.join(x['Total_Score'] + ' ' + x['Tier'] for x in ref)})")
+    # panel-v1.3 (roadmap item 16): sample QC section of the score report, clinician report rule
+    md = (sdir / "scoring" / "cxsv_score_report.md").read_text()
+    check("## Sample QC and sex check" in md and "sex_call " in md and "x_ratio " in md,
+          "score report has the sample QC and sex check section")
+    rep = sdir / "report"
+    pdf, docx, png = (rep / f"{sample}.clinician_report.pdf", rep / f"{sample}.clinician_report.docx",
+                      rep / f"{sample}.tier1_points.png")
+    check(pdf.exists() and pdf.read_bytes()[:5] == b"%PDF-", f"clinician report PDF written ({pdf.name})")
+    import zipfile
+    ok = docx.exists() and zipfile.is_zipfile(docx) and "word/document.xml" in zipfile.ZipFile(docx).namelist()
+    check(ok, f"clinician report DOCX written ({docx.name})")
+    if ok:
+        xml = zipfile.ZipFile(docx).read("word/document.xml").decode("utf-8", "replace")
+        n1 = sum(1 for r in scores if r["Tier"] == "Tier1_high_priority")
+        check("Sample quality" in xml and "What the tiers mean" in xml and "Sex-chromosome check" in xml
+              and (n1 == 0 or "word/media/" in " ".join(zipfile.ZipFile(docx).namelist())),
+              f"clinician report has its sections and, with {n1} Tier 1 loci, the Tier 1 points graphic")
+    check(png.exists() and png.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n", f"Tier 1 points graphic written ({png.name})")
     chk = (sdir / "private" / "catalogue_check.tsv").read_text()
     check("VERIFIED" in chk and "MISMATCH" not in chk, "catalogue table verified against its manifest")
 

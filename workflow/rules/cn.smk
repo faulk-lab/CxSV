@@ -13,7 +13,8 @@
 #   panel_cn_pon        panel: {P}/cn/pon/<stratum>.npz from every panel library not
 #                       in cn_params.pon_exclude (library-QC flags), + pon_members.tsv;
 #                       chrX one reference per sex call, chrY males only (ambiguous
-#                       sex calls: autosomes only; lib/cxsv_cn.classify_sex)
+#                       sex calls: autosomes only; lib/cxsv_cn.classify_sex); the
+#                       members table marks sex-discordant libraries (sexchrom_public)
 #   cn_segment          per sample: {S}/cn/segments.tsv, stats.json against the PoN of
 #                       its stratum (panel: {P}/cn/pon; patient: the release's cn/pon)
 #   panel_cn_segments   panel: {P}/cn/panel_cn_segments.tsv (every library's segments;
@@ -178,6 +179,14 @@ def cn_panel_segments(wildcards=None):
     return f"{PANEL_RELEASE}/cn/panel_cn_segments.tsv"
 
 
+def cn_pon_members(wildcards=None):
+    """pon_members.tsv of the panel / release: its sexchrom_public column (or, for an older
+    release, its sex ratios) leaves sex-discordant libraries out of chrX/chrY public counting."""
+    if WORKFLOW_NAME == "panel":
+        return f"{RESULTS_ROOT}/panel/cn/pon/pon_members.tsv"
+    return f"{PANEL_RELEASE}/cn/pon/pon_members.tsv"
+
+
 if WORKFLOW_NAME == "panel":
     rule panel_cn_pon:
         """PoN per stratum from the panel libraries' depth (scripts/cn_pon.py)."""
@@ -228,7 +237,8 @@ if WORKFLOW_NAME == "panel":
     rule panel_cn_segments:
         """Every panel library's segments in one table (segment-level panel frequency). The
         sex column is the library's sex call (male / female / ambiguous): chrX / chrY
-        segments count only towards samples of the same sex (cxsv_cnlink.cn_public)."""
+        segments count only towards samples of the same sex (cxsv_cnlink.cn_public), and
+        not at all for the sex-discordant libraries of pon_members.tsv (sexchrom_public)."""
         input:
             segs  = per_sample(f"{S}/cn/segments.tsv"),
             stats = per_sample(f"{S}/cn/stats.json")
@@ -263,6 +273,7 @@ rule sample_cn_linkage:
         segs     = f"{S}/cn/segments.tsv",
         stats    = f"{S}/cn/stats.json",
         panel    = cn_panel_segments,
+        members  = cn_pon_members,
         params   = f"{RESULTS_ROOT}/cn_params.json",
         fai      = f"{REFERENCE}.fai",
         script   = f"{SCRIPTS}/cn_linkage.py",
@@ -281,7 +292,8 @@ rule sample_cn_linkage:
     shell:
         "python {input.script} --vcf {input.vcf} --clusters {input.clusters} --summary {input.summary} "
         "--cxsv-vcf {input.cxsv_vcf} --single {input.single} --segments {input.segs} "
-        "--panel-segments {input.panel} --individual {params.individual:q} --stats {input.stats} --fai {input.fai} "
+        "--panel-segments {input.panel} --pon-members {input.members} --individual {params.individual:q} "
+        "--stats {input.stats} --fai {input.fai} "
         "--calling {input.params} --scripts {SCRIPTS} --work {params.work} "
         "--out-clusters {output.clusters} --out-summary {output.summary} --out-vcf {output.cxsv_vcf} "
         "--out-candidates {output.candidates} --out-loci {output.loci} --out-cn-only {output.cn_only} 2> {log}"

@@ -282,9 +282,9 @@ bind of the literature set):
 
 - Done 2026-11-09: tag, finalise, tagged bundle, patient switch (section 10). Nothing deleted.
 - **For the PI:** deletion of the superseded bundles listed in section 10 (none deleted).
-- **Follow-ups:** ROADMAP item 16 (a)–(d). The `docs/PANEL_BUILD.md` "measured for
-  panel-v1.2" addition is still pending (it was blocked by a safety check); the facts are in
-  section 3.
+- **Follow-ups:** ROADMAP item 16 (a)–(d). The `docs/PANEL_BUILD.md` "Measured for
+  panel-v1.2" addition (blocked by a safety check on 2026-11-08) was added on 2026-11-12
+  (item 16 (o)).
 
 ## 9. Reproduce
 
