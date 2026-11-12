@@ -606,9 +606,9 @@ All on freya. Build record: [docs/panel_v1.2/README.md](panel_v1.2/README.md)
 
 | Step | Measured | Notes |
 |---|---|---|
-| Downstream-only rebuild, panel-v1.2-r2 (main 84d380e, 20 cores; release `cxsv-panel-20261108-fdac9ff80401`) | **17,143 s** (4.8 h) for the whole job; 17,089 s of it in `rebuild_downstream.sh` (17,835 jobs, one run, no resume) | the rest is the guard snapshots and the release verification; 58,646 upstream files (1,410.5 GB) hard-linked from panel-v1.1-r2; depth from `build/cn_depth_v1`; both guard compares 0 differences |
+| Downstream-only rebuild, panel-v1.2-r2 (main 84d380e, 20 cores; release `cxsv-panel-20261108-fdac9ff80401`) | **17,089 s** (4.7 h) in `rebuild_downstream.sh` (17,835 jobs, one run, no resume; `rebuild_commands.log`) | excludes the guard snapshots (a full `tree_snapshot.py` listing takes 1–2 h on the CIFS NAS) and the release verification, which were not timed; docs/PLAN_panel_v1.3.md quotes 17,143 s for this rebuild; 58,646 upstream files (1,410.5 GB) hard-linked from panel-v1.1-r2; depth from `build/cn_depth_v1`; both guard compares 0 differences |
 | Candidate build panel-v1.2 (main 73c4beb, root `build/panel-v1.2`) | stopped at 54 % (9,716 of 17,835 jobs) at HG01137; `--resume` finished in 10,735 s | below |
-| Full-panel LOFO (1,619 genomes, own family left out) | **9,737 s** for the candidate, locus callability computed in the run; 3,381 s for the r2 release (`panel_rates.sh`), reusing the panel-v1.1-r2 callability and depth calibration | stop rule ≤ 0.301 Tier 1 per genome: 0.198 |
+| Full-panel LOFO (1,619 genomes, own family left out) | **9,737 s** for the candidate, locus callability computed in the run (job record, quoted in docs/PLAN_panel_v1.3.md; not in the build record); 3,381 s for the r2 release (`panel_rates.sh`), reusing the panel-v1.1-r2 callability and depth calibration | stop rule ≤ 0.301 Tier 1 per genome: 0.198 |
 | Offline bundle validation (`tests/lab/validate_bundle.sh`, stand-in HG01868, 9 checks) | **8,413 s** (tagged bundle); 8,418 s (untagged) | the three full runs (Singularity, Docker, outside the bundle) take 2,555–2,783 s each |
 | Full-genome positive control (`tests/lab/pos_control_full_genome.sh`, E01–E13 + L01–L04, callers re-run, 12 cores) | **6,184 s** (tagged bundle); 6,205 s (untagged) | |
 
@@ -625,7 +625,7 @@ new mtimes. All 1,619 still match their recorded sha256, and the panel-v1.1-r2 t
 showed 0 differences. The r2 rebuild did not hit the problem because the files already
 carried the newer mtime. Fix: ROADMAP item 16 (a), copy instead of hard-link.
 
-For a panel-v1.3 downstream rebuild on freya these give about 4.8 h for the rebuild,
+For a panel-v1.3 downstream rebuild on freya these give about 4.7 h for the rebuild itself (plus 1–2 h per guard snapshot),
 0.9–2.7 h for the LOFO (reused or recomputed callability), 2.3 h for the bundle
 validation and 1.7 h for the positive control.
 
