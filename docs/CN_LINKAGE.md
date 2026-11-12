@@ -307,10 +307,13 @@ does not appear in the report. After every patient run, the analyst reads
   reference of its ploidy sex (`sex_ratio_male` 0.75) and is never counted for
   sex-matched panel frequency. A 45,X sample gets male ploidy and no chrX loss. An
   XXY sample gets female ploidy and its chrY is not segmented. Neither case is
-  reported as a finding.
-- `score_cxsv.py` infers sex separately from flank depth (`infer_sex`, cut-offs
-  0.75 / 0.85; a sample-sheet sex overrides it). That call can disagree with
-  `sex_call`. When the two disagree, `cn/stats.json` is the reference.
+  reported as a finding (from panel-v1.3 the reports print the flag).
+- From panel-v1.3 (roadmap item 16c) `score_cxsv.py` has no sex inference of its own:
+  locus copy number uses the ploidy sex of `cn/stats.json`, and the score report and
+  the clinician report print `sex_call`, `x_ratio`, `y_ratio` with the ambiguous-sex
+  flag. A sample-sheet sex is reported and compared with the call, not used for
+  ploidy (docs/SCORING.md section 6e). Before v1.3 the scorer used a flank-depth
+  `infer_sex` (0.75 / 0.85), overridden by the sample sheet, which could disagree.
 
 Panel evidence that this case is real: 18 of 1,619 panel libraries are ambiguous.
 Nine of them are registry females with a male-range chrX ratio (0.50-0.66) and

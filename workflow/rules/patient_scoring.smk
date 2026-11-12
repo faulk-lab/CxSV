@@ -182,6 +182,9 @@ rule scoring_params:
         body = {
             "weights": config["weights"], "tiers": config["tiers"], "copy_number": config["copy_number"],
             "clustering": config["clustering"], "foldback": config["foldback"],
+            # roadmap item 16e / 16f (panel-v1.3)
+            "tier_ceiling_by_status": config.get("tier_ceiling_by_status") or {},
+            "depth_noise": config.get("depth_noise") or {"enabled": False},
             "scoring_resources": scoring_resource_files(),
             "panel_match": {"tolerance": MATCH.get("tolerance", 500),
                             "ins_len_ratio": MATCH.get("ins_len_ratio", 0.5),

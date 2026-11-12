@@ -144,6 +144,8 @@ def scoring_params(cfg, release_meta, sex):
     m = pat.get("panel_match", {})
     return {"weights": sc["weights"], "tiers": sc["tiers"], "copy_number": sc["copy_number"],
             "clustering": sc["clustering"], "foldback": sc["foldback"],
+            "tier_ceiling_by_status": sc.get("tier_ceiling_by_status") or {},
+            "depth_noise": sc.get("depth_noise") or {"enabled": False},
             "scoring_resources": {k: v for k, v in sc["scoring_resources"].items() if v},
             "panel_match": {"tolerance": m.get("tolerance", 500), "ins_len_ratio": m.get("ins_len_ratio", 0.5),
                             "min_junction_fraction": m.get("min_junction_fraction", 0.75)},

@@ -25,6 +25,7 @@ Config (later files override earlier ones; nested keys merge):
     config/patient.yaml   patient runs, panel release, matching settings
     config/scoring.yaml   catalogues, scoring resources, weights, tiers, patient info
     config/library_qc.yaml  library QC calibration and conservative-mode switch (not fingerprinted)
+    config/clinician_report.yaml  prose of the clinician report (rule clinician_report; not fingerprinted)
     --configfile ...      site overlay: paths, patient sample sheet
 """
 
@@ -38,6 +39,7 @@ configfile: os.path.join(PROJECT_DIR, "config", "calling.yaml")
 configfile: os.path.join(PROJECT_DIR, "config", "patient.yaml")
 configfile: os.path.join(PROJECT_DIR, "config", "scoring.yaml")
 configfile: os.path.join(PROJECT_DIR, "config", "library_qc.yaml")
+configfile: os.path.join(PROJECT_DIR, "config", "clinician_report.yaml")
 
 WORKFLOW_NAME = "patient"
 COHORT_SPECS  = config.get("patient_runs") or {}
@@ -55,6 +57,7 @@ include: "../rules/caller_checks.smk"
 include: "../rules/library_qc.smk"
 include: "../rules/patient_private.smk"
 include: "../rules/patient_scoring.smk"
+include: "../rules/clinician_report.smk"
 
 
 rule all:
@@ -73,3 +76,5 @@ rule all:
         per_sample(f"{S}/private/cxsv_catalogue_hits.tsv"),
         per_sample(f"{S}/scoring/cxsv_scores.tsv"),
         per_sample(f"{S}/scoring/cxsv_score_report.md"),
+        per_sample(f"{S}/report/{{sample}}.clinician_report.docx"),
+        per_sample(f"{S}/report/{{sample}}.clinician_report.pdf"),

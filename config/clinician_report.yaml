@@ -1,0 +1,87 @@
+# =============================================================================
+# CxSV CLINICIAN REPORT — fixed text of the 2-page research report
+# (rule clinician_report, workflow/rules/clinician_report.smk; roadmap item 16l).
+# Loaded by workflow/patient/Snakefile. Not fingerprinted: reporting only.
+#
+# Every number in a report comes from the run's own outputs (scores, CN stats,
+# library QC, compatibility check, scoring params); this file holds only the prose:
+# what the tiers and the main features mean (manuscript tables 5 and 6, updated for
+# the panel-v1.3 rules), the limitations and the footer. Tier thresholds are read
+# from the run's scoring_params.json, never from here. Reports never state a diagnosis.
+# =============================================================================
+clinician_report:
+  specimen: "De-identified research sample"
+  test: "Long-read whole-genome complex structural variant (CxSV) screen"
+  reference: "T2T-CHM13v2 (hs1)"
+  footer: "Research report \u2014 not for clinical decision-making without confirmation in an accredited laboratory"
+  # Tier 1 points graphic: at most this many Tier 1 loci are drawn (highest total first)
+  figure_max_rows: 15
+
+  # Meaning of each tier (manuscript table 6)
+  tier_meaning:
+    Tier1_high_priority: >-
+      High-priority candidate for expert review: typically a private (or largely unmatched)
+      rearrangement that disrupts, deletes or duplicates a dosage-sensitive gene or region, with
+      technical and structural support. Warrants orthogonal confirmation (e.g. targeted
+      long-read sequencing, optical mapping, microarray or FISH), parental testing and phenotype
+      correlation before any diagnostic conclusion.
+    Tier2: >-
+      Possible candidate: some pathogenicity evidence (gene content, complexity) but partly
+      matched in the panel, weaker dosage evidence or technical caveats. A locus seen in
+      presumed-healthy panel individuals is reported at most as Tier 2, whatever its points.
+      Review if no Tier 1 finding explains the phenotype, or when the phenotype points to the
+      genes involved.
+    Tier3: >-
+      Low priority: event present but with little gene-dosage evidence, or offset by
+      population or artefact penalties. Retained for completeness and re-analysis.
+    Benign_likely: >-
+      Net evidence against relevance: usually present in healthy genomes, catalogued as
+      common, gene-free, or in artefact-prone sequence.
+  # Rules that change the reported tier without changing the points
+  tier_rules:
+    - >-
+      Population ceiling: a locus carried by presumed-healthy panel individuals (panel status
+      public) is never reported above Tier 2; the report says how many carry it.
+    - >-
+      Library QC conservative mode: in a library flagged for excess SVIM-only breakend calls
+      (relative to coverage-matched healthy genomes of the same platform), a Tier 1 locus needs more than half of its junctions called by at least two callers, or a
+      read-depth copy-number change; otherwise it is reported as Tier 2.
+    - >-
+      Depth-noise gate: when the read-depth profile is noisier than the panel threshold for the
+      platform, a copy-number-derived Tier 1 locus needs more than half of its junctions called by
+      at least two callers; otherwise it is reported as Tier 2. Copy-number-only candidates are
+      then unreliable.
+
+  # The main scoring features (manuscript table 5; points as in config/scoring.yaml)
+  features:
+    - [panel privacy, "private +0.30 x callable fraction; public -1.00 (partly matched: graded)",
+       "Whether the rearrangement exists in 1,582 presumed-healthy individuals sequenced and called identically"]
+    - [catalogue frequency, "AF >= 0.01: -1.00; AF >= 0.001: -0.50; contained: -0.25",
+       "Independent population evidence (CoLoRSdb, HGSVC3, HPRC, gnomAD-SV) that the event is polymorphic"]
+    - [gene dosage, "HI 3 gene deleted +1.00 / disrupted +0.90; TS 3 gene duplicated +1.00; LOEUF < 0.35 +0.30",
+       "A dosage-sensitive gene (ClinGen haploinsufficiency / triplosensitivity, or loss-of-function intolerant) is disrupted, deleted or duplicated"]
+    - [region dosage, "curated HI/TS 3 region lost/gained +1.00 (partial: scaled)",
+       "Overlap with recurrent genomic-disorder regions curated by ClinGen"]
+    - [exons, "+0.15", "Coding sequence is involved"]
+    - [no genes, "-0.60", "Gene-free events are rarely explanatory"]
+    - [complexity class, "+0.05 to +0.30", "Structural complexity; chromothripsis-like events weighted highest"]
+    - [caller agreement, ">= 50% of junctions with >= 2 callers: +0.10; all single-caller: -0.10",
+       "Technical confidence: callers agree when their breakends match, whatever SV type each reports"]
+    - [artefact context, "-0.30 x segdup fraction; -0.15 x low-complexity fraction",
+       "Breakends in segmental duplications or simple repeats are more often artefacts or polymorphisms"]
+    - [chromothripsis criteria, "breakpoint count, interleaving, copy-number oscillation, clustering: up to about +0.9",
+       "Pattern of a single catastrophic rearrangement rather than independent SVs"]
+
+  limitations:
+    - >-
+      Research use only. This is not a clinically validated test; all thresholds and weights are
+      operational choices that have not been validated against clinical outcomes.
+    - >-
+      Detection limits: complex events within segmental duplications or other repeats can be missed
+      or mis-scored; small events and low-level mosaicism may not be detected.
+    - >-
+      Population filtering assumes the background panel individuals are healthy; a variant present
+      in the panel is treated as likely benign.
+    - >-
+      Copy-number and sex-chromosome results come from read depth against a panel of normals; an
+      ambiguous sex-chromosome check or a noisy depth profile makes them unreliable (see Sample quality).
