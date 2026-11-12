@@ -229,10 +229,7 @@ def test_ploidy_sex_and_par():
     assert sc.ploidy("chrX", 1_000_000, "male", par) == 2        # PAR1
     assert sc.ploidy("chrX", 152_000_000, "female", par) == 2
     assert sc.ploidy("chrY", 10_000_000, "female", par) == 0
-    fl = [("chr1", 0, 10, 30.0), ("chr2", 0, 10, 31.0), ("chrX", 100_000_000, 100_000_010, 15.0)]
-    assert sc.infer_sex(fl, par)[0] == "male"
-    fl[-1] = ("chrX", 100_000_000, 100_000_010, 30.0)
-    assert sc.infer_sex(fl, par)[0] == "female"
+    assert not hasattr(sc, "infer_sex")      # removed in panel-v1.3 (item 16c): one sex source, the CN track
 
 
 def test_cn_segments_and_oscillation():

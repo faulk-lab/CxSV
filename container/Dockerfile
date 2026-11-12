@@ -1,7 +1,8 @@
 # =============================================================================
 # CxSV pipeline image: ONE image with every tool both workflows need, installed
 # package-for-package from envs/cxsv-pipeline.explicit.txt (conda package URLs
-# + MD5s of the env that built the panel). Runs under Docker, Singularity CE
+# + MD5s of the env that built the panel) plus envs/cxsv-pipeline.pip.txt (hash-pinned
+# PyPI wheels for the clinician report). Runs under Docker, Singularity CE
 # and Apptainer (no entrypoint, no daemon, any uid; tools on PATH).
 #
 # The image holds the environment only. The workflow code comes from the
@@ -25,10 +26,15 @@ ARG IMAGE_TAG=cxsv-pipeline
 
 USER root
 COPY envs/cxsv-pipeline.explicit.txt /opt/cxsv-env/cxsv-pipeline.explicit.txt
+COPY envs/cxsv-pipeline.pip.txt /opt/cxsv-env/cxsv-pipeline.pip.txt
 
 # Explicit install: exactly the listed package files (checked against their
-# MD5s), no solver. Then drop the package cache.
+# MD5s), no solver; then the hash-pinned PyPI wheels of envs/cxsv-pipeline.pip.txt
+# (clinician report: python-docx, reportlab), no dependency resolution. Then drop
+# the package cache.
 RUN micromamba create -y -p /opt/cxsv --file /opt/cxsv-env/cxsv-pipeline.explicit.txt \
+ && /opt/cxsv/bin/python -m pip install --no-deps --require-hashes --no-cache-dir --no-compile \
+        -r /opt/cxsv-env/cxsv-pipeline.pip.txt \
  && micromamba clean -a -y \
  && rm -rf /opt/conda/pkgs \
  && echo "$ENV_LOCK_SHA256  /opt/cxsv-env/cxsv-pipeline.explicit.txt" > /opt/cxsv-env/SHA256 \
@@ -56,6 +62,7 @@ LABEL org.opencontainers.image.title="cxsv-pipeline" \
 RUN snakemake --version && sniffles --version && cuteSV --version && svim --version \
  && samtools --version | head -1 && bcftools --version | head -1 && bedtools --version \
  && mosdepth --version && (SURVIVOR 2>&1 | grep -i version) && Rscript -e 'library(ggplot2)' >/dev/null \
+ && python -c 'import docx, reportlab, matplotlib' \
  && rm -rf /tmp/.cache /tmp/* && chmod 1777 /tmp
 
 WORKDIR /work

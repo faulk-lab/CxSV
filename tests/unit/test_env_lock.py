@@ -41,6 +41,8 @@ def test_yaml_pins_hold_in_the_lock():
     lock = lock_versions()
     deps = yaml.safe_load((ENVS / "cxsv-pipeline.yaml").read_text())["dependencies"]
     for d in deps:
+        if not isinstance(d, str):          # the pip: section (test below)
+            continue
         m = re.fullmatch(r"([\w.-]+)=([\w.]+)", d)
         if m:
             name, pin = m.groups()
@@ -51,3 +53,32 @@ def test_yaml_pins_hold_in_the_lock():
 def test_image_is_built_from_the_explicit_list():
     df = (REPO / "container" / "Dockerfile").read_text()
     assert "envs/cxsv-pipeline.explicit.txt" in df and re.search(r"^FROM \S+@sha256:[0-9a-f]{64}", df, re.M)
+    assert "envs/cxsv-pipeline.pip.txt" in df and "--require-hashes" in df and "--no-deps" in df
+
+
+def pip_lock():
+    """{name: (version, sha256)} of envs/cxsv-pipeline.pip.txt."""
+    text = (ENVS / "cxsv-pipeline.pip.txt").read_text().replace("\\\n", " ")
+    out = {}
+    for line in text.splitlines():
+        line = line.split("#", 1)[0].strip()
+        if line:
+            m = re.fullmatch(r"([\w.-]+)==([\w.]+)\s+--hash=sha256:([0-9a-f]{64})", line)
+            assert m, line
+            out[m.group(1).lower()] = (m.group(2), m.group(3))
+    return out
+
+
+def test_pip_section_matches_the_hashed_pip_lock():
+    """The clinician-report wheels (roadmap item 16l): yaml pip: pins == pip.txt pins, every
+    pip package hash-pinned, none of them also a conda package of the lock."""
+    deps = yaml.safe_load((ENVS / "cxsv-pipeline.yaml").read_text())["dependencies"]
+    pip_sec = [d["pip"] for d in deps if isinstance(d, dict) and "pip" in d]
+    assert len(pip_sec) == 1 and "pip" in deps
+    pins = dict(p.split("==", 1) for p in pip_sec[0])
+    lock = pip_lock()
+    assert {k.lower(): v for k, v in pins.items()} == {k: v for k, (v, _) in lock.items()}
+    assert {"python-docx", "reportlab", "lxml"} <= set(lock)
+    conda = lock_versions()
+    assert not set(lock) & {k.lower() for k in conda}, set(lock) & set(conda)
+    assert "pip" in conda
