@@ -1,0 +1,4 @@
+sample	locus	change	cls	status	score	criteria
+BOC_2057	chr11:1465980-1509727	lost	Chromothripsis_like	public	1.06	C1_min_breakpoints,C2_nested_SV,C5_chromoanagenesis_cluster
+pos_control	chrX:101752400-102492226	lost	CN_linked_gain	private	1.53	CN_linked;C1_min_breakpoints
+pos_control	chrX:101752400-102493000	gained	CN_linked_gain	private	1.53	CN_linked;C1_min_breakpoints

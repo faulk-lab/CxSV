@@ -1,0 +1,8 @@
+cohort	sample_id	locus	change	cls	status	score	criteria
+1kGP_LRSC_ONT_CHM13	HG00136	chr2:230331000-230521261	gained	DUP-TRP_INV-DUP	private	1.41	CN_linked;NONE
+1kGP_LRSC_ONT_CHM13	HG00136	chr2:230331120-230521261	lost	DUP-TRP_INV-DUP	private	1.41	CN_linked;NONE
+1kGP_LRSC_ONT_CHM13	HG04054	chr16:1000-131000	gained	CN_nested_gain	private	1.61	CN_linked;NONE
+1kGP_LRSC_ONT_CHM13	HG04054	chr16:58360-130866	lost	CN_nested_gain	private	1.56	CN_linked;NONE
+1kGP_ONT_1019_CHM13	HG00268	chrX:32547914-32645149	gained	DEL+INV	shared_junctions	1.14	C1_min_breakpoints,C4_CN_plus_orient,C5_chromoanagenesis_cluster
+1kGP_ONT_1019_CHM13	HG04015	chr13:42100142-42229231	gained	DEL+DUP+INV	private	1.05	C1_min_breakpoints,C2_nested_SV,C3_overlapping_types,C4_CN_plus_orient
+1kGP_PacBio_CHM13	HG00311	chr16:6666191-7204000	gained	CN_linked_loss	private	1.00	CN_linked;C3_overlapping_types,C4_CN_plus_orient

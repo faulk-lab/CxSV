@@ -1,0 +1,5 @@
+sample	gene	locus	version	Tier	Score_Tier	Total_Score	Panel_Status	Tier_Ceiling	caller_agreement	caller_points	Depth_Noise_Gate
+BOC_2057	BRSK2	chr11:1465980-1509727	before	Tier1_high_priority	Tier1_high_priority	1.06	public		6/9 junctions with >= 2 callers	0.10	
+BOC_2057	BRSK2	chr11:1465980-1509727	after	Tier2	Tier1_high_priority	1.06	public	capped at Tier 2: seen in 65 healthy panel individuals (panel status public; Tier 1 by points)	6/9 junctions with >= 2 callers (breakends within 500 bp, any SV type)	0.10	not_applied
+BOC_4433	NF1	chr17:31902782-32067453	before	Tier1_high_priority	Tier1_high_priority	1.46	private		0/2 junctions with >= 2 callers	-0.10	
+BOC_4433	NF1	chr17:31902782-32067453	after	Tier1_high_priority	Tier1_high_priority	1.66	private	not_applied	2/2 junctions with >= 2 callers (breakends within 500 bp, any SV type)	0.10	not_applied

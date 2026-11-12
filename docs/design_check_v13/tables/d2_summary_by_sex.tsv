@@ -1,0 +1,15 @@
+set	bound	sex_call	genomes	chrX_segments	chrX_public_v12	chrX_public_d2	chrY_segments	chrY_public_v12	chrY_public_d2	chrX_public_v12_per_genome	chrX_public_d2_per_genome
+positive_control	1.12	female	1	1	0	0	0	0	0	0.0	0.0
+positive_control	1.18	female	1	1	1	0	0	0	0	1.0	0.0
+positive_control	1.25	female	1	1	1	0	0	0	0	1.0	0.0
+subset	1.12	ambiguous	2	1	0	0	1	1	0	0.0	0.0
+subset	1.12	female	42	31	9	2	0	0	0	0.214	0.048
+subset	1.12	male	69	40	9	3	17	9	9	0.13	0.043
+subset	1.18	ambiguous	2	1	0	0	1	1	0	0.0	0.0
+subset	1.18	female	42	31	9	2	0	0	0	0.214	0.048
+subset	1.18	male	69	40	9	3	17	9	9	0.13	0.043
+subset	1.25	ambiguous	2	1	0	0	1	1	0	0.0	0.0
+subset	1.25	female	42	31	9	2	0	0	0	0.214	0.048
+subset	1.25	male	69	40	9	3	17	9	9	0.13	0.043
+test_genome	1.12	female	5	21	5	2	0	0	0	1.0	0.4
+test_genome	1.12	male	4	10	1	0	2	2	1	0.25	0.0
