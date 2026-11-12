@@ -4,6 +4,9 @@
 # networking disabled. Copied to the bundle root by scripts/make_bundle.sh;
 # everything it uses lives in the bundle directory it sits in.
 #
+#   ./run_cxsv.sh intake  --workdir DIR --config intake.yaml  [--bind PATH]... [--cores N]
+#                                          align uBAM/modBAM/FASTQ/other-aligner BAM or CRAM
+#                                          to hs1 with the panel recipe (docs/INTAKE.md)
 #   ./run_cxsv.sh patient --workdir DIR --config patient.yaml [--bind PATH]... [--cores N]
 #   ./run_cxsv.sh panel   --workdir DIR --config panel.yaml   [--bind PATH]... [--cores N]
 #   ./run_cxsv.sh verify-bundle            sha256 of every bundle file (MANIFEST.sha256)
@@ -17,6 +20,9 @@
 #   --bind PATH       a host directory with inputs (alignments, sample sheets),
 #                     mounted READ-ONLY at the same path; repeatable
 #   --cores N         snakemake --cores (default 16)
+#   --mem-mb N        memory snakemake may schedule, MB (default 90% of this host's
+#                     RAM); rules with a mem_mb request (SV callers, intake alignment)
+#                     never run together beyond it (docs/RELEASE_AND_BUNDLE.md)
 #   --runtime NAME    singularity | apptainer | docker (default: first found,
 #                     in that order)
 #   --dry-run         resolve the DAG only (snakemake -n)
@@ -41,13 +47,14 @@ source "$BUNDLE/bundle.env"          # CXSV_BUNDLE_ID CXSV_COMMIT CXSV_RELEASE_I
 usage() { awk 'NR >= 4 && /^# =====/ {exit} NR >= 4' "$0" | sed 's/^# \{0,1\}//'; }
 [ $# -ge 1 ] || { usage; exit 1; }
 CMD="$1"; shift
-WORKDIR=""; CONFIGS=(); BINDS=(); CORES=16; RUNTIME="${CXSV_RUNTIME:-}"; DRY=false; NETNS=true; EXTRA=()
+WORKDIR=""; CONFIGS=(); BINDS=(); CORES=16; MEM_MB=""; RUNTIME="${CXSV_RUNTIME:-}"; DRY=false; NETNS=true; EXTRA=()
 while [ $# -gt 0 ]; do
     case "$1" in
         --workdir) WORKDIR="$2"; shift 2 ;;
         --config)  CONFIGS+=("$2"); shift 2 ;;
         --bind)    BINDS+=("$(cd "$2" && pwd)"); shift 2 ;;
         --cores)   CORES="$2"; shift 2 ;;
+        --mem-mb)  MEM_MB="$2"; shift 2 ;;
         --runtime) RUNTIME="$2"; shift 2 ;;
         --dry-run|-n) DRY=true; shift ;;
         --no-netns) NETNS=false; shift ;;
@@ -69,7 +76,7 @@ fi
 [ -n "$RUNTIME" ] || { echo "no container runtime found (singularity, apptainer or docker)"; exit 1; }
 
 case "$CMD" in
-    patient|panel|shell)
+    intake|patient|panel|shell)
         [ -n "$WORKDIR" ] || { echo "--workdir is required"; exit 1; }
         mkdir -p "$WORKDIR/config" "$WORKDIR/.tmp"; WORKDIR="$(cd "$WORKDIR" && pwd)" ;;
     verify-release|netcheck) WORKDIR="$(mktemp -d)"; mkdir -p "$WORKDIR/.tmp"; trap 'rm -rf "$WORKDIR"' EXIT ;;
@@ -97,9 +104,11 @@ ENVS=(CXSV_BUNDLE_ID="$CXSV_BUNDLE_ID" CXSV_COMMIT="$CXSV_COMMIT" CXSV_IMAGE_ID=
       REF_PATH="$REF_CACHE_DIR/%2s/%2s/%s" REF_CACHE="$REF_CACHE_DIR/%2s/%2s/%s")
 
 case "$CMD" in
-    patient|panel)
+    intake|patient|panel)
+        # memory snakemake may schedule: 90% of this host's RAM unless --mem-mb is given
+        [ -n "$MEM_MB" ] || MEM_MB=$(awk '/^MemTotal:/ {printf "%d", $2 * 1024 / 1e6 * 0.9}' /proc/meminfo)
         INNER=(snakemake -s "/bundle/repo/workflow/$CMD/Snakefile" --directory /work --cores "$CORES"
-               --keep-going --printshellcmds --configfile "${CFG_IN[@]}")
+               --resources mem_mb="$MEM_MB" --keep-going --printshellcmds --configfile "${CFG_IN[@]}")
         $DRY && INNER+=(--dry-run)
         INNER+=("${EXTRA[@]}") ;;
     verify-release)

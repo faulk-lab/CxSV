@@ -283,7 +283,7 @@ the same `singularity exec` / `apptainer exec`, or
 |---|---|
 | `run_cxsv.sh` | entry point (section 5) |
 | `README.md` | run instructions, ids and checksums of this bundle |
-| `bundle.json`, `bundle.env` | bundle id, commit, release id, image id, SIF sha256, Docker-archive sha256, base image, sizes by component, build times |
+| `bundle.json`, `bundle.env` | bundle id, commit, release id, image id, SIF sha256, Docker-archive sha256, base image, sizes by component, build times; since panel-v1.3 (item 16n) also `source.git_tag` / `git_tag_object` / `git_tag_type` / `git_tags_at_commit` (the tag at the bundle commit; the release's tag when several), and `panel_release.git_tag`, `git_tag_object`, `finalised_utc`, `release_manifest_sha256`, `release_json_sha256` (`workflow/lib/cxsv_bundle_meta.py`; make_bundle.sh warns when the release is tagged but the bundle commit is not) |
 | `MANIFEST.sha256` | sha256 of every file (`sha256sum -c` format; covers `bundle.json`) |
 | `bundle_manifest.tsv` | the same with sizes and components |
 | `repo/` | the repository at the commit (`git archive`; `workflow/COMMIT` holds the hash) |
@@ -298,7 +298,8 @@ the same `singularity exec` / `apptainer exec`, or
 Nothing in the bundle refers to a path outside it. Inside the container the
 bundle is `/bundle` (read-only), the run directory is `/work`, and the input
 directories are mounted read-only at their own paths. The minimap2 index
-(`hs1.map-ont.k17.mmi`, 9 GB) is not included: patients arrive aligned.
+(`hs1.map-ont.k17.mmi`, 9 GB) is not included: `run_cxsv.sh intake` builds it in the
+work directory when patient reads need aligning (docs/INTAKE.md).
 
 ### Build
 
@@ -344,8 +345,10 @@ B=/path/to/cxsv-bundle-...
 $B/run_cxsv.sh verify-bundle            # every file against MANIFEST.sha256
 $B/run_cxsv.sh verify-release           # the panel release against its manifest
 $B/run_cxsv.sh netcheck                 # loopback only inside the container
+$B/run_cxsv.sh intake  --workdir /scratch/run1 --config intake.yaml \
+    --bind /data/patient1 --cores 32           # only if the reads are not yet a panel-recipe hs1 alignment
 $B/run_cxsv.sh patient --workdir /scratch/run1 --config patient.yaml \
-    --bind /data/patient1 --cores 16 [--runtime singularity|apptainer|docker]
+    --bind /data/patient1 --cores 16 [--mem-mb N] [--runtime singularity|apptainer|docker]
 ```
 
 `patient.yaml` holds `patient_runs` (sample sheets with absolute paths under
@@ -400,6 +403,40 @@ and chrY copy-number calls as unreliable. The patient report does not show this 
 workflow engine and container runtime are allowed. The bundle assumes
 Snakemake (inside the image) plus Singularity/Apptainer, and also ships a
 Docker archive.
+
+### Node memory (roadmap item 16m)
+
+Snakemake reserves memory only for rules that request it, and only within a
+budget: `run_cxsv.sh` passes `--resources mem_mb` = 90 % of the host's RAM
+(`--mem-mb N` overrides it). The caller requests come from `caller_resources` in
+`config/calling.yaml` (applied by `workflow/rules/caller_resources.smk`; not
+fingerprinted), and attempt *k* of a job reserves *k* times its request.
+
+Measured 2026-11-12, BOC_3559 host CRAM (39x ONT R10.4.1, CRAM 3.0), each caller
+alone, 16 threads, inside the panel-v1.2 bundle SIF:
+
+| Caller | Node | Wall | Max RSS, largest process (`time -v`) | RSS summed over its processes (5 s samples) | Request |
+|---|---|---|---|---|---|
+| SVIM 2.0.0 (1 thread) | betsy | 5,682 s | 5.4 GB | 4.4 GB | 8,000 MB, 1 retry |
+| SVIM 2.0.0 (1 thread) | athena | 6,036 s | 5.4 GB | 4.3 GB | |
+| Sniffles2 2.8.1 | betsy | 339 s | 2.1 GB | 11.8 GB | 24,000 MB (32-thread default) |
+| cuteSV 2.1.4 | betsy | 380 s | 3.6 GB | 8.5 GB | 16,000 MB (32-thread default) |
+
+The summed RSS double-counts pages shared between forked workers, so it is an
+upper estimate. SVIM's `std::bad_alloc` on athena on 2026-11-11 (BOC_3559 patient
+run, 24 cores) did **not** reproduce: alone on the same CRAM (md5 `9965b7db…`) it
+passed on athena with the same 5.4 GB peak as on betsy. Its footprint is far below
+any node's RAM, so the abort was transient or caused by other load on the node;
+the retry covers it, and the requests keep the three callers (48 GB together)
+within the budget.
+
+| Node | RAM (`free -g`) | Patient calling (48 GB requested) | Intake (docs/INTAKE.md) |
+|---|---|---|---|
+| freya | 123 GiB | yes | minibatch 4g (72 GB) |
+| betsy | 121 GiB | yes | 4g |
+| athena | 94 GiB | yes | 4g |
+| keurig | 60 GiB | yes (budget about 58 GB) | 2g (54 GB) |
+| shadowfax | 60 GiB | yes (budget about 58 GB) | 2g (54 GB) |
 
 ## 6. Validation record
 

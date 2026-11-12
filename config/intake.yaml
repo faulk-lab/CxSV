@@ -1,0 +1,30 @@
+# =============================================================================
+# CxSV PATIENT INTAKE — defaults (workflow/intake/Snakefile; docs/INTAKE.md)
+#
+# Not part of the calling fingerprint: alignment is upstream of calling. The
+# recipe itself (minimap2 2.24-r1122 -y -ax map-ont --eqx -k 17, tags
+# MM/ML/MN/qs, hs1) is fixed in workflow/lib/cxsv_intake.py and
+# workflow/scripts/intake_align.sh, so it cannot drift from the panel by config.
+# =============================================================================
+
+intake:
+  # Tab-separated, header line. Required: sample_id, input (several inputs of one
+  # sample separated by ','). Optional: individual_id, platform (ONT only),
+  # input_reference (FASTA to decode CRAM inputs made against another reference),
+  # description (read-group DS text, e.g. basecaller model). Set in the site overlay.
+  sheet: null
+  results_root: "results/intake"
+  # Prebuilt minimap2 index of the same hs1 (k=17, w=10, map-ont; checked from its
+  # header). null = build it once in <results_root>/ref (about 9 GB).
+  # Lab fleet: /mnt/sargasso1/CxSV/refs/hs1.map-ont.k17.mmi
+  minimap2_index: null
+  index_mem_mb: 24000
+  # minimap2 -K: memory and speed only, never the alignments. Measured on the nine
+  # monkey_meth genomes (26 threads): 4g -> minimap2 peak 53-56 GB, 2g -> 37-39 GB;
+  # samtools sort adds sort_threads x sort_mem. Use 2g with mem_mb 54000 on 60 GB nodes.
+  minibatch: "4g"
+  align:
+    threads: 26
+    sort_threads: 8
+    sort_mem: "2G"
+    mem_mb: 72000

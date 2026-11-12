@@ -244,8 +244,11 @@ sed -e "s|@BUNDLE_ID@|$BUNDLE_ID|g" -e "s|@COMMIT@|$COMMIT|g" -e "s|@RELEASE_ID@
     -e "s|@SIF_SHA256@|$CXSV_SIF_SHA256|g" "$EXPORT/container/BUNDLE_README.md" > "$STAGE/README.md"
 
 TOTAL_SECS=$(( $(date +%s) - T_START ))
+# tags at the bundle commit, for bundle.json source.git_tag (workflow/lib/cxsv_bundle_meta.py)
+git -C "$REPO" for-each-ref --points-at "$COMMIT" --format='%(refname:short)%09%(objectname)%09%(objecttype)' \
+    refs/tags > "$EXPORT/.tags_at_commit"
 # bundle.json first (sizes from a file walk), so MANIFEST.sha256 covers it too
-CXSV_LIT_VER="$LIT_VER" python3 - "$STAGE" "$BUNDLE_ID" "$COMMIT" "$RELEASE_ID" "$TEST_RELEASE" "$TOTAL_SECS" \
+CXSV_LIT_VER="$LIT_VER" CXSV_TAGS_FILE="$EXPORT/.tags_at_commit" python3 - "$STAGE" "$BUNDLE_ID" "$COMMIT" "$RELEASE_ID" "$TEST_RELEASE" "$TOTAL_SECS" \
     "repo=${SECS[repo]} container=${SECS[container]} reference=${SECS[reference]} resources=${SECS[resources]} release=${SECS[release]} catalogues=${SECS[catalogues]}" \
     "${CAT_LIST[@]}" <<'PY'
 import json, os, sys, datetime
@@ -284,8 +287,19 @@ meta = {
     "size_bytes_by_component": dict(sorted(comp_bytes.items())),
     "build_seconds_before_checksums": {"total": int(total), **{k: int(v) for k, v in (x.split("=") for x in secs.split())}},
 }
+# git tag of the commit and of the release, release manifest sha256 (roadmap item 16n);
+# the module comes from the exported commit, like every other script in the bundle
+sys.path.insert(0, os.path.join(stage, "repo", "workflow", "lib"))
+import cxsv_bundle_meta as bm
+tag_fields, warnings = bm.source_tag(rel.get("source", {}), bm.parse_tag_lines(open(os.environ["CXSV_TAGS_FILE"]).read()))
+meta["source"].update(tag_fields)
+meta["panel_release"].update(bm.release_fields(os.path.join(stage, "panel_release", rid)))
+for w in warnings:
+    print(f"WARNING: {w}", file=sys.stderr)
 json.dump(meta, open(os.path.join(stage, "bundle.json"), "w"), indent=2)
-print(json.dumps({k: meta[k] for k in ("bundle_id", "size_bytes_before_manifests", "n_files")}))
+print(json.dumps({**{k: meta[k] for k in ("bundle_id", "size_bytes_before_manifests", "n_files")},
+                  "git_tag": meta["source"]["git_tag"],
+                  "release_manifest_sha256": meta["panel_release"]["release_manifest_sha256"]}))
 PY
 
 t=$(date +%s); log "checksums"

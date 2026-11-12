@@ -31,6 +31,12 @@ jobs:
       - name: run panel + patient on the synthetic dataset and check results
         shell: bash -el {0}
         run: CORES=4 bash tests/synthetic/run_synthetic.sh "$RUNNER_TEMP/synth"
+      - name: caller memory requests and SVIM retry (rules/caller_resources.smk, not fingerprinted)
+        shell: bash -el {0}
+        run: bash tests/synthetic/check_caller_resources.sh "$RUNNER_TEMP/synth"
+      - name: patient intake (modBAM / FASTQ / other-aligner BAM and CRAM -> hs1 CRAM, panel recipe)
+        shell: bash -el {0}
+        run: CORES=4 bash tests/synthetic/check_intake.sh "$RUNNER_TEMP/intake"
       - name: plot scripts (locale-independent output, per-sample call ids)
         shell: bash -el {0}
         run: bash tests/synthetic/check_plot_scripts.sh "$RUNNER_TEMP/plots"
@@ -54,3 +60,6 @@ jobs:
             ${{ runner.temp }}/synth/panel_build/*.log
             ${{ runner.temp }}/synth/panel_build/nodes/*/ledger.tsv
             ${{ runner.temp }}/synth/panel_build/nodes/*/logs/**
+            ${{ runner.temp }}/synth/caller_resources_dryrun.log
+            ${{ runner.temp }}/intake/*.log
+            ${{ runner.temp }}/intake/results/intake/*/logs/**
