@@ -4,6 +4,8 @@
 
 **Outcome: STOP.** One acceptance criterion fails (subset healthy LOFO Tier 1 per genome 0.283 > 0.248). Per the plan's stop rule nothing was merged; main is unchanged.
 
+**PI decision (2026-11-12): PROCEED.** The subset LOFO rise (0.2566 -> 0.2832, +0.027; 3 loci from type-agnostic caller agreement) is accepted. The 0.248 line does not transfer to this enriched subset. The binding gate is the full-panel LOFO <= 0.248 of the panel-v1.3 build, together with all other stop rules. PRs #43 (with the clamp fix), #47 (with the D3 thresholds), #44 and this record were then merged into main.
+
 ## Criteria
 
 | Criterion | Value | Result |
