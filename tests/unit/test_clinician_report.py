@@ -86,7 +86,8 @@ def test_one_tier1_report_has_every_section_and_no_comparator():
     assert "NF1 disrupted: ClinGen HI 3, TS 0, LOEUF 0.449" in t
     assert "gene dosage +0.90" in t and "caller agreement +0.10" in t       # every non-zero feature
     assert "sex_call female, x_ratio 1.013, y_ratio 0" in t
-    assert "no calibrated CN-sigma threshold for stratum ONT_LRSC_R10" in t
+    # config/scoring.yaml depth_noise (design check D3): ONT_LRSC_R10 sigma_max 0.233; fixture sigma 0.2066
+    assert "normal (CN sigma 0.207, threshold 0.233 for ONT_LRSC_R10)" in t
     assert "capped at Tier 2" in t and "Tier 3: 1 loci; likely benign: 1 loci (of 4 CxSV loci scored)" in t
     assert "\u2265 0.99" in t and "0.50 to < 0.99" in t                      # thresholds from the params
     assert "No phenotype (HPO) terms, OMIM annotation or parental samples were used" in t

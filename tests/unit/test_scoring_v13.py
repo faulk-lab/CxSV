@@ -179,13 +179,15 @@ def test_depth_noise_gate_demotes_only_cn_derived_tier1_without_junction_support
     assert all(l["dn_gate"] == "not_applied" and l["tier"] == "Tier1_high_priority" for l in loci)
 
 
-def test_depth_noise_config_covers_every_pon_stratum_and_is_uncalibrated():
+def test_depth_noise_config_covers_every_pon_stratum_and_is_calibrated():
     sco = yaml.safe_load((REPO / "config" / "scoring.yaml").read_text())["depth_noise"]
     cal = yaml.safe_load((REPO / "config" / "calling.yaml").read_text())["cn_params"]
     strata = set(cal["default_stratum"].values()) | set(cal["chemistry_stratum"].values())
     assert strata <= set(sco["sigma_max"]), strata - set(sco["sigma_max"])
-    # placeholders until the panel-v1.3 design check (D3) sets them from the panel distribution
-    assert all(v is None for v in sco["sigma_max"].values()) and sco["default_sigma_max"] is None
+    # panel-v1.3 design check D3 (docs/design_check_v13): median + 3.5 scaled MAD of the panel per stratum
+    assert sco["sigma_max"] == {"ONT_LRSC_R10": 0.233, "ONT_LRSC_R9": 0.220, "ONT_1kGP_1019": 0.401,
+                                "PacBio_HiFi": 0.198}
+    assert sco["default_sigma_max"] is None        # every PoN stratum is listed
     assert sco["enabled"] is True and sco["conservative"]["demote_to"] == "Tier2"
 
 
@@ -254,6 +256,7 @@ def test_score_cli_caps_public_and_agrees_across_sv_types(tmp_path):
     assert "sex_call ambiguous, x_ratio 0.66, y_ratio 0.08" in md and sc.AMBIGUOUS_SEX_FLAG in md
     assert "sample-sheet sex: female" in md                     # reported, not used for ploidy
     assert "sex male (copy-number track; call ambiguous" in row["ct_cn_oscillation_value"]
-    assert "no calibrated CN-sigma threshold for stratum ONT_LRSC_R10" in md
+    # config/scoring.yaml depth_noise (design check D3): ONT_LRSC_R10 sigma_max 0.233; fixture sigma 0.2
+    assert "depth noise normal (CN sigma 0.2 <= 0.233, stratum ONT_LRSC_R10)" in md
     priv, _ = _score_fixture(tmp_path, status="private", carriers="0", stats=stats)
     assert priv["Tier"] == "Tier1_high_priority" and priv["Tier_Ceiling"] == "not_applied"
