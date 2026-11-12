@@ -17,6 +17,12 @@ female / ambiguous); ploidy and the chrX/chrY reference follow the ploidy sex (a
 call: the legacy chrX rule), and stats.json records both. Segments:
 cxsv_cn.segment_genome (ploidy-aware HMM on 10 kb bins, 1 kb boundary refinement,
 nested-level scan, masked-bin extents at each boundary).
+
+--set SECTION.KEY=VALUE (repeatable; e.g. --set segmentation.nested_min_z=5.5) overrides one
+existing cn_params value of --params for this run (design-check sweeps, panel-v1.3 D5); the
+value is read as JSON (a number, true/false, a list) or else as a string, an unknown key
+stops the run, and stats.json lists the overrides. A pipeline run takes the same override
+from a --configfile overlay instead (docs/CN_LINKAGE.md, "Sweeping nested_min_z").
 """
 import argparse
 import csv
@@ -49,6 +55,32 @@ def resolve_stratum(a):
     return a.default_stratum, "platform default"
 
 
+def apply_overrides(cnp, sets):
+    """Apply --set SECTION.KEY=VALUE overrides to the cn_params dict; returns {key: value}.
+    The key must exist in cn_params (segmentation keys: also in cxsv_cn.DEFAULTS)."""
+    done = {}
+    for item in sets or ():
+        if "=" not in item:
+            sys.exit(f"--set {item!r}: expected SECTION.KEY=VALUE")
+        key, raw = item.split("=", 1)
+        path = key.strip().split(".")
+        try:
+            val = json.loads(raw)
+        except ValueError:
+            val = raw
+        d = cnp
+        for part in path[:-1]:
+            if not isinstance(d.get(part), dict):
+                sys.exit(f"--set {key}: cn_params has no section {part!r}")
+            d = d[part]
+        known = set(d) | (set(cn.DEFAULTS) if path[:-1] == ["segmentation"] else set())
+        if path[-1] not in known:
+            sys.exit(f"--set {key}: unknown cn_params key {path[-1]!r}")
+        d[path[-1]] = val
+        done[key] = val
+    return done
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     for k in ("depth", "pon", "params", "stratum", "out", "stats"):
@@ -57,8 +89,13 @@ def main():
                                                          "when --stratum is auto")
     ap.add_argument("--default-stratum", default=None, help="stratum when --stratum auto finds no group")
     ap.add_argument("--par", default=None, help="PAR BED; default cn_params.par of --params")
+    ap.add_argument("--set", action="append", default=[], metavar="SECTION.KEY=VALUE",
+                    help="override one cn_params value, e.g. segmentation.nested_min_z=5.5 (repeatable)")
     a = ap.parse_args()
     cnp = json.load(open(a.params))["cn_params"]
+    overrides = apply_overrides(cnp, a.set)
+    if overrides:
+        print(f"cn_params overrides: {overrides}", file=sys.stderr)
     P = {**cn.DEFAULTS, **cnp["segmentation"]}
     par = cn.read_par(a.par) if a.par else cn.par_from_params(cnp.get("par"))
     fine = cn.read_bins(a.depth)
@@ -95,7 +132,9 @@ def main():
                  pon_sex_reference=pon.meta.get("sex_reference", "pooled"),
                  genome_median=round(st["genome_median"], 3), sigma=round(st["sigma"], 4) if st["sigma"] == st["sigma"] else None,
                  masked_fraction=round(st["masked_fraction"], 4) if st["masked_fraction"] == st["masked_fraction"] else None,
-                 segments=len(segs))
+                 segments=len(segs), nested_min_z=P["nested_min_z"])
+    if overrides:
+        stats["overrides"] = overrides
     json.dump(stats, open(a.stats, "w"), indent=1, sort_keys=True)
     print(json.dumps(stats), file=sys.stderr)
 

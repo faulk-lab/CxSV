@@ -1,0 +1,19 @@
+sample	variant	old_written	new_no_segment	old_loci	new_candidates_locus	old_2bp	new_loci	new_written	old_candidates_locus	old_no_segment	new_ids	sex_call	old_ids	new_2bp
+BOC_1882	locus	1	0	3	3	0	3	1	3	0	chr1:238516000-238817000=DUP-TRP/INV-DUP;chr14:16058000-16703568=CN_linked_loss;chr22:11555000-16548000=CN_nested_gain	male	chr1:238599734-238814325=DUP-TRP/INV-DUP;chr14:16066990-16703568=CN_linked_loss;chr22:12304165-12325825=CN_nested_gain	0
+BOC_1882	v13	1	0	3	3	0	3	1	3	0	chr1:238516000-238817000=DUP-TRP/INV-DUP;chr14:16058000-16703568=CN_linked_loss;chr22:11555000-16548000=CN_nested_gain	male	chr1:238599734-238814325=DUP-TRP/INV-DUP;chr14:16066990-16703568=CN_linked_loss;chr22:12304165-12325825=CN_nested_gain	0
+BOC_2057	locus	1	0	1	1	0	1	1	1	0	chr6:125299000-125385000=CN_nested_gain	male	chr6:125299149-125337575=CN_nested_gain	0
+BOC_2057	v13	1	0	1	1	0	1	1	1	0	chr6:125299000-125385000=CN_nested_gain	male	chr6:125299149-125337575=CN_nested_gain	0
+BOC_2865	locus	2	0	2	2	0	2	2	2	0	chr2:17999000-18107000=CN_linked_loss;chr7:58406084-63721000=DUP-TRP/INV-DUP	female	chr2:18015241-18106809=CN_linked_loss;chr7:58406084-60763596=DUP-TRP/INV-DUP	0
+BOC_2865	v13	2	0	2	2	0	2	2	2	0	chr2:17999000-18107000=CN_linked_loss;chr7:58406084-63721000=DUP-TRP/INV-DUP	female	chr2:18015241-18106809=CN_linked_loss;chr7:58406084-60763596=DUP-TRP/INV-DUP	0
+BOC_3537	locus	0	0	0	0	0	0	0	0	0		female		0
+BOC_3537	v13	0	0	0	0	0	0	0	0	0		female		0
+BOC_3559	locus	0	0	0	0	0	0	0	0	0		female		0
+BOC_3559	v13	0	0	0	0	0	0	0	0	0		female		0
+BOC_4433	locus	2	0	3	3	0	3	2	3	0	chr11:134520273-134900015=CN_linked_gain;chr16:14893000-15320000=DUP-TRP/INV-DUP;chr17:31902782-32130000=CN_linked_loss	female	chr11:134520273-134900015=CN_linked_gain;chr16:14893156-15031459=DUP-TRP/INV-DUP;chr17:31902782-32067453=CN_linked_loss	0
+BOC_4433	v13	2	0	3	3	0	3	2	3	0	chr11:134520273-134900015=CN_linked_gain;chr16:14893000-15320000=DUP-TRP/INV-DUP;chr17:31902782-32130000=CN_linked_loss	female	chr11:134520273-134900015=CN_linked_gain;chr16:14893156-15031459=DUP-TRP/INV-DUP;chr17:31902782-32067453=CN_linked_loss	0
+BOC_5002	locus	0	0	0	0	0	0	0	0	0		male		0
+BOC_5002	v13	0	0	0	0	0	0	0	0	0		male		0
+BOC_5883	locus	8	0	9	3	7	3	2	3	6	chr2:123180000-126635000=CN_nested_gain;chr12:33041000-33860000=CN_linked_gain;chr17:0-5037000=CN_linked_loss	female	chr2:124119030-124120463=CN_nested_gain;chr3:22061084-22061086=CN_linked_gain;chr4:134564260-134564262=CN_linked_gain;chr5:94066173-94066175=CN_nested_gain;chr10:133836642-133836644=CN_nested_gain;chr12:33041389-33044048=CN_linked_gain;chr12:127596854-127596856=CN_nested_gain;chr17:0-2=CN_linked_loss;chrN:62454005-62454007=CN_linked_loss	0
+BOC_5883	v13	8	0	9	3	7	3	2	3	6	chr2:123180000-126635000=CN_nested_gain;chr12:33041000-33860000=CN_linked_gain;chr17:0-5037000=CN_linked_loss	female	chr2:124119030-124120463=CN_nested_gain;chr3:22061084-22061086=CN_linked_gain;chr4:134564260-134564262=CN_linked_gain;chr5:94066173-94066175=CN_nested_gain;chr10:133836642-133836644=CN_nested_gain;chr12:33041389-33044048=CN_linked_gain;chr12:127596854-127596856=CN_nested_gain;chr17:0-2=CN_linked_loss;chrN:62454005-62454007=CN_linked_loss	0
+BOC_7308	locus	1	0	1	1	0	1	1	1	0	chr14:16037000-16599000=CN_linked_loss	male	chr14:16046045-16046202=CN_linked_loss	0
+BOC_7308	v13	1	0	1	1	0	1	1	1	0	chr14:16037000-16599000=CN_linked_loss	male	chr14:16046045-16046202=CN_linked_loss	0

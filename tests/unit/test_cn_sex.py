@@ -127,12 +127,78 @@ def test_public_counting_is_sex_matched_on_chrx_only():
         ("a1", "A1", [_seg("chrX", 1_000_000, 1_500_000, 3, 2)], "ambiguous"),
         ("f1", "F1", [_seg("chrX", 990_000, 1_490_000, 3, 2)], "female"),
     ]
-    pub, counts = cnl.cn_public(cand, others, sex="female")
+    v12 = {**cnl.CN_DEFAULTS, "public_min_genomes_sexchrom": 1}     # panel-v1.2-r2 rule
+    pub, counts = cnl.cn_public(cand, others, v12, sex="female")
     assert counts == [1, 1] and pub                     # chrX: f1 only; chr1: m1 (autosome, any sex)
-    pub, counts = cnl.cn_public(cand, others[:2], sex="female")
+    pub, counts = cnl.cn_public(cand, others[:2], v12, sex="female")
     assert counts == [0, 1] and not pub                 # the male's chrX gain no longer makes it public
-    assert cnl.cn_public(cand, others[:2], sex=None)[1] == [2, 1]   # old rule, for comparison
-    assert cnl.cn_public(cand, [o[:3] for o in others])[1] == [3, 1]  # tables without a sex column
+    assert cnl.cn_public(cand, others[:2], v12, sex=None)[1] == [2, 1]   # old rule, for comparison
+    assert cnl.cn_public(cand, [o[:3] for o in others], v12)[1] == [3, 1]  # tables without a sex column
+    # panel-v1.3 D2 (default): one sex-matched individual is not enough on chrX
+    pub, counts = cnl.cn_public(cand, others, sex="female")
+    assert counts == [1, 1] and not pub
+
+
+def test_sexchrom_needs_two_sex_matched_individuals_autosomes_one():
+    P = cnl.CN_DEFAULTS
+    assert P["public_min_genomes"] == 1 and P["public_min_genomes_sexchrom"] == 2
+    assert cnl.min_genomes("chrX") == cnl.min_genomes("chrY") == 2 and cnl.min_genomes("chr7") == 1
+    x = {"segs": [_seg("chrX", 1_000_000, 1_500_000, 3, 2)]}
+    a = {"segs": [_seg("chr2", 1_000_000, 1_500_000, 3, 2)]}
+    one = [("c/f1", "F1", [_seg("chrX", 1_000_000, 1_500_000, 3, 2), _seg("chr2", 1_000_000, 1_500_000, 3, 2)], "female", True)]
+    same_ind = one + [("d/f1", "F1", [_seg("chrX", 1_000_000, 1_500_000, 3, 2)], "female", True)]
+    two = one + [("c/f2", "F2", [_seg("chrX", 1_010_000, 1_490_000, 3, 2)], "female", True)]
+    assert cnl.cn_public(a, one, sex="female") == (True, [1])          # autosome: one individual
+    assert cnl.cn_public(x, one, sex="female") == (False, [1])
+    assert cnl.cn_public(x, same_ind, sex="female") == (False, [1])    # two libraries, one individual
+    assert cnl.cn_public(x, two, sex="female") == (True, [2])
+    males = [("c/m%d" % i, "M%d" % i, [_seg("chrX", 1_000_000, 1_500_000, 2, 1)], "male", True) for i in range(3)]
+    assert cnl.cn_public(x, males, sex="female") == (False, [0])       # not sex-matched
+    y = {"segs": [_seg("chrY", 3_000_000, 3_500_000, 0, 1)]}
+    ym = [("c/m%d" % i, "M%d" % i, [_seg("chrY", 3_000_000, 3_500_000, 0, 1)], "male", True) for i in range(2)]
+    assert cnl.cn_public(y, ym[:1], sex="male") == (False, [1]) and cnl.cn_public(y, ym, sex="male") == (True, [2])
+
+
+# pon_members.tsv rows of panel-v1.2-r2 (calibration of D2, docs/CN_LINKAGE.md section 2b)
+PANEL_LIBS = [
+    dict(key="1kGP_LRSC_ONT_CHM13/NA19238", individual_id="NA19238", sex_call="ambiguous", x_ratio=1.171, y_ratio=0.0001),
+    dict(key="1kGP_ONT_1019_CHM13/NA19238", individual_id="NA19238", sex_call="female", x_ratio=1.024, y_ratio=0.0001),
+    dict(key="1kGP_LRSC_ONT_CHM13/HG03499", individual_id="HG03499", sex_call="female", x_ratio=0.856, y_ratio=0.0),
+    dict(key="1kGP_ONT_1019_CHM13/HG03499", individual_id="HG03499", sex_call="female", x_ratio=0.970, y_ratio=0.0),
+    dict(key="1kGP_LRSC_ONT_CHM13/HG03548", individual_id="HG03548", sex_call="female", x_ratio=0.953, y_ratio=0.0),
+    dict(key="1kGP_ONT_1019_CHM13/HG03548", individual_id="HG03548", sex_call="female", x_ratio=1.016, y_ratio=0.0),
+    dict(key="1kGP_ONT_1019_CHM13/HG00096", individual_id="HG00096", sex_call="ambiguous", x_ratio=1.26, y_ratio=0.0),
+    dict(key="a/M1", individual_id="M1", sex_call="male", x_ratio=0.49, y_ratio=0.19),
+    dict(key="b/M1", individual_id="M1", sex_call="male", x_ratio=0.50, y_ratio=0.32),
+    dict(key="a/M2", individual_id="M2", sex_call="male", x_ratio=0.49, y_ratio="nan"),
+    dict(key="b/M2", individual_id="M2", sex_call="male", x_ratio=0.50, y_ratio=0.20),
+]
+
+
+def test_sexchrom_discordant_libraries():
+    d = cnl.sexchrom_discordant(PANEL_LIBS)
+    assert sorted(d) == ["1kGP_LRSC_ONT_CHM13/HG03499", "1kGP_LRSC_ONT_CHM13/NA19238", "1kGP_ONT_1019_CHM13/HG03499",
+                         "1kGP_ONT_1019_CHM13/NA19238", "a/M1", "b/M1"]
+    r = d["1kGP_ONT_1019_CHM13/NA19238"]
+    assert "sex call ambiguous" in r and "chrX ratio 1.171" in r and "> 0.1" in r
+    assert "chrY ratio" in d["a/M1"]                   # chrY 0.19 vs 0.32
+    # HG03548 (|diff| 0.063), a single-library ambiguous individual and a missing chrY ratio: kept
+    assert not any(k.endswith(("HG03548", "HG00096")) or "M2" in k for k in d)
+    loose = {**cnl.CN_DEFAULTS, "sexchrom_discordance_x": 0.15, "sexchrom_discordance_y": 0.2}
+    assert sorted(cnl.sexchrom_discordant(PANEL_LIBS, loose)) == ["1kGP_LRSC_ONT_CHM13/NA19238",
+                                                                   "1kGP_ONT_1019_CHM13/NA19238"]   # sex call only
+
+
+def test_discordant_library_counts_on_autosomes_not_on_sex_chromosomes():
+    """PC L01 (female chrX DUP-TRP) under D2: NA19238's chrX gain plus one other female."""
+    x = {"segs": [_seg("chrX", 1_000_000, 1_500_000, 3, 2), _seg("chr3", 9_000_000, 9_500_000, 1, 2)]}
+    others = [("lrsc/NA19238", "NA19238", [_seg("chrX", 900_000, 1_600_000, 3, 2), _seg("chr3", 9_000_000, 9_500_000, 1, 2)],
+               "female", False),
+              ("c/F2", "F2", [_seg("chrX", 1_000_000, 1_500_000, 3, 2)], "female", True)]
+    pub, counts = cnl.cn_public(x, others, sex="female")
+    assert counts == [1, 1] and not pub               # chrX: F2 only (< 2); chr3: NA19238 still counts
+    others[0] = others[0][:4] + (True,)
+    assert cnl.cn_public(x, others, sex="female") == (True, [2, 1])
 
 
 def test_cn_linkage_reads_the_sex_column(tmp_path):
@@ -144,3 +210,52 @@ def test_cn_linkage_reads_the_sex_column(tmp_path):
                  "c/s\tSELF\tT\tfemale\tchr1\t1\t100\t3\t2\n")
     o = sorted(cn_linkage.others(str(p), "SELF"))
     assert [(x[0], x[3]) for x in o] == [("c/a", "male"), ("c/b", "ambiguous")]
+
+
+def test_cn_linkage_sexchrom_exclusion_from_pon_members(tmp_path):
+    import cn_linkage
+    head = "key\tindividual_id\tstratum\tsex\tsex_call\tx_ratio\ty_ratio\tgenome_median\tin_pon\tin_sex_reference"
+    old = tmp_path / "v12.tsv"                          # panel-v1.2-r2 table: recomputed from the ratios
+    old.write_text(head + "\n" + "".join(
+        f"{r['key']}\t{r['individual_id']}\tT\tfemale\t{r['sex_call']}\t{r['x_ratio']}\t{r['y_ratio']}\t30\tyes\tyes\n"
+        for r in PANEL_LIBS[:6]))
+    ex = cn_linkage.sexchrom_excluded(str(old))
+    assert sorted(ex) == sorted(r["key"] for r in PANEL_LIBS[:4])
+    new = tmp_path / "v13.tsv"                          # panel-v1.3 table: the recorded column decides
+    new.write_text(head + "\tsexchrom_public\n" + "c/a\tA\tT\tfemale\tfemale\t0.97\t0\t30\tyes\tyes\tyes\n"
+                   "c/b\tB\tT\tfemale\tambiguous\t1.2\t0\t30\tyes\tno: sex ambiguous\tno: discordant libraries of B: x\n")
+    assert cn_linkage.sexchrom_excluded(str(new)) == {"c/b": "discordant libraries of B: x"}
+    assert cn_linkage.sexchrom_excluded("none") == {}
+    panel = tmp_path / "panel.tsv"
+    panel.write_text("key\tindividual_id\tstratum\tsex\tchrom\tstart\tend\tstate\tploidy\n"
+                     "c/a\tA\tT\tfemale\tchrX\t1\t100\t3\t2\nc/b\tB\tT\tfemale\tchrX\t1\t100\t3\t2\n")
+    o = sorted(cn_linkage.others(str(panel), "SELF", cn_linkage.sexchrom_excluded(str(new))))
+    assert [(x[0], x[4]) for x in o] == [("c/a", True), ("c/b", False)]
+
+
+def test_cn_pon_records_sexchrom_public(tmp_path):
+    import gzip
+    import json
+    import subprocess
+    rng = np.random.default_rng(11)
+    rows = ["key\tindividual_id\tstratum\tdepth"]
+    libs = [("c/f1", "F1", "female", ()), ("d/f1", "F1", "female", (("chrX", 200, 4000, 3),)),   # chrX ~1.5: discordant
+            ("c/f2", "F2", "female", ()), ("d/f2", "F2", "female", ()), ("c/m1", "M1", "male", ())]
+    for key, ind, sex, ev in libs:
+        p = tmp_path / (key.replace("/", "_") + ".bed.gz")
+        with gzip.open(p, "wt") as fh:
+            for c, a in _fine(rng, 30, sex, ev).items():
+                fh.writelines(f"{c}\t{i * 1000}\t{i * 1000 + 1000}\t{v:.2f}\n" for i, v in enumerate(a))
+        rows.append(f"{key}\t{ind}\tT\t{p}")
+    (tmp_path / "members.tsv").write_text("\n".join(rows) + "\n")
+    (tmp_path / "p.json").write_text(json.dumps({"cn_params": {"segmentation": dict(cn.DEFAULTS),
+                                                                "linkage": {"sexchrom_discordance_x": 0.10,
+                                                                            "sexchrom_discordance_y": 0.10},
+                                                                "par": {"chrX": [[0, 200000]], "chrY": [[0, 100000]]}}}))
+    subprocess.run([sys.executable, ROOT / "workflow" / "scripts" / "cn_pon.py", "--members", tmp_path / "members.tsv",
+                    "--params", tmp_path / "p.json", "--out-dir", tmp_path / "pon", "--threads", "1"], check=True)
+    lines = (tmp_path / "pon" / "pon_members.tsv").read_text().splitlines()
+    assert lines[0].split("\t")[-1] == "sexchrom_public"
+    col = {l.split("\t")[0]: l.split("\t")[-1] for l in lines[1:]}
+    assert col["c/f1"].startswith("no: discordant libraries of F1") and col["d/f1"] == col["c/f1"]
+    assert col["c/f2"] == col["d/f2"] == col["c/m1"] == "yes"
