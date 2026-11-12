@@ -598,6 +598,37 @@ python3 $T/tree_snapshot.py --compare $NEW/provenance/old_tree_before.tsv $NEW/p
   report no difference. On the CIFS NAS a full listing takes 1–2 h; a full-panel
   dry run needs a run clock of 8 h or more (the job graph alone took over 2 h).
 
+### Measured for panel-v1.2
+
+All on freya. Build record: [docs/panel_v1.2/README.md](panel_v1.2/README.md)
+(sections 3, 4 and 6); provenance in
+`/mnt/sargasso1/CxSV/build/panel-v1.2-r2/provenance/` (`rebuild_commands.log`).
+
+| Step | Measured | Notes |
+|---|---|---|
+| Downstream-only rebuild, panel-v1.2-r2 (main 84d380e, 20 cores; release `cxsv-panel-20261108-fdac9ff80401`) | **17,143 s** (4.8 h) for the whole job; 17,089 s of it in `rebuild_downstream.sh` (17,835 jobs, one run, no resume) | the rest is the guard snapshots and the release verification; 58,646 upstream files (1,410.5 GB) hard-linked from panel-v1.1-r2; depth from `build/cn_depth_v1`; both guard compares 0 differences |
+| Candidate build panel-v1.2 (main 73c4beb, root `build/panel-v1.2`) | stopped at 54 % (9,716 of 17,835 jobs) at HG01137; `--resume` finished in 10,735 s | below |
+| Full-panel LOFO (1,619 genomes, own family left out) | **9,737 s** for the candidate, locus callability computed in the run; 3,381 s for the r2 release (`panel_rates.sh`), reusing the panel-v1.1-r2 callability and depth calibration | stop rule ≤ 0.301 Tier 1 per genome: 0.198 |
+| Offline bundle validation (`tests/lab/validate_bundle.sh`, stand-in HG01868, 9 checks) | **8,413 s** (tagged bundle); 8,418 s (untagged) | the three full runs (Singularity, Docker, outside the bundle) take 2,555–2,783 s each |
+| Full-genome positive control (`tests/lab/pos_control_full_genome.sh`, E01–E13 + L01–L04, callers re-run, 12 cores) | **6,184 s** (tagged bundle); 6,205 s (untagged) | |
+
+**HG01137 stop and resume (candidate build).** In precomputed mode `cn_depth.sh`
+hard-linked each depth file from `cn_depth_v1`, so the output kept the source's mtime,
+which was older than the code checkout. Snakemake touches outputs that are older than
+their inputs, and through the hard link that touch also changed the shared
+`cn_depth_v1` file. For HG01137 the CIFS NAS still reported the old mtime, so
+Snakemake removed the output and failed the job; the run stopped at 54 % and
+`--resume` completed it.
+
+**Side effect on `cn_depth_v1`.** About 1,619 depth files in `cn_depth_v1` now carry
+new mtimes. All 1,619 still match their recorded sha256, and the panel-v1.1-r2 tree
+showed 0 differences. The r2 rebuild did not hit the problem because the files already
+carried the newer mtime. Fix: ROADMAP item 16 (a), copy instead of hard-link.
+
+For a panel-v1.3 downstream rebuild on freya these give about 4.8 h for the rebuild,
+0.9–2.7 h for the LOFO (reused or recomputed callability), 2.3 h for the bundle
+validation and 1.7 h for the positive control.
+
 ## Downstream-only rebuild (panel-v1.1 candidate, 2026-11-04)
 
 When a change touches only the rules after `merge_sv_callers` (item 13: CxSV
