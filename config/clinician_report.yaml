@@ -43,8 +43,8 @@ clinician_report:
       Population ceiling: a locus carried by presumed-healthy panel individuals (panel status
       public) is never reported above Tier 2; the report says how many carry it.
     - >-
-      Library QC conservative mode: in a library flagged for excess single-caller breakend calls,
-      a Tier 1 locus needs more than half of its junctions called by at least two callers, or a
+      Library QC conservative mode: in a library flagged for excess SVIM-only breakend calls
+      (relative to coverage-matched healthy genomes of the same platform), a Tier 1 locus needs more than half of its junctions called by at least two callers, or a
       read-depth copy-number change; otherwise it is reported as Tier 2.
     - >-
       Depth-noise gate: when the read-depth profile is noisier than the panel threshold for the
