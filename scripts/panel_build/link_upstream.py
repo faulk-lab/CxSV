@@ -20,9 +20,22 @@ What is linked: every file under OLD except
     rule reads (logs/svim.log, read by check_svim_output),
   - every output, log and benchmark of a job the new build's dry run plans
     (DRYRUN.txt: `snakemake -n` of the new code against the OLD tree, so the
-    paths are OLD paths), and anything under a planned directory output.
+    paths are OLD paths), and anything under a planned directory output,
+  - params-only outputs (PARAMS_ONLY_OUTPUTS, e.g. cn_params.json of rule
+    cn_params_json): a rule with no file inputs is never planned by a dry run
+    without Snakemake metadata, so a linked copy would silently feed the OLD
+    parameters to the new build; left out, the rule re-makes it from the new
+    config (panel-v1.3 build: the dry run then plans cn_params_json),
+  - side files in a copy-number directory (samples/<cohort>/<sample>/cn/) that
+    holds a planned output: files the cn rules write that are not declared
+    outputs (cn_linkage.py's cn/work/ files, opened for writing in place;
+    cn_depth's depth.regions.bed.gz.csi and depth.mosdepth.summary.txt),
+  - anything matching --exclude REGEX (relative path; repeatable).
 So no job of the new build has a linked file as output or log: Snakemake
-never writes to a linked inode, and the old tree cannot change.
+never writes to a linked inode, and the old tree cannot change. The panel-v1.3
+build found the last two gaps: 7,190 such files were hard-linked although no
+dry run planned them, and were unlinked by hand before the run
+(docs/panel_v1.3/README.md).
 
 The inventory (relative path, bytes, mtime_ns, inode, origin) is the
 provenance record of the reused outputs. --verify re-stats the OLD files after
@@ -35,6 +48,10 @@ import re
 import sys
 
 FIELDS = ("output:", "log:", "benchmark:")
+# outputs of rules with no file inputs (made from params only), relative to the panel results root
+PARAMS_ONLY_OUTPUTS = ("cn_params.json",)
+# copy-number directory of a sample: samples/<cohort>/<sample>/cn/...
+CN_DIR = re.compile(r"^(samples/[^/]+/[^/]+/cn)/")
 
 
 def planned_paths(dryrun):
@@ -87,12 +104,38 @@ def under_planned_dir(p, planned):
     return False
 
 
+def planned_cn_dirs(planned, old):
+    """samples/<cohort>/<sample>/cn directories (relative to OLD) holding a planned output."""
+    dirs = set()
+    for p in planned:
+        rel = os.path.relpath(p, old)
+        m = CN_DIR.match(rel + ("/" if rel.endswith("/cn") else ""))
+        if m:
+            dirs.add(m.group(1))
+    return dirs
+
+
+def side_file_reason(rel, cn_dirs, exclude=()):
+    """Why a file that no dry run plans must still not be linked (None = link it)."""
+    if rel in PARAMS_ONLY_OUTPUTS:
+        return "params-only"
+    m = CN_DIR.match(rel)
+    if m and m.group(1) in cn_dirs:
+        return "cn side files"
+    if any(re.search(x, rel) for x in exclude):
+        return "--exclude"
+    return None
+
+
 def build(a):
     old, new = os.path.abspath(a.old), os.path.abspath(a.new)
     planned, rules = planned_paths(a.dryrun)
     if not planned:
         sys.exit(f"no planned outputs found in {a.dryrun}")
-    rows, skipped = [], {"release": 0, "logs/benchmarks": 0, "planned": 0}
+    cn_dirs = planned_cn_dirs(planned, old)
+    exclude = getattr(a, "exclude", None) or []
+    rows, skipped = [], {"release": 0, "logs/benchmarks": 0, "planned": 0,
+                         "params-only": 0, "cn side files": 0, "--exclude": 0}
     for root, dirs, files in os.walk(old):
         rel_root = os.path.relpath(root, old)
         if rel_root == "release" or rel_root.startswith("release/"):
@@ -109,6 +152,8 @@ def build(a):
                 skipped["logs/benchmarks"] += 1
             elif p in planned or under_planned_dir(p, planned):
                 skipped["planned"] += 1
+            elif side_file_reason(rel, cn_dirs, exclude):
+                skipped[side_file_reason(rel, cn_dirs, exclude)] += 1
             else:
                 st = os.stat(p)
                 rows.append((rel, st.st_size, st.st_mtime_ns, st.st_ino, origin(rel)))
@@ -135,6 +180,27 @@ def build(a):
         w.writerows(rows)
     os.replace(tmp, a.inventory)
     print(f"linked {made} new ({len(rows)} total); inventory {a.inventory}")
+
+
+def linked_side_files(dryrun, new):
+    """Hard-linked files in NEW that the run could rewrite although no job plans them
+    (params-only outputs, side files of a planned cn directory); rebuild_downstream.sh
+    stops on any. `dryrun` is the dry run against NEW (its paths are under NEW)."""
+    planned, _ = planned_paths(dryrun)
+    new = os.path.abspath(new)
+    cn_dirs = planned_cn_dirs(planned, new)
+    bad = []
+    for root, dirs, files in os.walk(new):
+        rel_root = os.path.relpath(root, new)
+        if rel_root == "release" or rel_root.startswith("release/"):
+            dirs[:] = []
+            continue
+        for f in files:
+            p = os.path.join(root, f)
+            rel = os.path.relpath(p, new)
+            if side_file_reason(rel, cn_dirs) and os.stat(p).st_nlink > 1:
+                bad.append(rel)
+    return sorted(bad)
 
 
 def verify(inv):
@@ -168,6 +234,9 @@ if __name__ == "__main__":
     ap.add_argument("--include-log", action="append", default=[], metavar="NAME",
                     help="log file name of a held rule that a re-run rule reads (e.g. svim.log, read by "
                          "check_svim_output); linked although it is under logs/ (never written: its rule is held)")
+    ap.add_argument("--exclude", action="append", default=[], metavar="REGEX",
+                    help="also leave unlinked every file whose path relative to --old matches REGEX "
+                         "(re.search; repeatable), e.g. a further params-only output")
     ap.add_argument("--verify", metavar="INVENTORY")
     a = ap.parse_args()
     if a.verify:
