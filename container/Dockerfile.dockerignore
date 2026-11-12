@@ -1,3 +1,6 @@
-# Build context = repository root; the image needs only the explicit lock.
+# Build context = repository root; the image needs only the files its COPY lines name:
+# the explicit conda lock and the hash-pinned PyPI wheels of the clinician report
+# (panel-v1.3). tests/unit/test_env_lock.py checks that every COPY source is admitted.
 *
 !envs/cxsv-pipeline.explicit.txt
+!envs/cxsv-pipeline.pip.txt
