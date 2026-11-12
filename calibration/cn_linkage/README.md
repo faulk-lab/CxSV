@@ -2,6 +2,7 @@
 
 Report: [docs/CN_LINKAGE_PHASE1.md](../../docs/CN_LINKAGE_PHASE1.md). Plan: [docs/DUP_TRP_PLAN.md](../../docs/DUP_TRP_PLAN.md).
 Nothing here is used by the workflows; it runs in the pipeline image beside a panel release.
+`literature_cn_release.py` and `compare_cn_loci.py` call the workflow scripts themselves.
 
 | Step | Script | What it does |
 |---|---|---|
@@ -11,7 +12,9 @@ Nothing here is used by the workflows; it runs in the pipeline image beside a pa
 | linkage | `cnlink.py`, `augment.py`, `link_all.py` | candidates, distance-free record association, structure classes, panel CN frequency, loci added to the discovery tree |
 | scoring | `patient_rescore.py` | privacy / catalogues / depth for the new loci, deployed scorer |
 | chain | `run_phase1.sh` | make_genomes → segment_all → link_all → subset manifest → `cn_lofo.sh` (test D) |
-| test A | `literature_cn.py` | literature events with copy number modelled on a healthy donor's depth |
+| test A | `literature_cn.py` | literature events with copy number modelled on a healthy donor's depth (Phase 1 prototype segmentation and linkage; kept for the record) |
+| test A, release pipeline | `literature_cn_release.py` | the same events through the pipeline's `cn_segment.py` / `cn_linkage.py` against a release's `cn/pon` (sex-stratified reference), `panel_cn_segments.tsv` and `pon_members.tsv`, then the patient scoring chain; variants `v13` / `v12rule` (panel-v1.3 item d; docs/CN_LINKAGE.md section 6a) |
+| v1.3 CN locus check | `compare_cn_loci.py` | re-runs `cn_linkage.py` of a branch on finished patient runs and compares the CN loci with the run's own (panel-v1.3 item g) |
 | test B | `grid.py`, `grid_worker.sh`, `train_model.sh` | read-level simulation grid (design, simulate, run, collect) on the fleet |
 | test C/E | `smoke_pc.py`, `patient_rescore.py` | positive control (truth-CN smoke test; real depth), HG01868 |
 | test D | `cn_lofo.sh`, `testD_compare.py` | LOFO on the augmented subset vs panel-v1.1-r2 |

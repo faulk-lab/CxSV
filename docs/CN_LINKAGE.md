@@ -385,3 +385,57 @@ a record-count check).
 - Synthetic CI: the chr20-only synthetic genomes have no chrX and a small panel,
   so the track runs end to end (depth, PoN, segmentation, linkage) and must leave
   the expected results unchanged.
+
+
+### 6a. CN literature test A through the release pipeline (panel-v1.3, item d)
+
+`calibration/cn_linkage/literature_cn_release.py` replaces the Phase 1 path of
+`literature_cn.py` (prototype `cnlib`/`cnlink`, the 110-genome `phase1/seg` PoN). Per
+lit-v1.0 junction-level event (63; 26 DUP-TRP/INV-DUP):
+
+1. the junction track of item 11 test A (`score_literature_set.py`, mode `main`);
+2. the whole-genome 1 kb depth of a healthy donor of the carrier's sex (HG02026 male,
+   HG02181 female; LRSC R10, `cn_depth_v1`), scaled inside the event by
+   (ploidy + Δ) / ploidy from `literature_cn_segments.tsv`;
+3. `workflow/scripts/cn_segment.py` against `<release>/cn/pon` (stratum ONT_LRSC_R10,
+   sex-stratified chrX/chrY reference; all 63 runs used `pon_sex_reference` by_sex);
+4. `workflow/scripts/cn_linkage.py` with `<release>/cn/panel_cn_segments.tsv` and
+   `pon_members.tsv` (`--individual` = the donor), then `extract_junctions.py`,
+   `annotate_cxsv.py` and the patient scoring chain with `--cn-loci`, `--cn-only`,
+   `--cn-stats` (locus depth synthesised from the curated copy number, as before).
+
+Variant `v13` uses the branch's `cn_params`; `v12rule` the same with the panel-v1.2-r2
+chrX/chrY public rule, isolating D2. `--cn-set` passes `cn_segment.py --set` overrides
+(e.g. the D5 sweep).
+
+**Run against panel-v1.2-r2** (`cxsv-panel-20261108-fdac9ff80401`, code 1748631, freya,
+8 workers, 9 min 19 s; tables
+[testA_release_counts.tsv](cn_linkage/v13/testA_release_counts.tsv),
+[testA_release_summary.tsv](cn_linkage/v13/testA_release_summary.tsv),
+[testA_release_scores.tsv](cn_linkage/v13/testA_release_scores.tsv),
+[testA_release_vs_prototype.tsv](cn_linkage/v13/testA_release_vs_prototype.tsv)):
+
+| | junction level: called / Tier 1 | CN track: called / Tier 1 | DUP-TRP called / Tier 1 | other called / Tier 1 |
+|---|---|---|---|---|
+| prototype (`literature_cn.py`, v1.2 bundle) | 8 / 7 | 41 / 34 | 26 / 23 | 15 / 11 |
+| release pipeline, this branch (`v13`) | 8 / 7 | 40 / 34 | 26 / 23 | 14 / 11 |
+| release pipeline, v1.2 chrX/chrY rule (`v12rule`) | 8 / 7 | 38 / 32 | 24 / 21 | 14 / 11 |
+
+![Test A, release pipeline vs prototype](cn_linkage/v13/fig_testA_release_vs_prototype.png)
+
+- **D2:** GRO24_BAB2727 and GRO24_BAB3274 (male chrX DUP-TRP) are public under the v1.2
+  rule (one sex-matched panel individual carries the segment) and Tier 1 under D2.
+- **Not called, against the prototype:** NP18_P4855_512 is `public_cn`; its two chr21 gains
+  are carried by 3 and 2 other individuals of the full 1,619-library table (the prototype
+  filtered against its 110-genome subset). NP18_P2046_133: against the release PoN, the
+  small chr5 gain next to the loss is not segmented, so it is one loss with one DEL
+  (`simple_cnv`).
+- **Other tier changes:** 10 of 63 events change best tier against the prototype (both
+  directions; for example GRO24_BAB15428 Tier 2 → 1 and GRO24_BAB15705 Tier 1 → 3). The
+  causes are the PoN (release stratum vs Phase 1 subset), the sex-specific reference, and
+  the segment-anchored locus span (item g, the `size` feature). COL17_UTR22 stays Tier 1
+  through its junction locus. Its CN locus is no longer written: the prototype's was a
+  TRA-mate locus, and the chr2 locus has the junction-track locus's span.
+- **Remaining differences from the prototype design:** the donors are members of the
+  release ONT_LRSC_R10 PoN (`in_pon` yes), not left out with their family,
+  and only the donor's own libraries are left out of the public filter (patient semantics).

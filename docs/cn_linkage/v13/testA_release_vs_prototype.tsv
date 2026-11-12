@@ -1,0 +1,64 @@
+event_id	author_event_type	carrier_sex	dup_trp	prototype_tier	prototype_score	prototype_cn_classes	release_v13_tier	release_v13_score	release_v13_cn_classes	release_v12rule_tier	release_v12rule_score	junction_only_tier	changed_vs_prototype	changed_by_D2
+BAH19_BAB8920	DUP-NML-INV/DUP	male	False	not_called			not_called			not_called		not_called	False	False
+BAH19_BAB8923	DUP-NML-DUP	male	False	not_called			not_called			not_called		not_called	False	False
+BAH19_BAB8928	DUP-NML-DUP	male	False	Tier1_high_priority	1.65	CN_linked_gain	Tier1_high_priority	1.85	CN_linked_gain	Tier1_high_priority	1.85	not_called	False	False
+BAH19_BAB8934	DUP-NML-INV/DUP with templated insertion	male	False	not_called			not_called			not_called		not_called	False	False
+BAH19_BAB8938	DUP-TRP/INV-DUP	male	True	Benign_likely	-0.4	DUP-TRP_INV-DUP	Tier3	0.45	DUP-TRP_INV-DUP	Tier3	0.45	not_called	True	False
+BAH19_BAB8959	DUP-NML-DUP-NML-DUP	male	False	Tier1_high_priority	2.18		Tier1_high_priority	2.18		Tier1_high_priority	2.18	Tier1_high_priority	False	False
+BAH19_BAB8962	two tandem DUPs (DUP-NML-DUP)	male	False	not_called			not_called			not_called		not_called	False	False
+BAH19_BAB8964	DUP-TRP/INV-DUP	male	True	Tier1_high_priority	1.73	DUP-TRP_INV-DUP	Tier1_high_priority	1.53	DUP-TRP_INV-DUP	Tier1_high_priority	1.53	not_called	False	False
+COL17_TL009	mosaic chromoanasynthesis of chromosome 19 (dupINVdup core)	female	False	not_called			not_called			not_called		not_called	False	False
+COL17_TL010	balanced germline chromothripsis (4 chromosomes)	female	False	Tier1_high_priority	1.2		Tier1_high_priority	1.2		Tier1_high_priority	1.2	Tier1_high_priority	False	False
+COL17_UTR22	balanced germline chromothripsis (4 chromosomes)	female	False	Tier1_high_priority	1.11	CN_linked_loss	Tier1_high_priority	1.11		Tier1_high_priority	1.11	Tier1_high_priority	False	False
+EIS24_P12	complex translocation t(1;4;6;4) with del(6)(p12.3)	female	False	Tier1_high_priority	1.0		Tier1_high_priority	1.0		Tier1_high_priority	1.0	Tier1_high_priority	False	False
+EIS24_P3	DEL-INV-DEL	female	False	Tier2	0.86		Tier2	0.86		Tier2	0.86	Tier2	False	False
+EIS24_P4a	DUP-TRIP-QUAD-TRIP-DUP-NML-DEL (2p25)	female	False	Tier2	0.94	DUP-TRP_INV-DUP	Tier2	0.94	DUP-TRP_INV-DUP	Tier2	0.94	not_called	False	False
+EIS24_P4b	DEL-INV-DEL (2q21.2-q22.1)	female	False	not_called			not_called			not_called		not_called	False	False
+EIS24_P5	DEL-INV-NML-DUP-NML-DUP (chr3)	female	False	not_called			not_called			not_called		not_called	False	False
+EIS24_P6	translocated insertion with deletion (Xq28;9q22.33)	male	False	Tier1_high_priority	1.74	CN_linked_loss	Tier1_high_priority	1.74	CN_linked_loss	Tier1_high_priority	1.74	Tier1_high_priority	False	False
+EIS24_P8.1	DUP-INV-DUP (Xp22.2-Xq28)	male	False	not_called			not_called			not_called		not_called	False	False
+GRO24_BAB12566	DUP-TRP/INV-DUP	male	True	Tier1_high_priority	1.94	DUP-TRP_INV-DUP	Tier1_high_priority	1.29	DUP-TRP_INV-DUP	Tier1_high_priority	1.29	not_called	False	False
+GRO24_BAB14392	DUP-TRP/INV-DUP	male	True	Tier1_high_priority	2.43	DUP-TRP_INV-DUP	Tier1_high_priority	2.23	DUP-TRP_INV-DUP	Tier1_high_priority	2.23	not_called	False	False
+GRO24_BAB14547	DUP-TRP/INV-DUP	male	True	Tier1_high_priority	1.72	DUP-TRP_INV-DUP	Tier1_high_priority	1.52	DUP-TRP_INV-DUP	Tier1_high_priority	1.52	not_called	False	False
+GRO24_BAB14604	DUP-TRP/INV-DUP	male	True	Tier1_high_priority	1.66	CN_linked_gain	Tier1_high_priority	1.46	DUP-TRP_INV-DUP	Tier1_high_priority	1.46	not_called	False	False
+GRO24_BAB14686	DUP-TRP/INV-DUP	male	True	Tier1_high_priority	2.13	CN_linked_gain	Tier1_high_priority	2.13	CN_linked_gain	Tier1_high_priority	2.13	not_called	False	False
+GRO24_BAB15418	DUP-TRP/INV-DUP	male	True	Tier3	0.35	DUP-TRP_INV-DUP	Tier1_high_priority	1.9	CN_linked_gain	Tier1_high_priority	1.9	not_called	True	False
+GRO24_BAB15420	DUP-TRP/INV-DUP	male	True	Tier1_high_priority	1.91	DUP-TRP_INV-DUP	Tier1_high_priority	1.91	DUP-TRP_INV-DUP	Tier1_high_priority	1.91	not_called	False	False
+GRO24_BAB15428	DUP-TRP/INV-DUP	male	True	Tier2	0.55	CN_linked_gain	Tier1_high_priority	2.1	DUP-TRP_INV-DUP	Tier1_high_priority	2.1	not_called	True	False
+GRO24_BAB15702	DUP-TRP/INV-DUP	male	True	Tier1_high_priority	1.72	DUP-TRP_INV-DUP	Tier1_high_priority	1.52	DUP-TRP_INV-DUP	Tier1_high_priority	1.52	not_called	False	False
+GRO24_BAB15705	DUP-TRP/INV-DUP	male	True	Tier1_high_priority	2.66	CN_linked_gain	Tier3	0.37	CN_linked_gain	Tier3	0.37	not_called	True	False
+GRO24_BAB15740	DUP-TRP/INV-DUP	male	True	Tier1_high_priority	1.73	DUP-TRP_INV-DUP	Tier1_high_priority	1.53	DUP-TRP_INV-DUP	Tier1_high_priority	1.53	not_called	False	False
+GRO24_BAB15789	DUP-TRP/INV-DUP	male	True	Tier1_high_priority	2.14	CN_linked_gain	Tier1_high_priority	1.69	CN_linked_gain	Tier1_high_priority	1.69	not_called	False	False
+GRO24_BAB2727	DUP-TRP/INV-DUP	male	True	Tier1_high_priority	1.73	DUP-TRP_INV-DUP	Tier1_high_priority	1.73	CN_linked_gain	not_called		not_called	False	True
+GRO24_BAB2769	DUP-TRP/INV-DUP	male	True	Tier1_high_priority	2.34	DUP-TRP_INV-DUP	Tier1_high_priority	1.39	DUP-TRP_INV-DUP	Tier1_high_priority	1.39	not_called	False	False
+GRO24_BAB2772	DUP-TRP/INV-DUP	male	True	Tier1_high_priority	1.73	DUP-TRP_INV-DUP	Tier1_high_priority	1.53	DUP-TRP_INV-DUP	Tier1_high_priority	1.53	not_called	False	False
+GRO24_BAB2796	DUP-TRP/INV-DUP	male	True	Tier1_high_priority	1.9	DUP-TRP_INV-DUP	Tier1_high_priority	1.9	DUP-TRP_INV-DUP	Tier1_high_priority	1.9	not_called	False	False
+GRO24_BAB2797	DUP-TRP/INV-DUP	male	True	Tier1_high_priority	1.56	CN_linked_gain	Tier1_high_priority	1.56	CN_linked_gain	Tier1_high_priority	1.56	not_called	False	False
+GRO24_BAB2801	DUP-TRP/INV-DUP	male	True	Tier1_high_priority	1.97	CN_linked_gain	Tier1_high_priority	1.72	CN_linked_gain	Tier1_high_priority	1.72	not_called	False	False
+GRO24_BAB2805	DUP-TRP/INV-DUP	male	True	Tier1_high_priority	1.9	DUP-TRP_INV-DUP	Tier1_high_priority	1.7	DUP-TRP_INV-DUP	Tier1_high_priority	1.7	not_called	False	False
+GRO24_BAB3114	DUP-TRP/INV-DUP	male	True	Tier1_high_priority	1.9	DUP-TRP_INV-DUP	Tier1_high_priority	1.7	DUP-TRP_INV-DUP	Tier1_high_priority	1.7	not_called	False	False
+GRO24_BAB3147	DUP-TRP/INV-DUP	male	True	Tier1_high_priority	2.35	DUP-TRP_INV-DUP	Tier1_high_priority	2.35	DUP-TRP_INV-DUP	Tier1_high_priority	2.35	not_called	False	False
+GRO24_BAB3216	DUP-TRP/INV-DUP	male	True	Tier1_high_priority	1.9	CN_linked_gain	Tier1_high_priority	1.9	DUP-TRP_INV-DUP	Tier1_high_priority	1.9	not_called	False	False
+GRO24_BAB3255	DUP-TRP/INV-DUP	male	True	Tier1_high_priority	1.72	CN_linked_gain	Tier2	0.77	CN_linked_gain	Tier2	0.77	not_called	True	False
+GRO24_BAB3274	DUP-TRP/INV-DUP	male	True	Tier1_high_priority	1.73	DUP-TRP_INV-DUP	Tier1_high_priority	1.73	CN_linked_gain	not_called		not_called	False	True
+NP18_P00	clustered deletions with inversions	female	False	Tier1_high_priority	1.05	CN_linked_loss	Tier1_high_priority	1.55	CN_linked_loss	Tier1_high_priority	1.55	not_called	False	False
+NP18_P06	DUP-NML-DUP (inserted duplications)	female	False	not_called			not_called			not_called		not_called	False	False
+NP18_P1426_301	chromoanasynthesis-like clustered CNVs	female	False	not_called			not_called			not_called		not_called	False	False
+NP18_P2046_133	clustered deletions with inversions	female	False	Tier1_high_priority	1.66	CN_linked_gain_loss	not_called			not_called		not_called	True	False
+NP18_P2109_123	delINVdel	female	False	Tier1_high_priority	1.24		Tier1_high_priority	1.24		Tier1_high_priority	1.24	Tier1_high_priority	False	False
+NP18_P2109_150	inserted duplication	female	False	not_called			Tier2	0.81	CN_nested_gain	Tier2	0.81	not_called	True	False
+NP18_P2109_151	inverted inserted duplication	female	False	not_called			not_called			not_called		not_called	False	False
+NP18_P2109_162	deletions and duplication with inversions	female	False	not_called			not_called			not_called		not_called	False	False
+NP18_P2109_176	deletions and duplication with inversions	female	False	Tier2	0.96	CN_nested_gain	Tier1_high_priority	1.86	CN_nested_gain	Tier1_high_priority	1.86	not_called	True	False
+NP18_P2109_185	deletion and duplications with inversions	female	False	Benign_likely	-0.19	DUP-TRP_INV-DUP	Tier1_high_priority	1.63	DUP-TRP_INV-DUP	Tier1_high_priority	1.63	not_called	True	False
+NP18_P2109_188	clustered deletions with inversions	female	False	not_called			not_called			not_called		not_called	False	False
+NP18_P2109_190	delINVdel	female	False	Tier1_high_priority	1.04		Tier1_high_priority	1.04		Tier1_high_priority	1.04	Tier1_high_priority	False	False
+NP18_P2109_302	delINVdel	female	False	not_called			not_called			not_called		not_called	False	False
+NP18_P4855_511	DUP-NML-DUP (inserted duplications)	female	False	not_called			not_called			not_called		not_called	False	False
+NP18_P4855_512	duplications with inverted insertion	female	False	Tier1_high_priority	2.41	CN_linked_gain	not_called			not_called		not_called	True	False
+NP18_P5371_204	duplications and deletion with inversion	female	False	not_called			not_called			not_called		not_called	False	False
+NP18_P5513_116	terminal Xq deletion with inverted Xp duplication	female	False	not_called			not_called			not_called		not_called	False	False
+NP18_P5513_206	clustered duplications with inversions	female	False	not_called			not_called			not_called		not_called	False	False
+NP18_P72	delINVdel	female	False	not_called			not_called			not_called		not_called	False	False
+NP18_P74	DUP-NML-DUP	female	False	not_called			not_called			not_called		not_called	False	False
+NP18_P81	clustered deletions with inversion	female	False	not_called			not_called			not_called		not_called	False	False
