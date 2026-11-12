@@ -276,7 +276,7 @@ the same `singularity exec` / `apptainer exec`, or
 |---|---|
 | `run_cxsv.sh` | entry point (section 5) |
 | `README.md` | run instructions, ids and checksums of this bundle |
-| `bundle.json`, `bundle.env` | bundle id, commit, release id, image id, SIF sha256, Docker-archive sha256, base image, sizes by component, build times |
+| `bundle.json`, `bundle.env` | bundle id, commit, release id, image id, SIF sha256, Docker-archive sha256, base image, sizes by component, build times; since panel-v1.3 (item 16n) also `source.git_tag` / `git_tag_object` / `git_tag_type` / `git_tags_at_commit` (the tag at the bundle commit; the release's tag when several), and `panel_release.git_tag`, `git_tag_object`, `finalised_utc`, `release_manifest_sha256`, `release_json_sha256` (`workflow/lib/cxsv_bundle_meta.py`; make_bundle.sh warns when the release is tagged but the bundle commit is not) |
 | `MANIFEST.sha256` | sha256 of every file (`sha256sum -c` format; covers `bundle.json`) |
 | `bundle_manifest.tsv` | the same with sizes and components |
 | `repo/` | the repository at the commit (`git archive`; `workflow/COMMIT` holds the hash) |
