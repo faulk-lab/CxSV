@@ -1,0 +1,11 @@
+criterion	value	pass
+L01 private under D2 at female chrX bounds 1.12 / 1.18 / 1.25	private at all three (v1.2 rule: public at 1.18 and 1.25 via NA19238, now sex-discordant)	True
+BOC_2057 BRSK2 chr11:1,465,980-1,509,727 at most Tier 2	Tier2 (Tier 1 by points, score 1.06; public, capped)	True
+BOC_4433 NF1 chr17:31,902,782-32,067,453 Tier 1 with caller agreement >= 1/2	Tier1_high_priority, score 1.46 -> 1.66; agreement 0/2 -> 2/2	True
+No malformed locus IDs (zero-length / chr:0-2 CN loci)	none in any re-scored sample; BOC_5883 chr17:0-2 -> chr17:0-5037000 (9 -> 3 CN loci). 2-bp junction-track BND_cluster loci (unchanged from v1.2, Benign_likely) are by design. A crash (HG03667 CN locus past chr2 end) was found and fixed (d830a0e)	True
+Sex call printed for every sample	sex line from the CN track in all 9 test genomes, HG01868 and the PC	True
+0 public loci at Tier 1	subset LOFO 0 / 32; test genomes 0; HG01868 0; PC 0	True
+Subset healthy LOFO Tier 1 per genome <= 0.248	0.2832 (v1.2 on the same 113 genomes: 0.2566; +0.0266)	False
+HG01868 0 Tier 1	0 Tier 1 (4 Tier 2)	True
+PC planted Tier 1 events kept vs v1.2	13/17 vs 13/17 at v1.2; none lost, scores identical	True
+D3 gate flags BOC_5883 and BOC_7308	both 'Depth noise high' (0.322, 0.237 > 0.233)	True

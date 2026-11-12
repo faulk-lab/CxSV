@@ -1,0 +1,4 @@
+bound	pc_sex_call	pc_x_ratio	l01_segments	counts_v12	public_v12	counts_d2	public_d2	private_d2	matching_sex_matched	matching_after_d2_exclusion
+1.12	female	1.0398	chrX:101753000-102493000 3/2	0	False	0	False	True		
+1.18	female	1.0398	chrX:101753000-102493000 3/2	1	True	0	False	True	1kGP_LRSC_ONT_CHM13/NA19238[sex-discordant]	
+1.25	female	1.0398	chrX:101753000-102493000 3/2	1	True	0	False	True	1kGP_LRSC_ONT_CHM13/NA19238[sex-discordant]	

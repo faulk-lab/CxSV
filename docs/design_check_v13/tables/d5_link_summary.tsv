@@ -1,0 +1,6 @@
+z	genomes	candidates_per_genome	candidates_nested_per_genome	locus_per_genome	cn_loci_per_genome	cn_loci_nested_per_genome	cn_only_per_genome	cn_only_nested_per_genome
+5.0	113	16.0973	3.9823	0.4956	0.4956	0.2566	14.0354	3.5575
+5.25	113	16.0973	3.708	0.5133	0.5133	0.2743	14.0442	3.3009
+5.5	113	16.0973	3.3186	0.4956	0.4956	0.2478	14.0531	2.9469
+5.75	113	16.0973	2.9912	0.469	0.469	0.2212	14.0619	2.646
+6.0	113	16.0973	2.7522	0.4513	0.4513	0.1947	14.0531	2.4425

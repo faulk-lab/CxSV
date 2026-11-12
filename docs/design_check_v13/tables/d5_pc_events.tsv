@@ -1,0 +1,86 @@
+z	event	n_segments	segments	candidates	cn_loci
+5.0	E01	0			
+5.0	E02	0			
+5.0	E03	0			
+5.0	E04	0			
+5.0	E05	0			
+5.0	E06	0			
+5.0	E07	0			
+5.0	E08	0			
+5.0	E09	0			
+5.0	E10	0			
+5.0	E11	0			
+5.0	E12	0			
+5.0	E13	0			
+5.0	L01	3	chrX:101753000-102286000 3/2 z=21.7573;chrX:102286000-102412000 4/2 nested z=5.78;chrX:102412000-102493000 3/2 z=21.7573	locus:DUP-TRP/INV-DUP	chrX:101752400-102493000=DUP-TRP/INV-DUP(yes)
+5.0	L02	1	chr17:2194000-2471000 1/2 z=-12.3632	cn_only:CN_linked_loss	
+5.0	L03	2	chr2:166634000-166995000 1/2 z=-10.1662;chr9:24980000-25259000 3/2 z=8.7052	locus:CN_linked_loss;cn_only:CN_linked_gain	chr2:166633655-166995000=CN_linked_loss(no: same id as a junction-track locus)
+5.0	L04	0			
+5.25	E01	0			
+5.25	E02	0			
+5.25	E03	0			
+5.25	E04	0			
+5.25	E05	0			
+5.25	E06	0			
+5.25	E07	0			
+5.25	E08	0			
+5.25	E09	0			
+5.25	E10	0			
+5.25	E11	0			
+5.25	E12	0			
+5.25	E13	0			
+5.25	L01	3	chrX:101753000-102286000 3/2 z=21.7573;chrX:102286000-102412000 4/2 nested z=5.78;chrX:102412000-102493000 3/2 z=21.7573	locus:DUP-TRP/INV-DUP	chrX:101752400-102493000=DUP-TRP/INV-DUP(yes)
+5.25	L02	1	chr17:2194000-2471000 1/2 z=-12.3632	cn_only:CN_linked_loss	
+5.25	L03	2	chr2:166634000-166995000 1/2 z=-10.1662;chr9:24980000-25259000 3/2 z=8.7052	locus:CN_linked_loss;cn_only:CN_linked_gain	chr2:166633655-166995000=CN_linked_loss(no: same id as a junction-track locus)
+5.25	L04	0			
+5.5	E01	0			
+5.5	E02	0			
+5.5	E03	0			
+5.5	E04	0			
+5.5	E05	0			
+5.5	E06	0			
+5.5	E07	0			
+5.5	E08	0			
+5.5	E09	0			
+5.5	E10	0			
+5.5	E11	0			
+5.5	E12	0			
+5.5	E13	0			
+5.5	L01	3	chrX:101753000-102286000 3/2 z=21.7573;chrX:102286000-102412000 4/2 nested z=5.78;chrX:102412000-102493000 3/2 z=21.7573	locus:DUP-TRP/INV-DUP	chrX:101752400-102493000=DUP-TRP/INV-DUP(yes)
+5.5	L02	1	chr17:2194000-2471000 1/2 z=-12.3632	cn_only:CN_linked_loss	
+5.5	L03	2	chr2:166634000-166995000 1/2 z=-10.1662;chr9:24980000-25259000 3/2 z=8.7052	locus:CN_linked_loss;cn_only:CN_linked_gain	chr2:166633655-166995000=CN_linked_loss(no: same id as a junction-track locus)
+5.5	L04	0			
+5.75	E01	0			
+5.75	E02	0			
+5.75	E03	0			
+5.75	E04	0			
+5.75	E05	0			
+5.75	E06	0			
+5.75	E07	0			
+5.75	E08	0			
+5.75	E09	0			
+5.75	E10	0			
+5.75	E11	0			
+5.75	E12	0			
+5.75	E13	0			
+5.75	L01	3	chrX:101753000-102286000 3/2 z=21.7573;chrX:102286000-102412000 4/2 nested z=5.78;chrX:102412000-102493000 3/2 z=21.7573	locus:DUP-TRP/INV-DUP	chrX:101752400-102493000=DUP-TRP/INV-DUP(yes)
+5.75	L02	1	chr17:2194000-2471000 1/2 z=-12.3632	cn_only:CN_linked_loss	
+5.75	L03	2	chr2:166634000-166995000 1/2 z=-10.1662;chr9:24980000-25259000 3/2 z=8.7052	locus:CN_linked_loss;cn_only:CN_linked_gain	chr2:166633655-166995000=CN_linked_loss(no: same id as a junction-track locus)
+5.75	L04	0			
+6.0	E01	0			
+6.0	E02	0			
+6.0	E03	0			
+6.0	E04	0			
+6.0	E05	0			
+6.0	E06	0			
+6.0	E07	0			
+6.0	E08	0			
+6.0	E09	0			
+6.0	E10	0			
+6.0	E11	0			
+6.0	E12	0			
+6.0	E13	0			
+6.0	L01	1	chrX:101753000-102493000 3/2 z=21.7573	locus:CN_linked_gain	chrX:101752400-102493000=CN_linked_gain(yes)
+6.0	L02	1	chr17:2194000-2471000 1/2 z=-12.3632	cn_only:CN_linked_loss	
+6.0	L03	2	chr2:166634000-166995000 1/2 z=-10.1662;chr9:24980000-25259000 3/2 z=8.7052	locus:CN_linked_loss;cn_only:CN_linked_gain	chr2:166633655-166995000=CN_linked_loss(no: same id as a junction-track locus)
+6.0	L04	0			

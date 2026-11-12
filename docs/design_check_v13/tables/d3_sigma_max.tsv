@@ -1,0 +1,5 @@
+stratum	n_libraries	median	mad_scaled	k	sigma_max	n_flagged	max
+ONT_1kGP_1019	1017	0.233	0.048	3.5	0.401	22	0.8114
+ONT_LRSC_R10	247	0.1629	0.02	3.5	0.233	0	0.2116
+ONT_LRSC_R9	220	0.1558	0.0185	3.5	0.22	0	0.2042
+PacBio_HiFi	135	0.1586	0.0111	3.5	0.198	10	0.2726
