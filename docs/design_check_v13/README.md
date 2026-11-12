@@ -1,6 +1,6 @@
 # panel-v1.3 Phase 1 design check (D2, D3, D5, D1/h)
 
-2026-11-12. Integration branch `v13-design-check` = main e4ed243 + PR #43 (v13-cn-fixes 9d411b2) + PR #47 (v13-scoring-report 17cb153) + D3 thresholds (979e232) + CN-locus clamp fix (d830a0e); last code commit cd08108 (calling fingerprint **aa64baf08272**); branch tip c5a6626 adds only this report, its figures, tables and scripts (not fingerprinted, so the fingerprint is unchanged) (main/panel-v1.2-r2: fdac9ff80401).
+2026-11-12. Integration branch `v13-design-check` = main e4ed243 + PR #43 (v13-cn-fixes 9d411b2) + PR #47 (v13-scoring-report 17cb153) + D3 thresholds (979e232) + CN-locus clamp fix (d830a0e); last code commit cd08108 (calling fingerprint **aa64baf08272**); the later commits on the branch add only this report, its figures, tables and scripts (not fingerprinted, so the fingerprint of the branch tip is unchanged) (main/panel-v1.2-r2: fdac9ff80401).
 
 **Outcome: STOP.** One acceptance criterion fails (subset healthy LOFO Tier 1 per genome 0.283 > 0.248). Per the plan's stop rule nothing was merged; main is unchanged.
 
