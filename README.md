@@ -68,6 +68,7 @@ envs/
   cxsv-pipeline.yaml      the one pinned environment for both workflows
   cxsv-pipeline.lock.yaml exact solved versions (conda env export)
   cxsv-pipeline.explicit.txt  package URLs + MD5s: what the container image installs
+  cxsv-pipeline.pip.txt   hash-pinned PyPI wheels (clinician report: python-docx, reportlab)
 container/
   Dockerfile              the one pinned image (Docker / Singularity / Apptainer)
   run_cxsv.sh             offline-bundle entry point (copied to the bundle root)
@@ -259,6 +260,7 @@ pair.
 | `samples/<run>/<sample>/scoring/cxsv_scores.tsv` | every CxSV locus ranked: total points, tier, top-3 contributions, and each feature's value and points (roadmap item 5; [docs/SCORING.md](docs/SCORING.md)) |
 | `samples/<run>/<sample>/scoring/cxsv_score_features.tsv` | the same, one row per (locus, feature) with the rule applied |
 | `samples/<run>/<sample>/scoring/cxsv_score_report.md` | human-readable per-call report |
+| `samples/<run>/<sample>/report/<sample>.clinician_report.{docx,pdf}` | 2-page clinician-facing research report with the Tier 1 points graphic (`<sample>.tier1_points.png`); panel-v1.3, [docs/SCORING.md](docs/SCORING.md) section 6e |
 | `samples/<run>/<sample>/scoring/locus_depth.tsv`, `scoring_params.json` | read depth of locus segments (copy number); the weights, tiers, resources and patient information used |
 | `samples/<run>/<sample>/plots/` | genomic context and complexity class plots |
 

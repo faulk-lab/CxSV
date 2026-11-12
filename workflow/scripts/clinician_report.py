@@ -143,6 +143,29 @@ def coords(r):
     return f"{r['Chr']}:{fmt_int(r['Start'])}\u2013{fmt_int(r['End'])}"
 
 
+def dosage_genes(row):
+    """Affected genes with ClinGen HI/TS 1-3 (from gene_dosage_value), in table order."""
+    return [g for g, hi, ts in re.findall(r"([^;\s(]+):\w+\(HI ([^,]+),TS ([^,]+),", str(row.get("gene_dosage_value", "")))
+            if hi in ("1", "2", "3") or ts in ("1", "2", "3")]
+
+
+def genes_ranked(row):
+    """Genes_Affected with the dosage-sensitive genes first (result box, tables)."""
+    items = [x for x in str(row.get("Genes_Affected", "")).split(",") if x and x not in ("-", "none")]
+    key = set(dosage_genes(row))
+    return ",".join(sorted(items, key=lambda x: (x.split(":", 1)[0] not in key)))
+
+
+def short_value(f, v, r):
+    """Compact feature value for the report: dosage-sensitive genes only for gene_dosage,
+    else the value cut at 70 characters (the scores table keeps the full value)."""
+    if f == "gene_dosage":
+        keep = [m.group(0) for m in re.finditer(r"([^;\s(]+):\w+\(HI ([^,]+),TS ([^,]+),LOEUF ([^)]+)\)", v)
+                if m.group(1) in set(dosage_genes(r))]
+        return "; ".join(keep) or v[:70]
+    return v if len(v) <= 70 else v[:67].rstrip() + "\u2026"
+
+
 def genes_plain(g, max_genes=None):
     """'NF1:broken,RNF135:lost' -> 'NF1 (disrupted), RNF135 (deleted)'."""
     out = []
@@ -336,7 +359,7 @@ def result_box(D, t1):
     else:
         r = t1[0]
         lead = (f"{size_txt(r['Size'])} {r['Cmplx_Class']} at {coords(r)}"
-                f" ({genes_plain(r.get('Genes_Affected'), max_genes=3)})")
+                f" ({genes_plain(genes_ranked(r), max_genes=3)})")
         more = f"; {len(t1) - 1} further Tier 1 locus/loci listed below" if len(t1) > 1 else ""
         text = (f"{len(t1)} Tier 1 finding{'s' if len(t1) > 1 else ''} requiring expert review and orthogonal "
                 f"confirmation in an accredited laboratory: {lead}{more}.")
@@ -380,11 +403,11 @@ def sample_blocks(D, figure=None):
             kv = [["Size / structure", f"{size_txt(r['Size'])}; {CLASS_PLAIN.get(r['Cmplx_Class'], r['Cmplx_Class'])} "
                                        f"[{r['Cmplx_Class']}; SV types {r.get('SV_Types', 'NA')}; "
                                        f"{fmt_int(r.get('N_Junctions'))} junctions]"],
-                  ["Genes affected", genes_plain(r.get("Genes_Affected"))],
+                  ["Genes affected", genes_plain(genes_ranked(r))],
                   ["Dosage sensitivity", dosage_plain(r)],
                   ["Population frequency", f"{pan}; {cat}"],
                   ["Score", f"{float(r['Total_Score']):.2f} (Tier 1 threshold {thr:.2f})"],
-                  ["Contributing features", "; ".join(f"{f.replace('_', ' ')} {p:+.2f} ({v})"
+                  ["Contributing features", "; ".join(f"{f.replace('_', ' ')} {p:+.2f} ({short_value(f, v, r)})"
                                                       for f, p, v in all_points(r))]]
             g = gate_notes(r)
             if g:
@@ -405,9 +428,9 @@ def sample_blocks(D, figure=None):
         tab = [["Locus (hs1)", "Size / class", "Genes", "Population", "Score", "Note"]]
         for r in t2:
             size = "size not reported" if malformed(r) else size_txt(r["Size"])
-            tab.append([coords(r), f"{size}; {r['Cmplx_Class']}", genes_plain(r.get("Genes_Affected"), max_genes=4),
+            tab.append([coords(r), f"{size}; {r['Cmplx_Class']}", genes_plain(genes_ranked(r), max_genes=3),
                         short_population(r), f"{float(r['Total_Score']):.2f}", interpretation(r, D)])
-        B.append(("table", tab, [4.0, 2.4, 3.0, 2.2, 1.1, 4.8]))
+        B.append(("table", tab, [3.9, 3.3, 2.9, 2.0, 0.9, 4.5]))
     else:
         B.append(("p", "Tier 2: none."))
     B.append(("p", f"Tier 3: {counts['Tier3']} loci; likely benign: {counts['Benign_likely']} loci "
@@ -421,7 +444,7 @@ def sample_blocks(D, figure=None):
               [[sc.tier_label(k).replace("likely benign", "Likely benign"), thr_txt.get(k, "NA"), meaning.get(k, "")]
                for k in (TOP, "Tier2", "Tier3", "Benign_likely") if k in thr_txt], [2.0, 2.4, 13.1]))
     if T.get("tier_rules"):
-        B.append(("bullets", list(T["tier_rules"])))
+        B.append(("small_bullets", list(T["tier_rules"])))
     B.append(("p", "A locus is first required to meet CxSV criteria (at least 3 breakpoints, nested SVs, overlapping "
                    "SV types, or a copy-number change with an inversion). Points are then summed over explicit "
                    "features modelled on ACMG/ClinGen CNV scoring; the main ones are:"))
@@ -508,9 +531,12 @@ def to_docx(blocks, path, footer):
             p = doc.add_paragraph()
             p.add_run("Interpretation: ").bold = True
             p.add_run(b[1])
-        elif k == "bullets":
+        elif k in ("bullets", "small_bullets"):
             for x in b[1]:
-                doc.add_paragraph(x, style="List Bullet")
+                bp = doc.add_paragraph(x, style="List Bullet")
+                if k == "small_bullets":
+                    for rr in bp.runs:
+                        rr.font.size = Pt(7.5)
         elif k == "box":
             tb = doc.add_table(rows=1, cols=1)
             tb.style = "Table Grid"
@@ -521,7 +547,7 @@ def to_docx(blocks, path, footer):
             p.add_run(b[2])
             doc.add_paragraph()
         elif k == "figure":
-            doc.add_picture(b[1]["path"], width=Cm(17.5))
+            doc.add_picture(b[1]["path"], width=Cm(16.0))
             r = doc.add_paragraph().add_run(b[2])
             r.font.size, r.italic = Pt(7.5), True
         elif k in ("kv", "kv2", "table"):
@@ -560,6 +586,9 @@ def to_pdf(blocks, path, footer):
     cap = ParagraphStyle("cap", parent=small, fontName="Helvetica-Oblique")
     cellst = ParagraphStyle("c", parent=base, fontSize=7.5, leading=9)
     cellb = ParagraphStyle("cb", parent=cellst, fontName="Helvetica-Bold")
+    tcell = ParagraphStyle("tc", parent=base, fontSize=7, leading=8.4)        # multi-column tables
+    tcellb = ParagraphStyle("tcb", parent=tcell, fontName="Helvetica-Bold")
+    sbl = ParagraphStyle("sbl", parent=small, leftIndent=10, firstLineIndent=-7)
     title = ParagraphStyle("t", parent=base, fontName="Helvetica-Bold", fontSize=12.5, leading=15, spaceAfter=4)
     h = ParagraphStyle("h", parent=base, fontName="Helvetica-Bold", fontSize=10, leading=12, spaceBefore=6,
                        spaceAfter=3, textColor=colors.HexColor("#1F3A5F"), keepWithNext=1)
@@ -583,8 +612,8 @@ def to_pdf(blocks, path, footer):
             story += [Paragraph(esc(b[1]), base if k == "p" else small), Spacer(1, 3)]
         elif k == "interp":
             story += [Paragraph("<b>Interpretation:</b> " + esc(b[1]), base), Spacer(1, 3)]
-        elif k == "bullets":
-            story += [Paragraph("\u2022 " + esc(x), bl) for x in b[1]] + [Spacer(1, 3)]
+        elif k in ("bullets", "small_bullets"):
+            story += [Paragraph("\u2022 " + esc(x), bl if k == "bullets" else sbl) for x in b[1]] + [Spacer(1, 3)]
         elif k == "box":
             t = Table([[Paragraph(f"<b>{esc(b[1])}:</b> {esc(b[2])}",
                                   ParagraphStyle("bx", parent=base, fontSize=9.5, leading=12))]], colWidths=[W])
@@ -595,12 +624,16 @@ def to_pdf(blocks, path, footer):
             story += [t, Spacer(1, 5)]
         elif k == "figure":
             f = b[1]
-            story += [Image(f["path"], width=W, height=W * f["height_px"] / f["width_px"]),
+            fw = W * 0.8
+            story += [Image(f["path"], width=fw, height=fw * f["height_px"] / f["width_px"]),
                       Paragraph(esc(b[2]), cap), Spacer(1, 5)]
         elif k in ("kv", "kv2", "table"):
             rows = b[1]
-            data = [[Paragraph(esc(v), cellb if ((k != "table" and j % 2 == 0) or (k == "table" and i == 0))
-                               else cellst) for j, v in enumerate(row)] for i, row in enumerate(rows)]
+            if k == "table":
+                data = [[Paragraph(esc(v), tcellb if i == 0 else tcell) for v in row] for i, row in enumerate(rows)]
+            else:
+                data = [[Paragraph(esc(v), cellb if j % 2 == 0 else cellst) for j, v in enumerate(row)]
+                        for row in rows]
             if k == "kv":
                 cw = [W * x for x in (0.15, 0.35, 0.15, 0.35)]
             elif k == "kv2":

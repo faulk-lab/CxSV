@@ -45,7 +45,9 @@ RC = {"font.family": "sans-serif", "font.size": 8, "axes.labelsize": 8, "axes.ti
       "xtick.direction": "out", "ytick.direction": "out", "xtick.major.size": 3, "ytick.major.size": 3,
       "xtick.major.width": 0.6, "ytick.major.width": 0.6, "axes.spines.top": False,
       "axes.spines.right": False, "legend.frameon": False, "savefig.dpi": 300,
-      "axes.titlelocation": "left", "axes.titleweight": "normal", "pdf.fonttype": 42, "ps.fonttype": 42}
+      "axes.titlelocation": "left", "axes.titleweight": "normal", "pdf.fonttype": 42, "ps.fonttype": 42,
+      # gene names in \mathit{}: italic digits too (NF1, not NF-upright-1)
+      "mathtext.fontset": "custom", "mathtext.it": "DejaVu Sans:italic", "mathtext.rm": "DejaVu Sans"}
 
 
 def category_points(row):
@@ -153,7 +155,7 @@ def tier1_points_figure(rows, tiers, out_png, max_rows=15, out_pdf=None):
         handles = status_handles + [Patch(color=GCOL[g], label=g) for g in used] + \
             [Line2D([], [], marker="D", ls="", color="black", markersize=4, label="total points")]
         # one legend under both panels: dot colour (left) and categories (right)
-        fig.subplots_adjust(bottom=0.62 / h, top=1 - 0.30 / h)     # fixed margins in inches: x labels fit
+        fig.subplots_adjust(bottom=0.50 / h, top=1 - 0.30 / h)     # fixed margins in inches: x labels fit
         fig.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, 0.0), ncol=4,
                    handlelength=1, columnspacing=1.0, handletextpad=0.4)
         fig.savefig(out_png, dpi=300, bbox_inches="tight")

@@ -666,6 +666,7 @@ def sample_qc_section(SX, dn, loci, P):
     if cfg:
         S.append("- tier ceiling by panel status: " + ", ".join(f"{k} at most {sc.tier_label(v)}" for k, v in cfg.items())
                  + f"; {len(capped)} locus/loci capped")
+    S.append("")
     return S
 
 
