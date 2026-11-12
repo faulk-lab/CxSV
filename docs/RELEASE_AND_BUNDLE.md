@@ -341,7 +341,7 @@ $B/run_cxsv.sh netcheck                 # loopback only inside the container
 $B/run_cxsv.sh intake  --workdir /scratch/run1 --config intake.yaml \
     --bind /data/patient1 --cores 32           # only if the reads are not yet a panel-recipe hs1 alignment
 $B/run_cxsv.sh patient --workdir /scratch/run1 --config patient.yaml \
-    --bind /data/patient1 --cores 16 [--runtime singularity|apptainer|docker]
+    --bind /data/patient1 --cores 16 [--mem-mb N] [--runtime singularity|apptainer|docker]
 ```
 
 `patient.yaml` holds `patient_runs` (sample sheets with absolute paths under

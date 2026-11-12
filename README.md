@@ -91,6 +91,8 @@ workflow/
     junctions.smk         shared, fingerprinted: per-sample junction table (docs/JUNCTIONS.md)
     sample_report.smk     shared: per-sample text report
     fingerprint.smk       shared: tool versions + calling fingerprint
+    caller_checks.smk     shared, not fingerprinted: SVIM output check
+    caller_resources.smk  shared, not fingerprinted: caller memory requests and SVIM retry
     panel_cohort.smk      panel: per-cohort population call sets and QC plots
     panel_callability.smk panel: mosdepth CALLABLE masks per sample, callability per junction site
     panel_aggregate.smk   panel: carrier table, junction sites, Sniffles2 population mode,
