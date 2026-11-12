@@ -248,7 +248,11 @@ def parse_samtools_fastq_count(stderr_text: str) -> int:
 
 def check_header(header_text: str, sample_id: str) -> list[str]:
     """Problems with an intake output header: exactly one @RG with SM == sample_id,
-    and a minimap2 @PG of the recipe version with the recipe arguments."""
+    and a minimap2 @PG of the recipe version with the recipe arguments.
+
+    Written for intake outputs, whose @PG carries an explicit '-k 17'. Panel CRAMs
+    made before the intake (k from the prebuilt .mmi only) have no '-k 17' token
+    and would be reported here although their alignments are the same."""
     problems = []
     rgs = [l for l in header_text.splitlines() if l.startswith("@RG\t")]
     sms = [f.split(":", 1)[1] for l in rgs for f in l.split("\t") if f.startswith("SM:")]

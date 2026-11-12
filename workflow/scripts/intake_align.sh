@@ -12,7 +12,8 @@
 # are concatenated into one alignment. Only primary records of BAM/CRAM inputs
 # are used (samtools view -F 0x900), so each read enters exactly once.
 #
-# Recipe (identical to the panel, docs/POSITIVE_CONTROL.md step 1):
+# Recipe (the panel's, docs/POSITIVE_CONTROL.md step 1; on BOC_4433 it reproduced the
+# panel-recipe CRAM record for record, docs/INTAKE.md):
 #   samtools fastq -T MM,ML,MN,qs | minimap2 2.24-r1122 -y -ax map-ont --eqx -k 17 -K <batch>
 #     | samtools sort | CRAM (reference hs1.fa), indexed
 # -y copies the MM/ML/MN modified-base tags and dorado's qs into the alignments.
@@ -22,6 +23,9 @@
 # verbatim and non-SAM tokens (runid=..., ch=...) would make invalid SAM.
 # -K (minibatch) changes memory and speed only, not the alignments.
 # The index must be a k=17 w=10 map-ont index of the same hs1 (checked from its header).
+# The panel CRAMs' @PG has no '-k 17' (k came from the prebuilt index); here -k 17 is also
+# written on the command line, which minimap2 overrides with the index's k, so the
+# alignments are the same and the @PG records k explicitly.
 #
 # Read group: ID = SM = <sample_id> (the sample sheet's ID, so caller VCF sample
 # columns match the patient sheet), PL, DS = intake description + recipe.

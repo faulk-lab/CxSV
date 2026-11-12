@@ -25,7 +25,7 @@ samtools view -u -F 0x900 <input>            # BAM/CRAM: primary records only, e
 | Element | Value | Why |
 |---|---|---|
 | aligner | minimap2 **2.24-r1122** | the panel's version; the script refuses any other (`exit 4`). It is in the container image (`envs/cxsv-pipeline.explicit.txt`, `minimap2-2.24-h7132678_1`); the intake needed no image change |
-| preset, k | `-x map-ont`, `-k 17` (w = 10) | the panel index parameters; a prebuilt index is checked from its header (`MMI\2`, w, k, sequence count = `.fai` lines) |
+| preset, k | `-x map-ont`, `-k 17` (w = 10) | the panel index parameters; a prebuilt index is checked from its header (`MMI\2`, w, k, sequence count = `.fai` lines). The panel CRAMs' `@PG` has no `-k 17` (k came from the prebuilt index); the intake also writes it on the command line, where minimap2 uses the index's k, so the alignments are unchanged (BOC_4433 below) and the `@PG` records k |
 | `--eqx`, `-a` | `=`/`X` CIGAR, SAM output | as the panel |
 | `-y` + `-T MM,ML,MN,qs` | modified-base tags and dorado's qs copied into the alignments | only these four: `-T '*'` would also copy dorado's per-read `RG:Z`, which clashes with the new read group |
 | `-K` | 4g (default) or 2g | memory and speed only, never the alignments |
