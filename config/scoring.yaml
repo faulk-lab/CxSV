@@ -174,17 +174,19 @@ tier_ceiling_by_status:
 # Tier-1 such locus needs more than min_multi_caller_fraction of its junctions with
 # >= 2 callers, else it is reported at demote_to (points unchanged). Copy-number-only
 # candidates are listed as unreliable.
-# Thresholds: PLACEHOLDERS (null = not calibrated, gate inactive and the report says
-# so). The panel-v1.3 design check sets them from the CN-sigma distribution of the
-# 1,619 panel libraries per stratum (docs/PLAN_panel_v1.3.md, D3), not from the test
-# genomes (nine test genomes: 0.16-0.21, BOC_7308 0.24, BOC_5883 0.32).
+# Thresholds (panel-v1.3 design check D3, docs/design_check_v13/): per PoN stratum,
+# median + 3.5 x scaled MAD (robust z 3.5) of the CN sigma of the 1,619 panel-v1.2-r2
+# libraries (cn/stats.json). Panel libraries above: ONT_1kGP_1019 22/1,017 (mostly
+# < 5x depth), PacBio_HiFi 10/135, ONT_LRSC_R10 0/247, ONT_LRSC_R9 0/220. Nine test
+# genomes (all R10): BOC_5883 (0.322) and BOC_7308 (0.237) above, the others 0.16-0.21.
+# Every PoN stratum is listed, so default_sigma_max (strata without a PoN) stays null.
 depth_noise:
   enabled: true
   sigma_max:
-    ONT_LRSC_R10: null
-    ONT_LRSC_R9: null
-    ONT_1kGP_1019: null
-    PacBio_HiFi: null
+    ONT_LRSC_R10: 0.233    # median 0.1629, scaled MAD 0.0200, n 247
+    ONT_LRSC_R9: 0.220     # median 0.1558, scaled MAD 0.0185, n 220
+    ONT_1kGP_1019: 0.401   # median 0.2330, scaled MAD 0.0480, n 1,017
+    PacBio_HiFi: 0.198     # median 0.1586, scaled MAD 0.0111, n 135
   default_sigma_max: null     # strata not listed above
   conservative: {min_multi_caller_fraction: 0.5, demote_to: Tier2}
   cn_classes: [DUP-TRP_INV-DUP, DUP-TRP/INV-DUP, CN_nested_gain, CN_linked_gain, CN_linked_loss,
