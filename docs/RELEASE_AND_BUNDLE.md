@@ -397,6 +397,40 @@ workflow engine and container runtime are allowed. The bundle assumes
 Snakemake (inside the image) plus Singularity/Apptainer, and also ships a
 Docker archive.
 
+### Node memory (roadmap item 16m)
+
+Snakemake reserves memory only for rules that request it, and only within a
+budget: `run_cxsv.sh` passes `--resources mem_mb` = 90 % of the host's RAM
+(`--mem-mb N` overrides it). The caller requests come from `caller_resources` in
+`config/calling.yaml` (applied by `workflow/rules/caller_resources.smk`; not
+fingerprinted), and attempt *k* of a job reserves *k* times its request.
+
+Measured 2026-11-12, BOC_3559 host CRAM (39x ONT R10.4.1, CRAM 3.0), each caller
+alone, 16 threads, inside the panel-v1.2 bundle SIF:
+
+| Caller | Node | Wall | Max RSS, largest process (`time -v`) | RSS summed over its processes (5 s samples) | Request |
+|---|---|---|---|---|---|
+| SVIM 2.0.0 (1 thread) | betsy | 5,682 s | 5.4 GB | 4.4 GB | 8,000 MB, 1 retry |
+| SVIM 2.0.0 (1 thread) | athena | 6,036 s | 5.4 GB | 4.3 GB | |
+| Sniffles2 2.8.1 | betsy | 339 s | 2.1 GB | 11.8 GB | 24,000 MB (32-thread default) |
+| cuteSV 2.1.4 | betsy | 380 s | 3.6 GB | 8.5 GB | 16,000 MB (32-thread default) |
+
+The summed RSS double-counts pages shared between forked workers, so it is an
+upper estimate. SVIM's `std::bad_alloc` on athena on 2026-11-11 (BOC_3559 patient
+run, 24 cores) did **not** reproduce: alone on the same CRAM (md5 `9965b7db…`) it
+passed on athena with the same 5.4 GB peak as on betsy. Its footprint is far below
+any node's RAM, so the abort was transient or caused by other load on the node;
+the retry covers it, and the requests keep the three callers (48 GB together)
+within the budget.
+
+| Node | RAM (`free -g`) | Patient calling (48 GB requested) | Intake (docs/INTAKE.md) |
+|---|---|---|---|
+| freya | 123 GiB | yes | minibatch 4g (72 GB) |
+| betsy | 121 GiB | yes | 4g |
+| athena | 94 GiB | yes | 4g |
+| keurig | 60 GiB | yes (budget about 58 GB) | 2g (54 GB) |
+| shadowfax | 60 GiB | yes (budget about 58 GB) | 2g (54 GB) |
+
 ## 6. Validation record
 
 ### 6-v1.2. Bundle with panel-v1.2-r2, 2026-11-09 (current patient bundle, tagged)

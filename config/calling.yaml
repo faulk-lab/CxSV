@@ -45,11 +45,14 @@ threads:
 # Applied by workflow/rules/caller_resources.smk (roadmap item 16m). mem_mb is
 # reserved per caller job when snakemake has a memory budget (run_cxsv.sh:
 # --resources mem_mb = 90% of the host's RAM); attempt k reserves mem_mb x k.
-# Peak RSS measured 2026-11-11 on BOC_3559 (39x ONT R10, CRAM, 16 threads);
-# docs/RELEASE_AND_BUNDLE.md "Node memory" has the table.
+# Measured 2026-11-12 on BOC_3559 (39x ONT R10.4.1 CRAM, 16 caller threads,
+# bundle SIF; docs/RELEASE_AND_BUNDLE.md "Node memory"): SVIM 5.4 GB (betsy and
+# athena), Sniffles2 11.8 GB and cuteSV 8.5 GB summed over their worker
+# processes. Sniffles2 and cuteSV run one worker per thread; their requests
+# allow for the 32-thread default (threads.sv_callers). Total 48 GB.
 caller_resources:
-  svim:     {mem_mb: 32000, retries: 1}
-  sniffles: {mem_mb: 16000}
+  svim:     {mem_mb: 8000, retries: 1}
+  sniffles: {mem_mb: 24000}
   cutesv:   {mem_mb: 16000}
 
 # ─── [FINGERPRINTED] SV calling ─────────────────────────────────────────────

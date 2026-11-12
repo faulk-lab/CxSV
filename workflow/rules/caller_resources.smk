@@ -8,9 +8,12 @@
 # before this file keeps its fingerprint (roadmap item 16m).
 #
 # Why: SVIM 2.0.0 aborted with std::bad_alloc on athena (94 GB) on the 39x
-# BOC_3559 genome on 2026-11-11, while Sniffles2 or cuteSV ran beside it; the
-# same run passed on freya (123 GB). SVIM has no threads directive, so snakemake
-# ran it next to a 16-32-thread caller with nothing limiting their sum.
+# BOC_3559 genome on 2026-11-11 (patient run, 24 cores); the rerun on freya
+# passed. Run alone on the same CRAM on 2026-11-12 SVIM peaked at 5.4 GB and
+# passed on athena and on betsy, so the abort was not SVIM's own footprint and
+# did not reproduce. A memory request keeps the callers' sum within the node,
+# and one retry covers a transient failure (docs/RELEASE_AND_BUNDLE.md
+# "Node memory").
 #
 #   mem_mb    reserved per job. Effective only with a memory budget
 #             (snakemake --resources mem_mb=N; run_cxsv.sh passes 90% of the

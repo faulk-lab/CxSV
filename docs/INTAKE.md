@@ -107,11 +107,24 @@ patient workflow's sheet format) and `intake_summary.tsv`.
 
 ## Memory and time
 
-Measured on the nine monkey_meth genomes (ONT R10.4.1, 7.8-13.9 M reads, 26 or 20
-minimap2 threads, 2026-11-10): minimap2 peak RSS 53-56 GB at `-K 4g`, 37-39 GB at
-`-K 2g`; alignment 48-98 min. `samtools sort` adds `sort_threads x sort_mem`
+Measured on the nine monkey_meth genomes (ONT R10.4.1, 26 or 20 minimap2
+threads, 2026-11-10; minimap2's own report): peak RSS 53-56 GB at `-K 4g`,
+37-39 GB at `-K 2g`; minimap2 48-98 min. `samtools sort` adds `sort_threads x sort_mem`
 (16 GB at the defaults), hence `mem_mb` 72000 (4g) or 54000 (2g). Building the
 index takes a few minutes and about 20 GB.
+
+## Validation on real data (2026-11-12)
+
+BOC_4433's raw dorado modBAM (95.9 GB, 11,081,123 reads, R10.4.1 sup v5.0.0
+5mC_5hmC/6mA) was taken through `workflow/intake/Snakefile` inside the panel-v1.2
+bundle SIF on keurig (`-K 2g`, 20 threads) and compared with the CRAM made by the
+ad-hoc `align_modbam_to_hs1.sh` on 2026-11-10:
+
+- every alignment record identical (md5 of `samtools view` without header
+  `80fad463…` in both; 15,267,530 records); only the `@RG DS` and `@PG` header lines differ;
+- input md5 identical (`9b803458…`); verdict PASS: 11,081,123 reads in =
+  11,051,474 primary mapped + 29,649 unmapped; MM/ML in 2,000 of 2,000 sampled records;
+- alignment 3,054 s, Snakemake job 3,233 s; minimap2 peak RSS 38.3 GB.
 
 ## Tests
 
