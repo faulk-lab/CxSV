@@ -56,6 +56,23 @@ def test_image_is_built_from_the_explicit_list():
     assert "envs/cxsv-pipeline.pip.txt" in df and "--require-hashes" in df and "--no-deps" in df
 
 
+def test_dockerignore_admits_every_copy_source():
+    """container/Dockerfile.dockerignore excludes everything (`*`) and re-admits the files the
+    image needs. panel-v1.3: the new `COPY envs/cxsv-pipeline.pip.txt` was not re-admitted, so
+    `make_bundle.sh image` failed ("not found") on main 1c9c80d. Every COPY source must be."""
+    df = (REPO / "container" / "Dockerfile").read_text()
+    ign = (REPO / "container" / "Dockerfile.dockerignore").read_text().splitlines()
+    rules = [l.strip() for l in ign if l.strip() and not l.lstrip().startswith("#")]
+    assert rules[0] == "*"
+    admitted = {r[1:] for r in rules if r.startswith("!")}
+    sources = []
+    for m in re.finditer(r"^COPY\s+(?!--from)(.+)$", df, re.M):
+        parts = [p for p in m.group(1).split() if not p.startswith("--")]
+        sources += parts[:-1]
+    assert sources, "no COPY lines found"
+    assert set(sources) <= admitted, set(sources) - admitted
+
+
 def pip_lock():
     """{name: (version, sha256)} of envs/cxsv-pipeline.pip.txt."""
     text = (ENVS / "cxsv-pipeline.pip.txt").read_text().replace("\\\n", " ")
