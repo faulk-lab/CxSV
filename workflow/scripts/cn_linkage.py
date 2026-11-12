@@ -196,7 +196,8 @@ def main():
             if r["Chr"] != chrom:
                 raise ValueError(f"classify_cxsv.py put CN cluster {r['ClusterID']} on {r['Chr']}, expected {chrom}")
             jid = f"{r['Chr']}:{r['Start']}-{r['End']}"       # junction-derived id (the v1.2 locus id)
-            s0, e0 = cl.check_locus(chrom, *cl.locus_span(k, chrom, rows_of[r["ClusterID"]]), k, lengths.get(chrom))
+            s0, e0 = cl.check_locus(chrom, *cl.locus_span(k, chrom, rows_of[r["ClusterID"]], lengths.get(chrom)),
+                                     k, lengths.get(chrom))
             r["Start"], r["End"], r["Size"] = str(s0), str(e0), str(e0 - s0)
             lid = f"{r['Chr']}:{r['Start']}-{r['End']}"
             row = dict(locus_id=lid, junction_span=jid, candidate=k["id"], cn_class=k["cls"],

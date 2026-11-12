@@ -98,6 +98,18 @@ def _run_linkage(tmp_path, summary_rows=()):
     return r, rd(out["loci"]), rd(out["summary"]), open(out["clusters"]).read().splitlines()
 
 
+def test_locus_span_clamped_to_contig_end():
+    # HG03667 (panel-v1.2-r2): a gain reaching the last, partial 1 kb bin of chr2
+    gain = _cand([dict(chrom="chr2", start=242_600_000, end=242_697_000, state=3, ploidy=2)])
+    rows = [(242_559_540, 242_559_542)]
+    assert cl.locus_span(gain, "chr2", rows) == (242_559_540, 242_697_000)
+    s, e = cl.locus_span(gain, "chr2", rows, 242_696_752)
+    assert (s, e) == (242_559_540, 242_696_752)
+    assert cl.check_locus("chr2", s, e, gain, 242_696_752) == (s, e)
+    with pytest.raises(ValueError):
+        cl.check_locus("chr2", 242_559_540, 242_697_000, gain, 242_696_752)
+
+
 def test_boc5883_loss_gets_segment_anchored_locus(tmp_path):
     r, loci, summ, bed = _run_linkage(tmp_path)
     assert [(L["locus_id"], L["junction_span"], L["written"]) for L in loci] == [("chr17:0-5037000", "chr17:0-2", "yes")]

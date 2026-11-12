@@ -346,17 +346,21 @@ def segment_contigs(c):
     return out
 
 
-def locus_span(c, chrom, rows=()):
+def locus_span(c, chrom, rows=(), length=None):
     """(start, end) of the copy-number locus of candidate c on `chrom`: the union of its
     segments there and the breakend intervals `rows` ((start, end) of the records' BED
     rows on that contig, vcf_to_bed.py). panel-v1.2 took the span from the rows alone, so
     a loss whose only junction was a telomeric translocation end became chr17:0-2
-    (BOC_5883, 17p13.3)."""
+    (BOC_5883, 17p13.3). With `length` (the contig length) the end is clamped to it: segments
+    are built on 1 kb bins, so one that reaches the last, partial bin ends past the contig
+    (HG03667 chr2, design check panel-v1.3)."""
     segs = [s for s in c["segs"] if s["chrom"] == chrom]
     if not segs:
         raise ValueError(f"candidate {c.get('id')} has no copy-number segment on {chrom}")
     lo = min([s["start"] for s in segs] + [int(r[0]) for r in rows])
     hi = max([s["end"] for s in segs] + [int(r[1]) for r in rows])
+    if length is not None:
+        hi = min(hi, int(length))
     return max(0, lo), hi
 
 
