@@ -4,8 +4,15 @@
     check_locus_ids.py --fai hs1.fa.fai TABLE.tsv [TABLE.tsv ...]
 
 A locus id is well formed when it is CONTIG:START-END with CONTIG a sequence of the reference
-.fai and 0 <= START < END <= length(CONTIG). The id column is Locus_ID or locus_id (comment
-lines '#' skipped). Prints one line per malformed id and a summary; exit 1 if any.
+.fai, 0 <= START < length(CONTIG) and START < END <= length(CONTIG) + 1. The id column is
+Locus_ID or locus_id (comment lines '#' skipped). Prints one line per malformed id and a
+summary; exit 1 if any.
+
+END = length + 1 is accepted (PI decision 22, 2026-11-13). vcf_to_bed.py writes a BND breakend as
+[POS - bnd_window, POS + bnd_window) without clamping to the contig, so a breakend on the last
+base of a contig gives END = length + 1 (24 panel loci in panel-v1.2-r2 and in panel-v1.3; fix in
+calling code for v1.4, ROADMAP item 19). Anything further past the end, a start on or past the end
+of the contig, zero length and contigs absent from the reference (chrN) are still malformed.
 """
 import argparse
 import csv
@@ -13,6 +20,7 @@ import re
 import sys
 
 ID = re.compile(r"^(\S+):(\d+)-(\d+)$")
+END_SLACK = 1   # END = length + 1 from the unclamped BND window (ROADMAP item 19)
 
 
 def problem(lid, lengths):
@@ -24,8 +32,10 @@ def problem(lid, lengths):
         return f"contig {c} not in the reference"
     if not s < e:
         return "start >= end"
-    if e > lengths[c]:
-        return f"end {e} past the end of {c} ({lengths[c]})"
+    if s >= lengths[c]:
+        return f"start {s} off the end of {c} ({lengths[c]})"
+    if e > lengths[c] + END_SLACK:
+        return f"end {e} past the end of {c} ({lengths[c]}; allowed {lengths[c] + END_SLACK})"
     return None
 
 

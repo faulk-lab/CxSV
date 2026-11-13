@@ -25,7 +25,9 @@
 #   8. tampered release refused: one byte changed / one unlisted file added
 #  10. locus ids well-formed (tests/lab/check_locus_ids.py): every locus id of the scored and
 #      reported tables of runs 4, 5 and 6 is chrom:start-end on a reference contig (.fai) with
-#      start < end <= contig length; loci on non-reference contigs must be in
+#      0 <= start < contig length, start < end <= contig length + 1 (decision 22: the unclamped
+#      BND window gives end = length + 1 at a contig's last base, ROADMAP item 19); loci on
+#      non-reference contigs must be in
 #      scoring/quarantined_loci.tsv instead (ROADMAP item 18)
 #   9. literature set shipped: bundle_site.yaml names literature_set.root inside the
 #      bundle, its MANIFEST.tsv verifies (sha256 of every listed file), the offline
