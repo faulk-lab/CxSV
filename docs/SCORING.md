@@ -604,7 +604,9 @@ Both are listed in `scoring/quarantined_loci.tsv` (action `removed` / `junctions
 counted in one line, "Quarantined (non-reference contig)", of the score report (summary and
 Sample QC section) and of the clinician report's QC table. Bundle validation check 10
 (`tests/lab/check_locus_ids.py`) fails on any scored or reported locus id that is not
-`contig:start-end` on a reference contig with `start < end <= contig length`.
+`contig:start-end` on a reference contig with `0 <= start < contig length` and
+`start < end <= contig length + 1` (end = length + 1 is the unclamped BND window at a contig's
+last base, accepted for panel-v1.3 by decision 22 and fixed in calling code in v1.4, ROADMAP item 19).
 
 Effect on panel-v1.3: none of the 336 healthy-LOFO Tier 1 loci touches a non-reference contig.
 608 LOFO loci touch one (129 removed: all Benign_likely or Tier 3; 479 lose junctions: 467 Benign,

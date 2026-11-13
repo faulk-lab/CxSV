@@ -162,6 +162,14 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
     1c9c80d, finalise, rebuild from the tag, switch; (b) fix item 18 in calling code first (new
     release); (c) quarantine loci on contigs absent from the reference in the scorer (new bundle,
     same release). Details: [panel_v1.3/README.md](panel_v1.3/README.md).
+22. **Contig-end locus ids (decided 2026-11-13, item 19).** After the scorer quarantine (option c
+    of decision 21, PR #53) the strict locus-id check (validation check 10) found ids whose end is
+    contig length + 1, for example `chrM:2-16570` (chrM is 16,569 bp). That is 9 ids in 7 of the
+    nine test genomes, 2 in HG01868, 1 in the positive control and 24 panel loci (also 24 in the
+    tagged panel-v1.2-r2), all Benign_likely; 603 healthy-LOFO loci, 0 Tier 1. PI: **allow
+    end = length + 1 for panel-v1.3; fix upstream in v1.4.** Check 10 and the regression criterion
+    now require a reference contig, `0 <= start < length` and `start < end <= length + 1`; chrN,
+    other non-reference contigs, zero length and anything further off the contig still fail.
 
 ---
 
@@ -188,6 +196,7 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
 | 16 | panel-v1.3 follow-ups: (a)–(d) from panel-v1.2, (e)–(o) from the nine-genome test run | **done 2026-11-12 (release + bundle; deployment held)**: (a)–(o) merged (PRs #43, #44, #47, #48; tooling #49, #50, #51); release `cxsv-panel-20261111-aa64baf08272` VERIFIED, healthy Tier 1 0.2075 per genome (R10 0.2551), 0 public Tier 1; bundle `cxsv-bundle-20261112-1c9c80d0e2c6` validated (PC 13/13 planted Tier 1 kept, L01 private at 1.12/1.18/1.25, HG01868 0 Tier 1, nine genomes 1 Tier 1 = *NF1*); **not tagged, patients not switched**: malformed locus id `chrN:…` (item 18) and validation check 7 (fixed by #51) failed the stop rule (decision 21) | docs/panel_v1.3/README.md, docs/design_check_v13/README.md |
 | 17 | Test run on nine de-identified genomes (monkey_meth children's blood) with clinician-style reports | **done 2026-11-11**: 9/9 offline runs with the tagged v1.2 bundle; 2 Tier 1 in 9 genomes (0.22 per genome; R10 healthy expectation 0.247): private *NF1* deletion (BOC_4433, needs confirmation) and a public *BRSK2* locus (scoring weakness, item 16 e) | below; NAS `patient_test_runs/monkeymeth_20261110/` |
 | 18 | Sniffles2 PAR BND mate contig `chrN` reaches junction tables and locus ids | **new 2026-11-12**: 266 panel junction sites and 18 panel loci on `chrN` (v1.3); BOC_5883 locus `chrN:62452837-62454007`; fix in calling code = new release | below, docs/panel_v1.3/README.md |
+| 19 | Contig-end off-by-one: BND window not clamped to the contig (end = length + 1) | **new 2026-11-13, v1.4 calling item** (decision 22): 24 panel loci in panel-v1.2-r2 and panel-v1.3, never Tier 1; tolerated by validation check 10 for v1.3 | below |
 
 ---
 
@@ -510,6 +519,24 @@ Sniffles2 2.8.1 writes some BNDs near the chrY PAR with ALT mate contig `chrN` w
 - 266 junction sites and 18 panel CxSV loci of the v1.3 release (v1.2: 266 / 21).
 
 Proposed fix: in `vcf_to_bed.py`, set the mate contig of a BND from `CHR2` when the ALT contig is not in the reference, or drop the record, and test this on a PAR fixture. That changes fingerprinted calling code, so it needs a new release. A scorer-level quarantine of such loci would keep the release.
+
+### 19. Contig-end off-by-one in breakend intervals — new 2026-11-13 (v1.4 calling item)
+
+`workflow/scripts/vcf_to_bed.py` writes each BND breakend (and its mate) as
+`[POS - bnd_window, POS + bnd_window)` with a floor at 0 but no ceiling at the contig length.
+With `bnd_window = 1`, a breakend on the last base of a contig (POS = length) gives an interval
+end of length + 1. `classify_cxsv.py` takes the cluster End as the maximum interval end, so the
+locus id ends one base past the contig. Measured with the strict check (2026-11-13):
+
+- panel releases: 24 loci each in panel-v1.2-r2 (of 13,053) and panel-v1.3 (of 11,899), 18 shared;
+- healthy LOFO (panel-v1.3): 603 loci, 599 Benign_likely and 4 Tier 3, 0 Tier 1;
+- nine test genomes: 9 ids in 7 genomes; HG01868: 2; positive control: 1 (`chrM:7-16570`); all
+  Benign_likely; the overshoot is always exactly 1 base.
+
+Fix for v1.4: clamp `b1_end`, `b2_end` and the `_end` rows of long-span breakends to the contig
+length from the .fai, with a unit test on a last-base BND; then set `END_SLACK = 0` in
+`tests/lab/check_locus_ids.py`. It changes fingerprinted calling code (new release, LOFO
+re-calibration), so it is paired with the item 18 calling fix.
 
 ### 17. Test run on nine de-identified genomes — done 2026-11-11
 

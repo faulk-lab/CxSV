@@ -81,7 +81,7 @@ def test_locus_id_check(tmp_path):
     t.write_text("Rank\tLocus_ID\n1\tchr1:0-2\n2\tchr17:0-5037000\n")
     assert cli.main(["--fai", str(fai), str(t)]) == 0
     for bad, why in (("chrN:62452837-62454007", "not in the reference"), ("chr1:500-500", "start >= end"),
-                     ("chr1:10-1001", "past the end"), ("chr1-10-20", "not CONTIG")):
+                     ("chr1:10-1002", "past the end"), ("chr1-10-20", "not CONTIG")):
         t.write_text(f"Rank\tLocus_ID\n1\t{bad}\n")
         assert cli.main(["--fai", str(fai), str(t)]) == 1
         assert why in cli.problem(bad, {"chr1": 1000, "chr17": 5037000})
