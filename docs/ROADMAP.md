@@ -6,6 +6,8 @@ whole-genome positive control against the full panel (branch `validation-panel-v
 *Updated 2026-11-11: panel-v1.2 tagged and deployed for patients (item 15); test run on nine
 de-identified genomes (item 17); item 16 extended with the test-run findings; build plan for
 panel-v1.3: [docs/PLAN_panel_v1.3.md](PLAN_panel_v1.3.md) (decision 19).*
+*Updated 2026-11-13: panel-v1.3 tagged, release finalised and deployed for patients (item 16;
+decisions 21, 22); v1.4 calling items 18 and 19.*
 
 Goal (unchanged): separate **public** CxSVs, seen in a background panel of
 presumed-healthy long-read genomes, from **private** CxSVs in a patient. Then
@@ -162,6 +164,7 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
     1c9c80d, finalise, rebuild from the tag, switch; (b) fix item 18 in calling code first (new
     release); (c) quarantine loci on contigs absent from the reference in the scorer (new bundle,
     same release). Details: [panel_v1.3/README.md](panel_v1.3/README.md).
+    **Resolved 2026-11-13:** option (c), scorer quarantine (PR #53); check 7 fixed by PR #51.
 22. **Contig-end locus ids (decided 2026-11-13, item 19).** After the scorer quarantine (option c
     of decision 21, PR #53) the strict locus-id check (validation check 10) found ids whose end is
     contig length + 1, for example `chrM:2-16570` (chrM is 16,569 bp). That is 9 ids in 7 of the
@@ -170,6 +173,10 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
     end = length + 1 for panel-v1.3; fix upstream in v1.4.** Check 10 and the regression criterion
     now require a reference contig, `0 <= start < length` and `start < end <= length + 1`; chrN,
     other non-reference contigs, zero length and anything further off the contig still fail.
+    Done: PR #54 (main 718df79); finalise accepts a tag on a later commit with identical calling
+    code (`--allow-descendant-tag`, PR #55). **panel-v1.3 tagged on 718df79, release finalised and
+    patients switched 2026-11-13** to `cxsv-bundle-20261113-718df799a826`; rollback
+    `cxsv-bundle-20261109-84d380e08cc4` ([panel_v1.3/README.md](panel_v1.3/README.md) section 6).
 
 ---
 
@@ -193,10 +200,10 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
 | – | Small fixes 2026-11 (8 fixes from the panel-v1.0 validation) | done 2026-11-04; merged (PR #21) | `main`, below |
 | 14 | Library-chimerism QC (panel and patient) | **done 2026-11-06**: 24/1,619 panel libraries flagged; conservative mode on by default; no panel exclusion; bundle `cxsv-bundle-20261105-95126e14f036` validated 8/8, positive control unchanged; follow-ups (auto-detected QC group, wording, test-release ids) in bundle `cxsv-bundle-20261106-169503679a60` (commit 1695036), validated 8/8 | `main` (PR #28, #29), docs/LIBRARY_QC.md, docs/library_qc/DEPLOYMENT.md |
 | 15 | Copy-number-anchored detection of large DUP-TRP/INV-DUP and other CN-linked events | **Phase 2 done 2026-11-09**: panel-v1.2-r2 `cxsv-panel-20261108-fdac9ff80401` (sex-stratified chrX/chrY reference, PR #38), VERIFIED, healthy Tier 1 0.198 per genome, tagged `panel-v1.2` and finalised 2026-11-09; tagged bundle `cxsv-bundle-20261109-84d380e08cc4` validated 9/9 and **deployed for patients** (replaces 169503679a60 + panel-v1.1); the first candidate `6001d99ea4d4` was superseded (PC L01 failed) | docs/CN_LINKAGE.md, docs/panel_v1.2/README.md |
-| 16 | panel-v1.3 follow-ups: (a)–(d) from panel-v1.2, (e)–(o) from the nine-genome test run | **done 2026-11-12 (release + bundle; deployment held)**: (a)–(o) merged (PRs #43, #44, #47, #48; tooling #49, #50, #51); release `cxsv-panel-20261111-aa64baf08272` VERIFIED, healthy Tier 1 0.2075 per genome (R10 0.2551), 0 public Tier 1; bundle `cxsv-bundle-20261112-1c9c80d0e2c6` validated (PC 13/13 planted Tier 1 kept, L01 private at 1.12/1.18/1.25, HG01868 0 Tier 1, nine genomes 1 Tier 1 = *NF1*); **not tagged, patients not switched**: malformed locus id `chrN:…` (item 18) and validation check 7 (fixed by #51) failed the stop rule (decision 21) | docs/panel_v1.3/README.md, docs/design_check_v13/README.md |
+| 16 | panel-v1.3 follow-ups: (a)–(d) from panel-v1.2, (e)–(o) from the nine-genome test run | **done; tagged and deployed 2026-11-13**: (a)–(o) merged (PRs #43, #44, #47, #48; tooling #49–#51, #53–#55); release `cxsv-panel-20261111-aa64baf08272` finalised (tag `panel-v1.3` on 718df79, source 1c9c80d), healthy Tier 1 0.2075 per genome (R10 0.2551), 0 public Tier 1; patient bundle `cxsv-bundle-20261113-718df799a826` (validation checks 1–10 + extras PASS, PC 13 planted Tier 1, L01 private, HG01868 0 Tier 1, nine genomes 1 Tier 1 = *NF1*); rollback `84d380e08cc4` | docs/panel_v1.3/README.md, docs/design_check_v13/README.md |
 | 17 | Test run on nine de-identified genomes (monkey_meth children's blood) with clinician-style reports | **done 2026-11-11**: 9/9 offline runs with the tagged v1.2 bundle; 2 Tier 1 in 9 genomes (0.22 per genome; R10 healthy expectation 0.247): private *NF1* deletion (BOC_4433, needs confirmation) and a public *BRSK2* locus (scoring weakness, item 16 e) | below; NAS `patient_test_runs/monkeymeth_20261110/` |
-| 18 | Sniffles2 PAR BND mate contig `chrN` reaches junction tables and locus ids | **new 2026-11-12**: 266 panel junction sites and 18 panel loci on `chrN` (v1.3); BOC_5883 locus `chrN:62452837-62454007`; fix in calling code = new release | below, docs/panel_v1.3/README.md |
-| 19 | Contig-end off-by-one: BND window not clamped to the contig (end = length + 1) | **new 2026-11-13, v1.4 calling item** (decision 22): 24 panel loci in panel-v1.2-r2 and panel-v1.3, never Tier 1; tolerated by validation check 10 for v1.3 | below |
+| 18 | Sniffles2 PAR BND mate contig `chrN` reaches junction tables and locus ids | **scorer quarantine done 2026-11-13** (PR #53, decision 21): such loci removed or their chrN junctions dropped, 0 LOFO Tier 1 affected; **calling fix queued for v1.4** (266 panel junction sites, 18 panel loci) | below, docs/panel_v1.3/README.md |
+| 19 | Contig-end off-by-one: BND window not clamped to the contig (end = length + 1) | **v1.4 calling item** (decision 22): 24 panel loci in panel-v1.2-r2 and panel-v1.3, never Tier 1; tolerated by validation check 10 for v1.3 (PR #54) | below |
 
 ---
 
@@ -449,7 +456,7 @@ per fix, each with a test. None changes the calling fingerprint
 
 ## Queued
 
-### 16. panel-v1.3 follow-ups from panel-v1.2 — done 2026-11-12 (release + bundle; deployment held, decision 21)
+### 16. panel-v1.3 follow-ups from panel-v1.2 — done; tagged and deployed 2026-11-13 (decisions 21, 22)
 
 **Outcome (2026-11-12).** (a)–(o) are implemented and merged. D1–D5 outcomes:
 
@@ -512,6 +519,9 @@ Added 2026-11-11 from the nine-genome test run (item 17); details and evidence i
 
 ### 18. Sniffles2 PAR BND mate contig `chrN` — new 2026-11-12
 
+**Status 2026-11-13:** the scorer-level quarantine is in panel-v1.3 (PR #53; SCORING.md 6f). The
+calling-code fix below is a **v1.4 item**, paired with item 19 (one new release).
+
 Sniffles2 2.8.1 writes some BNDs near the chrY PAR with ALT mate contig `chrN` while `CHR2=chrY`, and SURVIVOR keeps `chrN`. The panel-v1.0 fix (locus_segments.py) only drops depth intervals on contigs absent from the reference. The artefact still reaches:
 
 - `junctions.tsv` and the merged VCF of 5 of the 9 test genomes;
@@ -537,6 +547,13 @@ Fix for v1.4: clamp `b1_end`, `b2_end` and the `_end` rows of long-span breakend
 length from the .fai, with a unit test on a last-base BND; then set `END_SLACK = 0` in
 `tests/lab/check_locus_ids.py`. It changes fingerprinted calling code (new release, LOFO
 re-calibration), so it is paired with the item 18 calling fix.
+
+**panel-v1.4 queue (calling changes, one new release and LOFO re-calibration):** item 18 (set
+the BND mate contig from `CHR2` or drop the record), item 19 (clamp breakend windows to the
+contig; then `END_SLACK = 0` in `tests/lab/check_locus_ids.py`). Small tooling item: `make_bundle.sh`
+leaves `repo/workflow/lib/__pycache__/cxsv_bundle_meta.cpython-310.pyc` in the bundle (bytecode
+cache written while building; harmless, but it makes two builds of one commit differ by one file);
+build with `PYTHONDONTWRITEBYTECODE=1` or exclude `__pycache__`.
 
 ### 17. Test run on nine de-identified genomes — done 2026-11-11
 

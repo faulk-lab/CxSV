@@ -1,11 +1,15 @@
 # panel-v1.3: build record, bundle validation and deployment attempt
 
-Status (2026-11-12):
+Status (2026-11-13):
 
-- **Release `cxsv-panel-20261111-aa64baf08272` is VERIFIED.**
-- **Bundle `cxsv-bundle-20261112-1c9c80d0e2c6` is built and validated, with two findings.**
-- **Not tagged, not finalised, patients NOT switched.** The PI's rule is "tag, finalise and switch automatically if every acceptance criterion passes; stop on any failure". Two criteria failed (section 4).
-- Patients stay on the tagged panel-v1.2 bundle `cxsv-bundle-20261109-84d380e08cc4`.
+- **Tagged `panel-v1.3`** (tag object `06a6504c7fc9…` on main `718df799a826`); the release
+  `cxsv-panel-20261111-aa64baf08272` is **finalised** (source commit 1c9c80d, calling code
+  identical at the tag commit; PR #55).
+- **Patients switched** to the tagged bundle `cxsv-bundle-20261113-718df799a826` (section 6).
+  Rollback: `cxsv-bundle-20261109-84d380e08cc4` (panel-v1.2).
+- The first deployment attempt (2026-11-12, bundle `1c9c80d0e2c6`) stopped on two findings
+  (section 4); they were resolved by PI decisions 21 (scorer quarantine of non-reference contigs,
+  PR #53) and 22 (locus end = contig length + 1 accepted, PR #54).
 
 Plan: [PLAN_panel_v1.3.md](../PLAN_panel_v1.3.md). Design check: [design_check_v13/README.md](../design_check_v13/README.md). ROADMAP item 16, decisions 19 and 21.
 
@@ -151,9 +155,9 @@ Tier 1: **1 locus in 9 genomes (0.111 per genome)** at v1.3, versus 2 at v1.2. H
 - The v1.0 fix only drops depth intervals on contigs that are not in the reference.
 - Spread: `junctions.tsv` in 5 of 9 test genomes; one scored locus in BOC_5883 (two at v1.2); 266 junction sites and 18 panel loci in the v1.3 release (v1.2: 266 / 21).
 
-## 4. Deployment
+## 4. First deployment attempt (2026-11-12): stopped
 
-**STOPPED before tagging.** Failed criteria:
+**STOPPED before tagging** (resolved in section 6). Failed criteria:
 
 1. Malformed locus id `chrN:…` (BOC_5883).
 2. Bundle validation check 7 with the 1c9c80d tool (an expected report difference; PR #51).
@@ -185,3 +189,97 @@ PI options (decision 21):
   - `summarise_regression_v13.py`: criteria and tables;
   - `collect_derived_v13.sh`: Drive mirror.
 - Scripts on freya: `/home/minknow/scratch/v13/bundle/` (validation `bundle_validation/`, PC `pc_full_L/`, L01 bounds `l01_bounds/`).
+
+## 6. Rounds 2–3, tag, finalised release, tagged bundle and patient switch (2026-11-13)
+
+**Round 2: scorer quarantine (decision 21, option c; PR #53, main 5a50dde).** Loci on contigs
+absent from the reference are removed, and non-reference junctions are dropped from scored loci
+(SCORING.md 6f; `scoring/quarantined_loci.tsv`; one QC line in the score and clinician reports).
+Validation check 10 (locus ids well-formed) was added. Healthy LOFO: 0 of 336 Tier 1 loci touch a
+non-reference contig; re-scored with the quarantine, Tier 1 stays 118 → 118. Bundle
+`cxsv-bundle-20261112-5a50ddef8710` passed everything except the strict check 10: 9 locus ids
+in 7 of the nine genomes, 2 in HG01868 and 1 in the positive control end at contig length + 1
+(all Benign_likely).
+
+**Contig-end ids (decision 22; PR #54, main 718df79).** `vcf_to_bed.py` writes a BND breakend as
+`[POS - bnd_window, POS + bnd_window)` without clamping to the contig, so a breakend on the last
+base gives end = length + 1 (24 panel loci in panel-v1.2-r2 and in panel-v1.3; 603 healthy-LOFO
+loci, 0 Tier 1). Check 10 and the regression criterion now accept `end <= length + 1` and still
+reject chrN / other non-reference contigs, zero length, a start on or past the contig end and
+anything further past it. The clamp in calling code is a v1.4 item (ROADMAP item 19).
+
+**Round 3: validated bundle `cxsv-bundle-20261112-718df799a826`** (main 718df79, release
+unchanged, lit-v1.0, image `cxsv-pipeline:ddfe0617e229` / SIF `b1aed2bb…`; 2,302 files,
+10,600,572,975 bytes; MANIFEST.sha256 sha256 `e58fbdd6…0967`):
+
+- Bundle validation (`validate_bundle.sh`, 8,450 s): checks 1–10 PASS, failures 0. Check 7: no
+  unexpected difference. Check 10: 2,155 locus ids, 0 malformed, in each of the three runs.
+- Extras 10–14 PASS: 2-page clinician report with the sex call (Singularity = Docker), offline
+  intake, fingerprint `aa64baf08272…` COMPATIBLE, `bundle.json` release-manifest sha256,
+  **HG01868 0 Tier 1** (1,047 Benign_likely, 26 Tier 3, 4 Tier 2). HG01868 `cxsv_scores.tsv`,
+  `cxsv_score_features.tsv`, `quarantined_loci.tsv` and `cn_loci.tsv` are byte-identical to the
+  5a50dde bundle's runs.
+- Positive control (full genome, callers re-run, 6,122 s): `score.events.tsv` (md5 `03e6d798…`),
+  `score.junctions.tsv`, `score.offtarget.tsv`, `cn/segments.tsv`, `cn/cn_loci.tsv`, `cn/stats.json`
+  and the scoring tables are byte-identical to the 5a50dde run; CN segments are identical to the
+  1c9c80d candidate. 15/17 events pass (E13, L03 known), 16 Tier 1 all in planted events,
+  86/87 junctions exact; **L01 Tier 1, `CN_linked_gain`, 1.53, private** (bounds 1.12/1.18/1.25
+  unchanged, CN track identical).
+- Nine genomes re-scored through the bundle (scoring + report stages only): 9/9 exit 0,
+  COMPATIBLE, network off; every criterion PASS (NF1 Tier 1 1.66, callers 2/2; BRSK2 Tier 2;
+  sex call, intake, 2-page report and quarantine line 9/9; 0 malformed ids). 839 of 866 output
+  files are byte-identical to the 5a50dde runs; the other 27 (clinician reports,
+  `panel_release_check.txt`) differ only in the bundle id and code commit.
+
+**Tag (PI).** Annotated tag `panel-v1.3`, object `06a6504c7fc9eefec521d07a740fb6935c117bec`, on
+`718df799a826e14a19982a11eda47be2d5489a98` (tagger Chris Faulk). The message records the release
+id, source commit 1c9c80d, the calling fingerprint and decisions 21/22.
+
+**Finalise.** `write_release_metadata.py --finalise … --git-tag panel-v1.3
+--allow-descendant-tag` (tool from main a53a6fc, PR #55). The tag commit descends from the release
+source 1c9c80d and the 17 calling-code files and `config/calling.yaml` are identical.
+`source.commit` stays 1c9c80d; `source.git_tag_commit` 718df79 and `source.git_tag_relation` are
+recorded; `finalised_utc` 2026-11-13T14:41:13Z. Only the `release.json` row of the manifest changed:
+manifest sha256 `25dbee9e…` → `6ae39d767bc28fcf11d54e5286a55bb89fccedc6ac8b5deb75676fcab6cc13a4`;
+`release.json` sha256 `043b37c1c8cb…`; 1,640 files VERIFIED. Pre-finalise copies:
+`build/panel-v1.3/provenance/pre_finalise/`.
+
+**Tagged bundle.** `make_bundle.sh bundle --commit panel-v1.3` from a node-local clone at the tag
+(81 s). The UTC date changed, so the bundle id is new; the untagged bundle was renamed (not
+deleted) to `cxsv-bundle-20261112-718df799a826.pretag`.
+
+| | |
+|---|---|
+| bundle | `/mnt/sargasso1/CxSV/bundles/cxsv-bundle-20261113-718df799a826` |
+| size | 10,600,573,455 bytes; 2,302 files in `MANIFEST.sha256` (sha256 `8cf5d5f58bb3f5185cd8f1a316d5c0bf7c7e4e8b526a9d849e4a4112a12d29ae`) |
+| `bundle.json` | `source.git_tag` `panel-v1.3` (object `06a6504c…`); `panel_release.git_tag` `panel-v1.3`, `finalised_utc` 2026-11-13T14:41:13Z, `release_manifest_sha256` `6ae39d76…`, `release_json_sha256` `043b37c1…` |
+| checks | `run_cxsv.sh verify-bundle`: all 2,302 files verified; `verify-release`: VERIFIED |
+| vs the validated `.pretag` bundle | 2,295 of 2,302 manifest rows identical, the same file set. Differences: `bundle.json` (id, created time, tag fields, release-manifest/json sha256, sizes), `bundle.env` and `README.md` (bundle id), the embedded `release.json` and `release_manifest.tsv` (byte-identical to the finalised release; all other manifest rows identical), `source/cxsv-718df799a826.bundle` (same single head 718df79; pack bytes only) and `repo/workflow/lib/__pycache__/cxsv_bundle_meta.cpython-310.pyc` (bytecode cache written during the build; header mtime, `.py` source identical). Every other `repo/` file, the image, reference, catalogues and literature set are byte-identical. |
+
+**Patient switch.** The current patient configuration is now:
+
+| | |
+|---|---|
+| bundle | `/mnt/sargasso1/CxSV/bundles/cxsv-bundle-20261113-718df799a826` (tag `panel-v1.3`, commit 718df79) |
+| panel release | `cxsv-panel-20261111-aa64baf08272` (panel-v1.3, finalised), embedded in the bundle |
+| replaces | `cxsv-bundle-20261109-84d380e08cc4` (panel-v1.2), kept as the rollback |
+| new for patients | public loci capped at Tier 2; type-agnostic caller agreement; depth-noise gate; sex call in the report; clinician report rule (docx + pdf + Tier 1 graphic); intake module; non-reference-contig quarantine |
+
+Patient-run instructions are unchanged (RELEASE_AND_BUNDLE.md section 5): `run_cxsv.sh
+verify-bundle`, `run_cxsv.sh verify-release`, then `run_cxsv.sh patient …`; read the sex call and
+the quarantine line in the report.
+
+Bundles on the NAS (none deleted; deletion needs PI approval):
+
+| bundle | role | bytes |
+|---|---|---|
+| cxsv-bundle-20261113-718df799a826 | **current patient bundle** (tag panel-v1.3) | 10,600,573,455 |
+| cxsv-bundle-20261109-84d380e08cc4 | rollback (tag panel-v1.2) | 10,577,419,887 |
+| cxsv-bundle-20261112-718df799a826.pretag | superseded: validated untagged build of 718df79 | 10,600,572,975 |
+| cxsv-bundle-20261112-5a50ddef8710 | superseded: round 2 (strict check 10 failed) | 10,600,554,420 |
+| cxsv-bundle-20261112-1c9c80d0e2c6 | superseded: round 1 | 10,600,341,417 |
+| cxsv-bundle-20261106-169503679a60 | superseded (panel-v1.1) | 10,562,414,920 |
+
+Records on the NAS: `patient_test_runs/monkeymeth_v13_20261112/final_bundle_5a50ddef8710/` (round 2)
+and `final_bundle_718df799a826/` (round 3: re-scored runs, `summary/`, `identity_vs_5a50dde.tsv`);
+freya `/home/minknow/scratch/v13/r3/` (validation, PC).
