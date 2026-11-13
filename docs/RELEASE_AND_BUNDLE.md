@@ -8,12 +8,14 @@ network, from material whose origin can be checked. This document defines:
 3. the **container image**: one pinned environment for both workflows;
 4. the **offline bundle**: everything needed to score a patient with no network;
 5. how to **build** and **run** each of them;
-6. the **validation records** of the bundles. **The current patient bundle (since 2026-11-09)
-   is `cxsv-bundle-20261109-84d380e08cc4`**: tag `panel-v1.2` (commit 84d380e), panel-v1.2
-   release `cxsv-panel-20261108-fdac9ff80401` (finalised), copy-number track, sex-matched chrX/chrY
-   frequency, literature set lit-v1.0, library QC as before. Record:
-   [panel_v1.2/README.md](panel_v1.2/README.md) section 10. It replaces
-   `cxsv-bundle-20261106-169503679a60` (commit 1695036, panel-v1.1 + library QC; record in
+6. the **validation records** of the bundles. **The current patient bundle (since 2026-11-13)
+   is `cxsv-bundle-20261113-718df799a826`**: tag `panel-v1.3` (commit 718df79), panel-v1.3
+   release `cxsv-panel-20261111-aa64baf08272` (finalised; source commit 1c9c80d, calling code
+   identical at the tag commit), lit-v1.0, clinician report, intake module, non-reference-contig
+   quarantine. Record: [panel_v1.3/README.md](panel_v1.3/README.md) section 6. It replaces
+   `cxsv-bundle-20261109-84d380e08cc4` (tag `panel-v1.2`, release `cxsv-panel-20261108-fdac9ff80401`;
+   record [panel_v1.2/README.md](panel_v1.2/README.md) section 10), which is kept as the rollback.
+   Older: `cxsv-bundle-20261106-169503679a60` (commit 1695036, panel-v1.1 + library QC; record in
    [library_qc/DEPLOYMENT.md](library_qc/DEPLOYMENT.md), which also covers
    `cxsv-bundle-20261105-95126e14f036`). The panel-v1.1 bundle
    `cxsv-bundle-20261105-8fc5bef725bd` (deleted 2026-11-06, PI-approved) is recorded in
