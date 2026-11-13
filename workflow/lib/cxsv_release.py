@@ -147,7 +147,31 @@ def tag_commit(project_dir, tag) -> dict:
             "type": git("cat-file", "-t", tag)}
 
 
-def finalise_tag(release_dir, tag, project_dir, now_utc) -> dict:
+def calling_paths() -> list:
+    """Repository paths that decide which CxSV loci a sample has: the fingerprinted calling code
+    (cxsv_fingerprint.CALLING_CODE, under workflow/) and the calling config (config/calling.yaml,
+    the whole file, which is stricter than the fingerprinted parameter sections)."""
+    from cxsv_fingerprint import CALLING_CODE
+    return ["workflow/" + p for p in CALLING_CODE] + ["config/calling.yaml"]
+
+
+def descendant_relation(project_dir, source_commit, tag_commit_id) -> str:
+    """Check that tag_commit_id descends from source_commit and that no calling path differs
+    between them (git diff over calling_paths()); return the relation recorded in release.json.
+    Raises ValueError otherwise."""
+    def git(*args, check=True):
+        return subprocess.run(["git", "-C", str(project_dir), *args], capture_output=True, text=True, check=check)
+    if git("merge-base", "--is-ancestor", source_commit, tag_commit_id, check=False).returncode != 0:
+        raise ValueError(f"tag commit {tag_commit_id} does not descend from the release source {source_commit}")
+    paths = calling_paths()
+    changed = git("diff", "--name-only", source_commit, tag_commit_id, "--", *paths).stdout.split()
+    if changed:
+        raise ValueError(f"calling code or config/calling.yaml differs between the release source {source_commit} "
+                         f"and tag commit {tag_commit_id}: {changed}")
+    return f"descendant of source.commit; calling code and config/calling.yaml identical ({len(paths)} paths)"
+
+
+def finalise_tag(release_dir, tag, project_dir, now_utc, allow_descendant=False) -> dict:
     """Record the release's git tag in release.json and nothing else (roadmap item 12).
 
     The release must verify against its manifest first, and the tag must point at
@@ -156,7 +180,12 @@ def finalise_tag(release_dir, tag, project_dir, now_utc) -> dict:
     source.git_tag_type and finalised_utc; the manifest's release.json row is
     rewritten with the new size and sha256, and every other manifest row is kept
     byte for byte (checked). Idempotent: re-running with the same tag changes
-    nothing. Returns {"changed", "before", "after"} (verify() results)."""
+    nothing. Returns {"changed", "before", "after"} (verify() results).
+
+    allow_descendant (write_release_metadata.py --allow-descendant-tag; panel-v1.3, 2026-11-13):
+    also accept a tag on a later commit that descends from source.commit with the calling code
+    and config/calling.yaml unchanged (descendant_relation); source.commit is kept and
+    source.git_tag_commit / source.git_tag_relation record where the tag is."""
     before = verify(release_dir)
     if not before["ok"]:
         raise ValueError("release does not verify; refusing to finalise:\n  " + "\n  ".join(before["problems"]))
@@ -166,11 +195,19 @@ def finalise_tag(release_dir, tag, project_dir, now_utc) -> dict:
         meta = json.load(fh)
     t = tag_commit(project_dir, tag)
     src = meta.get("source") or {}
-    if not src.get("commit") or not t["commit"].startswith(src["commit"]) and not src["commit"].startswith(t["commit"]):
-        raise ValueError(f"tag {tag} points at {t['commit']}, but the release was built from {src.get('commit')}")
+    relation = None
+    if not src.get("commit"):
+        raise ValueError(f"tag {tag} points at {t['commit']}, but release.json names no source commit")
+    if not t["commit"].startswith(src["commit"]) and not src["commit"].startswith(t["commit"]):
+        if not allow_descendant:
+            raise ValueError(f"tag {tag} points at {t['commit']}, but the release was built from {src.get('commit')} "
+                             f"(a tag on a later commit with unchanged calling code needs --allow-descendant-tag)")
+        relation = descendant_relation(project_dir, src["commit"], t["commit"])
     if src.get("git_tag") == tag and src.get("git_tag_object") == t["object"]:
         return {"changed": False, "before": before, "after": before}
     src.update({"git_tag": tag, "git_tag_object": t["object"], "git_tag_type": t["type"]})
+    if relation:
+        src.update({"git_tag_commit": t["commit"], "git_tag_relation": relation})
     meta["source"] = src
     meta["finalised_utc"] = now_utc
     tmp = jpath + ".tmp"

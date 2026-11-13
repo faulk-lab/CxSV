@@ -21,7 +21,9 @@ Finalise mode (roadmap item 12): `--finalise RELEASE_DIR --git-tag TAG
 release.json (source.git_tag, source.git_tag_object, source.git_tag_type,
 finalised_utc) after checking that the release verifies and that the tag points
 at the release's source commit; only the release.json row of the manifest
-changes (cxsv_release.finalise_tag).
+changes (cxsv_release.finalise_tag). With --allow-descendant-tag the tag may sit on a
+later commit that descends from the source commit, provided no calling code and no line
+of config/calling.yaml differs (recorded as source.git_tag_commit / git_tag_relation).
 """
 import argparse
 import csv
@@ -81,9 +83,12 @@ def finalise_main(argv):
     ap.add_argument("--finalise", required=True, metavar="RELEASE_DIR")
     ap.add_argument("--git-tag", required=True)
     ap.add_argument("--project-dir", required=True, help="git checkout that has the tag")
+    ap.add_argument("--allow-descendant-tag", action="store_true",
+                    help="accept a tag on a later commit that descends from the release's source commit with "
+                         "the calling code and config/calling.yaml unchanged (recorded as source.git_tag_commit)")
     a = ap.parse_args(argv)
     now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    res = cr.finalise_tag(a.finalise, a.git_tag, a.project_dir, now)
+    res = cr.finalise_tag(a.finalise, a.git_tag, a.project_dir, now, allow_descendant=a.allow_descendant_tag)
     b, f = res["before"], res["after"]
     print(f"{'finalised' if res['changed'] else 'already finalised'}: {a.finalise} tag {a.git_tag}; "
           f"{f['n_files']} files verify; manifest sha256 {b['manifest_sha256']} -> {f['manifest_sha256']}")
