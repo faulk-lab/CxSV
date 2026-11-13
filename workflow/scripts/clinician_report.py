@@ -598,7 +598,7 @@ def make_reconstructions(a, D, t1):
         out.append({"rank": k, "row": row, "res": res, "figure": fig})
     if a.out_recon_tsv:
         with open(a.out_recon_tsv, "w", newline="") as fh:
-            w = csv.DictWriter(fh, fieldnames=R.TSV_COLUMNS, delimiter="\t")
+            w = csv.DictWriter(fh, fieldnames=R.TSV_COLUMNS, delimiter="\t", lineterminator="\n")
             w.writeheader()
             for x in out:
                 w.writerows(R.flat_rows(D["sample"], x["rank"], x["res"]))

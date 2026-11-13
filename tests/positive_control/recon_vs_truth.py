@@ -243,7 +243,7 @@ def main(argv=None):
     cols = ["locus", "score", "class", "event", "event_name", "outcome", "status", "n_equivalent", "truth", "drawn",
             "alternatives", "reasons"]
     with open(a.out_tsv, "w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=cols, delimiter="\t", extrasaction="ignore")
+        w = csv.DictWriter(fh, fieldnames=cols, delimiter="\t", extrasaction="ignore", lineterminator="\n")
         w.writeheader()
         w.writerows(out)
     n = {k: sum(1 for x in out if x["outcome"] == k) for k in ("exact", "in_alternatives", "mismatch", "no_truth_path")}
