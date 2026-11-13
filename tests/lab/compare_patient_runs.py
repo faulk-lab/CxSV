@@ -17,17 +17,74 @@ Every file below either root is compared, except run logs (logs/, *.log,
         "identical after path normalisation"
 Two run records are expected to differ and are listed as such: panel_release_check.txt
 (release path, runtime image) and panel_compatibility.txt (release path); their
-status lines must still agree. Exit 1 when any other file differs or exists on one side only.
+status lines must still agree. The clinician report (<sample>.clinician_report.docx/.pdf,
+panel-v1.3) names the run's identity in one row ("Pipeline bundle": the bundle id, or "not
+run from an offline bundle" for a run outside a bundle; "Report date ...; code <commit12>"),
+so a bundle run and a repository run differ there by design: the report TEXT (docx: every
+paragraph, table cell and footer; PDF: every text string of the decompressed page streams,
+in order) is compared with those identity values masked, and an equal text is listed as an
+expected run-record difference. Exit 1 when any other file differs or exists on one side only.
 """
 import argparse
+import base64
 import json
 import os
 import re
 import sys
+import zipfile
 import zlib
 
 EXPECTED = {"panel_release_check.txt": "status:", "panel_compatibility.txt": "status:"}
 PDF_VOLATILE = re.compile(rb"^(/CreationDate|/ModDate|/ID|<< /CreationDate).*$", re.M)
+REPORT = re.compile(r"\.clinician_report\.(docx|pdf)$")
+# run identity in the clinician report: bundle id or "not run from an offline bundle"; "; code <commit12>"
+REPORT_IDENTITY = [(re.compile(r"cxsv-bundle-\d{8}-[0-9a-f]{12}|not run from an offline bundle"), "<RUN-IDENTITY>"),
+                   (re.compile(r";?\s*code [0-9a-f]{12}\b"), "")]
+
+
+def mask_identity(text):
+    for rx, rep in REPORT_IDENTITY:
+        text = rx.sub(rep, text)
+    return text
+
+
+def docx_text(path):
+    """Text of every w:t run of the document, headers and footers, paragraph by paragraph."""
+    out = []
+    with zipfile.ZipFile(path) as z:
+        for n in sorted(z.namelist()):
+            if re.fullmatch(r"word/(document|header\d*|footer\d*)\.xml", n):
+                xml = z.read(n).decode("utf-8")
+                for par in re.findall(r"<w:p[ >].*?</w:p>", xml, re.S):
+                    out.append("".join(re.findall(r"<w:t(?: [^>]*)?>([^<]*)</w:t>", par)))
+    return "\n".join(out)
+
+
+def pdf_text(path):
+    """Literal text strings of every FlateDecode stream, in order (layout operators dropped)."""
+    data, out = open(path, "rb").read(), []
+    for m in re.finditer(rb"stream\r?\n(.*?)endstream", data, re.S):
+        body = m.group(1).strip()
+        if body.rstrip().endswith(b"~>"):                 # reportlab: /ASCII85Decode then /FlateDecode
+            try:
+                body = body.strip()
+                body = base64.a85decode(body if body.startswith(b"<~") else body[:-2], adobe=body.startswith(b"<~"))
+            except ValueError:
+                continue
+        try:
+            body = zlib.decompress(body)
+        except zlib.error:
+            pass
+        if b"BT" not in body:                               # page content streams only (text objects)
+            continue
+        out += [x.decode("latin-1") for x in re.findall(rb"\(((?:\\.|[^\\)])*)\)\s*Tj", body)]
+    return "\n".join(out)
+
+
+def report_text(path):
+    """Masked report text; None when no text could be extracted (never counts as equal)."""
+    t = docx_text(path) if path.endswith(".docx") else pdf_text(path)
+    return mask_identity(t) if t.strip() else None
 
 
 def files(root):
@@ -96,6 +153,8 @@ def main():
             rows.append((rel, "identical", how))
         elif (al_a or al_b) and normalise(ca, al_a) == normalise(cb, al_b) and base not in EXPECTED:
             rows.append((rel, "identical after path normalisation", how))
+        elif REPORT.search(base) and (report_text(os.path.join(a.a, rel)) or 0) == (report_text(os.path.join(a.b, rel)) or 1):
+            rows.append((rel, "differs as expected (run identity row); report text identical", "report text, identity masked"))
         elif base in EXPECTED:
             sa = [l for l in ca.decode().splitlines() if l.startswith(EXPECTED[base])]
             sb = [l for l in cb.decode().splitlines() if l.startswith(EXPECTED[base])]
