@@ -332,7 +332,8 @@ patient runs have no `Literature_Match` / `Literature_Events` columns and no
 `private/cxsv_literature_hits.tsv`. Scores and tiers are unaffected (the
 literature match is annotation only).
 
-**Validation** (`tests/lab/validate_bundle.sh`, 9 checks): integrity, release,
+**Validation** (`tests/lab/validate_bundle.sh`, 10 checks; check 10, locus ids well-formed, added for
+panel-v1.3 with the non-reference contig quarantine, docs/SCORING.md 6f): integrity, release,
 network off, offline Singularity run, offline Docker run, run outside the bundle
 (with the lab copy of the same literature set), records identical, tampered
 release refused, literature set shipped and verified (check 9, added with the fix

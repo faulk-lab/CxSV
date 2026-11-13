@@ -587,6 +587,32 @@ Not fingerprinted: re-scoring and a LOFO rerun, no panel rebuild (docs/PLAN_pane
   It needs python-docx and reportlab, which come from PyPI with hashes
   (`envs/cxsv-pipeline.pip.txt`): **the container image changes in panel-v1.3**.
 
+## 6f. Non-reference contig quarantine (ROADMAP item 18; PI decision 2026-11-13)
+
+Sniffles2 2.8.1 writes some BNDs near the chrY PAR with the ALT mate contig `chrN` while
+`CHR2=chrY`, and SURVIVOR keeps `chrN`. The calling code (fingerprinted) is unchanged; the
+scorer (`score_cxsv.py`, `cxsv_scoring.quarantine_nonreference`; not fingerprinted) checks every
+locus against the reference `.fai` before any feature is computed:
+
+- a locus whose contig is not a reference contig, or whose junctions **all** have a breakend
+  on one (record contig, junction breakend contigs or BND ALT mate contig), is **removed** from
+  scoring and tiering;
+- in any other locus, the junctions with a non-reference breakend are **dropped** from the
+  scoring pool and the locus is scored on the rest.
+
+Both are listed in `scoring/quarantined_loci.tsv` (action `removed` / `junctions_dropped`) and
+counted in one line, "Quarantined (non-reference contig)", of the score report (summary and
+Sample QC section) and of the clinician report's QC table. Bundle validation check 10
+(`tests/lab/check_locus_ids.py`) fails on any scored or reported locus id that is not
+`contig:start-end` on a reference contig with `start < end <= contig length`.
+
+Effect on panel-v1.3: none of the 336 healthy-LOFO Tier 1 loci touches a non-reference contig.
+608 LOFO loci touch one (129 removed: all Benign_likely or Tier 3; 479 lose junctions: 467 Benign,
+10 Tier 3, 2 Tier 2); re-scored with the quarantine (366 genomes), Tier 1 is unchanged (118 -> 118; 4 Benign_likely<->Tier 3 changes; BH q-values of the clustering criterion shift slightly because removed loci leave the test set) (see
+docs/panel_v1.3/README.md). Nine test genomes: BOC_5883 loses `chrN:62452837-62454007` (Benign)
+and `chr17:0-5037000` (public CN_linked_loss, Tier 2, whose only junction is the artefact);
+five loci in five genomes lose one junction each.
+
 ## 7. Known limitations and open findings
 
 - **The ClinGen gene list underserves duplications here.** The 2026-10-28 file

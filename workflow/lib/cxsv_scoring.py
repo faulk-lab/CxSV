@@ -906,3 +906,73 @@ def library_qc_gate(n_multi, n_junctions, n_cn_changed, w):
         return True, f"{n_cn_changed} copy-number-changed segment(s)"
     return False, (f"{n_multi}/{n_junctions} junctions with >= 2 callers, "
                    f"{n_cn_changed} copy-number-changed segment(s)")
+
+
+# ─── non-reference contig quarantine (ROADMAP item 18; PI decision 2026-11-13) ──
+# Sniffles2 2.8.1 writes some BNDs near the chrY PAR with ALT mate contig 'chrN' while
+# CHR2=chrY, and SURVIVOR keeps 'chrN'. Such a breakend is not on the reference, so a locus
+# id like chrN:62452837-62454007 is malformed and the call is an artefact. The calling code
+# (fingerprinted) is unchanged; the scorer removes them from scoring and tiering and lists them.
+BND_MATE = re.compile(r"[\[\]]([^\[\]:]+):\d+[\[\]]")
+
+
+def bnd_mate_contig(alt):
+    """Mate contig of a BND ALT (N[chr2:123[, ]chr2:123]N, ...), else None."""
+    m = BND_MATE.search(alt or "")
+    return m.group(1) if m else None
+
+
+def junction_nonreference(j, recs, ref):
+    """Contigs of one junction (row of junctions.tsv) absent from the reference: both breakend
+    contigs and, for each merged-VCF record behind it, the record contig and BND mate contig."""
+    bad = {c for c in (j["chrom1"], j["chrom2"]) if c not in ref}
+    for rid in (j.get("record_ids") or "").split(","):
+        rec = recs.get(rid) if rid else None
+        if rec:
+            for c in (rec.get("chrom"), bnd_mate_contig(rec.get("alt"))):
+                if c and c not in ref:
+                    bad.add(c)
+    return bad
+
+
+def quarantine_nonreference(status, by_locus, recs, ref):
+    """Split the loci into (kept rows, quarantined, dropped_junctions).
+
+    A locus is QUARANTINED (removed from scoring and tiering) when its own contig is not a
+    reference contig, or when every one of its junctions touches a non-reference contig (its
+    only junction evidence is the artefact). Otherwise junctions touching a non-reference
+    contig are DROPPED from that locus's scoring pool and the locus is scored on the rest.
+    quarantined: list of dicts (one per locus); dropped_junctions: {locus id: [contig sets]}."""
+    kept, quarantined, dropped = [], [], {}
+    for row in status:
+        L = f"{row['Chr']}:{row['Start']}-{row['End']}"
+        js = by_locus.get(L, [])
+        badj = [junction_nonreference(j, recs, ref) for j in js]
+        contigs = set().union(*badj) if badj else set()
+        if row["Chr"] not in ref:
+            reason = f"locus contig {row['Chr']} not in the reference"
+            contigs.add(row["Chr"])
+        elif js and all(badj):
+            reason = "every junction has a breakend on a non-reference contig"
+        else:
+            if any(badj):
+                dropped[L] = [b for b in badj if b]
+            kept.append(row)
+            continue
+        quarantined.append(dict(Locus_ID=L, Chr=row["Chr"], Start=row["Start"], End=row["End"],
+                                Cmplx_Class=row.get("Cmplx_Class", "NA"), Panel_Status=row.get("Panel_Status", "NA"),
+                                reason=reason, nonref_contigs=",".join(sorted(contigs)),
+                                junctions=len(js), nonref_junctions=sum(1 for b in badj if b)))
+    return kept, quarantined, dropped
+
+
+def quarantine_line(quarantined, dropped):
+    """The one 'Quarantined (non-reference contig)' line of the score and clinician reports."""
+    contigs = sorted({c for q in quarantined for c in q["nonref_contigs"].split(",") if c}
+                     | {c for v in dropped.values() for b in v for c in b})
+    n_j = sum(len(v) for v in dropped.values())
+    txt = (f"{len(quarantined)} locus/loci removed from scoring and tiering; {n_j} junction(s) dropped from "
+           f"{len(dropped)} scored locus/loci")
+    if contigs:
+        txt += f" (contig(s) absent from the reference: {', '.join(contigs)}; a caller artefact, not scored)"
+    return txt

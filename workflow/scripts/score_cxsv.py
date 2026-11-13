@@ -183,6 +183,9 @@ def main():
     ap.add_argument("--cn-only", default=None,
                     help="cn/cn_only.tsv (cn_linkage.py): copy-number-only candidates, listed untiered")
     ap.add_argument("--sample", default="patient")
+    ap.add_argument("--out-quarantine", default=None,
+                    help="TSV of loci removed from scoring because a contig is not in the reference (.fai), "
+                         "plus scored loci that lost junctions for that reason (ROADMAP item 18)")
     a = ap.parse_args()
 
     P = json.load(open(a.params))
@@ -205,6 +208,16 @@ def main():
             by_locus[L].append(r)
     jstatus = read_tsv(a.junction_status)
     recs = read_merged_vcf(a.vcf)
+    # non-reference contig quarantine (ROADMAP item 18): before any feature is computed
+    ref = set(chrom_len)
+    status, quarantined, dropped = sc.quarantine_nonreference(status, by_locus, recs, ref)
+    a.dropped_rows = {}
+    for row in status:
+        L = f"{row['Chr']}:{row['Start']}-{row['End']}"
+        if L in dropped:
+            a.dropped_rows[L] = (row, len(by_locus[L]))
+            by_locus[L] = [r for r in by_locus[L] if not sc.junction_nonreference(r, recs, ref)]
+    a.quarantine = (quarantined, dropped)
     support = read_support(dict(x.split("=", 1) for x in a.caller_vcf))
     depth = defaultdict(list)
     for line in open(a.depth):
@@ -249,7 +262,8 @@ def main():
         if r.get("panel_carriers", "0") not in ("0", "NA"):
             continue
         for c, p in ((r["chrom1"], int(r["pos1"])), (r["chrom2"], int(r["pos2"]))):
-            chrom_bk[c].append(p)
+            if c in ref:
+                chrom_bk[c].append(p)
 
     def eff_of(c):
         if c not in eff:
@@ -623,6 +637,32 @@ def write_outputs(a, P, loci, cat_names, SX, with_literature=False, qc=None, dn=
                 f = fm[n]
                 wf.writerow([x["L"], rank, f.name, f.group, f.value, f"{f.points:.2f}", f.rule])
     write_report(a, P, loci, SX, qc or {}, dn)
+    write_quarantine(a)
+
+
+QUARANTINE_COLS = ("Locus_ID", "Chr", "Start", "End", "Cmplx_Class", "Panel_Status", "action", "reason",
+                   "nonref_contigs", "junctions", "nonref_junctions")
+
+
+def write_quarantine(a):
+    """scoring/quarantined_loci.tsv: one row per quarantined locus (action 'removed') and per scored
+    locus that lost junctions (action 'junctions_dropped'). Header only when there are none."""
+    if not getattr(a, "out_quarantine", None):
+        return
+    quarantined, dropped = getattr(a, "quarantine", ([], {}))
+    with open(a.out_quarantine, "w", newline="") as fh:
+        w = csv.writer(fh, delimiter="\t", lineterminator="\n")
+        w.writerow(QUARANTINE_COLS)
+        for q in quarantined:
+            w.writerow([q["Locus_ID"], q["Chr"], q["Start"], q["End"], q["Cmplx_Class"], q["Panel_Status"],
+                        "removed", q["reason"], q["nonref_contigs"], q["junctions"], q["nonref_junctions"]])
+        for L, bads in sorted(dropped.items()):
+            row, n = getattr(a, "dropped_rows", {}).get(L, ({}, "NA"))
+            c, se = L.rsplit(":", 1)
+            s_, e_ = se.split("-")
+            w.writerow([L, c, s_, e_, row.get("Cmplx_Class", "NA"), row.get("Panel_Status", "NA"), "junctions_dropped",
+                        "junction(s) with a breakend on a non-reference contig dropped from the scoring pool; "
+                        "locus scored on the others", ",".join(sorted(set().union(*bads))), n, len(bads)])
 
 
 def panel_release_line(P):
@@ -701,8 +741,11 @@ def write_report(a, P, loci, SX, qc=None, dn=None):
     L.extend(cn_track_line(getattr(a, "cn_stats", None)))
     L.extend(cn_summary)
     L.append("- tiers: " + ", ".join(f"{t['name']} {tiers[t['name']]}" for t in P["tiers"]) + "\n")
+    qline = sc.quarantine_line(*getattr(a, "quarantine", ([], {})))
+    L.append(f"- Quarantined (non-reference contig): {qline}\n")
     if isinstance(SX, dict):
         L.extend(sample_qc_section(SX, dn, loci, P))
+        L.insert(len(L) - 1, f"- Quarantined (non-reference contig): {qline}")
     L.extend(qc_section)
     L.append("## Ranking\n")
     L.append("| Rank | Locus | Class | Panel | Genes | Total | Tier | Top contributions |")

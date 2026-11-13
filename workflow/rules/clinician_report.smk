@@ -33,6 +33,7 @@ rule clinician_report:
     """Clinician-facing research report (docx + pdf) with the Tier 1 points graphic."""
     input:
         scores  = f"{S}/scoring/cxsv_scores.tsv",
+        quarantine = f"{S}/scoring/quarantined_loci.tsv",
         params  = f"{S}/scoring/scoring_params.json",
         stats   = f"{S}/cn/stats.json",
         cn_only = f"{S}/cn/cn_only.tsv",
@@ -51,7 +52,7 @@ rule clinician_report:
     log: f"{S}/logs/clinician_report.log"
     shell:
         "MPLCONFIGDIR=${{TMPDIR:-/tmp}}/mpl_$$ python {input.script} --sample {wildcards.sample} "
-        "--scores {input.scores} --params {input.params} --cn-stats {input.stats} --cn-only {input.cn_only} "
+        "--scores {input.scores} --quarantine {input.quarantine} --params {input.params} --cn-stats {input.stats} --cn-only {input.cn_only} "
         "--library-qc {input.libqc} --depth-summary {params.summary} --compatibility {input.compat} "
         "--text {input.text} --out-docx {output.docx} --out-pdf {output.pdf} --out-figure {output.figure} "
         "> {log} 2>&1"
