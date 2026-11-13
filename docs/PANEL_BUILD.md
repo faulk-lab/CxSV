@@ -666,9 +666,21 @@ downstream-only rebuild applies; `callable_mask.sh` changed only in its log line
    - `logs/` and `benchmarks/`, except `--include-log svim.log`, which
      `check_svim_output` reads;
    - every output, log and benchmark that the new code's dry run (against the old
-     tree) plans.
+     tree) plans;
+   - params-only outputs (`cn_params.json`, rule `cn_params_json`): a rule with no
+     file inputs is never planned by a dry run without Snakemake metadata, so a link
+     would feed the OLD parameters to the new build; left out, the rule re-makes it;
+   - every file of a `samples/<cohort>/<sample>/cn/` directory that holds a planned
+     output: the cn rules write undeclared side files there (`cn/work/` of
+     `cn_linkage.py`, opened in place; `depth.regions.bed.gz.csi` and
+     `depth.mosdepth.summary.txt` of `cn_depth`). This is conservative: a held cn
+     output in such a directory is re-made rather than shared;
+   - anything matching `--exclude REGEX` (path relative to OLD, repeatable).
 
-   So no job ever writes to a shared inode. The inventory
+   So no job ever writes to a shared inode. The panel-v1.3 build found the last two
+   gaps (7,190 files linked that no dry run planned; unlinked by hand before the run,
+   docs/panel_v1.3/README.md); `rebuild_downstream.sh` now also stops when the dry run
+   against NEW finds a hard-linked params-only output or cn/ side file. The inventory
    (`provenance/reused_upstream.tsv`: 58,646 files, 1.41 TB, no copy) is
    re-checked after the build with `--verify`.
 4. **Run.** `CXSV_SIF=… CXSV_REBUILD_WORKDIR=<node-local dir> bash
@@ -676,7 +688,8 @@ downstream-only rebuild applies; `callable_mask.sh` changed only in its log line
    - It uses `--forcerun sample_vcf_to_bed calling_fingerprint`; the work
      directory has no per-sample metadata.
    - `--allowed-rules` is every rule except the held ones.
-   - The dry run must plan no held-rule job and no hard-linked output.
+   - The dry run must plan no held-rule job and no hard-linked output, and no
+     params-only output or cn/ side file may be a hard link.
    - Afterwards it greps the worker-error logs, verifies the inventory and
      verifies the release.
    - `--resume` continues a partial run.
@@ -708,4 +721,4 @@ downstream-only rebuild applies; `callable_mask.sh` changed only in its log line
 | `scripts/panel_build/make_aggregate_yaml.py` | new build's aggregate config |
 | `scripts/panel_build/check_callable_identity.sh` | held callability masks against the new code |
 | `scripts/panel_build/compare_builds.py` | per-genome loci, blind span, junction identity, old vs new |
-| `tests/unit/test_link_upstream.py` | link selection, verify, refusal (4 tests) |
+| `tests/unit/test_link_upstream.py` | link selection, verify, refusal, params-only and cn/ side files, `--exclude`, driver side-file check (8 tests) |

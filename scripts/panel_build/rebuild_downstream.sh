@@ -107,6 +107,17 @@ print(f"planned outputs/logs/benchmarks: {len(planned)}; present (from an earlie
 if linked:
     print("\n".join(linked[:20])); sys.exit("a planned output is a hard link (shared with the old build); stop")
 PY
+# side files no job plans but the run rewrites (params-only outputs, cn/ side files of a
+# planned cn directory) must not be hard links either (panel-v1.3 build: 7,190 were)
+$RESUME || python3 - "$DRYOUT" "$NEW/results/panel" "$HERE" <<'PY'
+import sys
+sys.path.insert(0, sys.argv[3])
+from link_upstream import linked_side_files
+bad = linked_side_files(sys.argv[1], sys.argv[2])
+print(f"hard-linked side files (params-only outputs, cn/ side files): {len(bad)}")
+if bad:
+    print("\n".join(bad[:20])); sys.exit("a side file the run rewrites is a hard link (shared with the old build); stop")
+PY
 $DRY && exit 0
 LOG="$WD/aggregate.log"; $RESUME && LOG="$WD/aggregate.resume.log"
 sm "${ARGS[@]}" > "$LOG" 2>&1 || { echo "snakemake failed: $LOG"; tail -n 30 "$LOG"; exit 1; }
