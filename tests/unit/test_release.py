@@ -226,6 +226,63 @@ def test_finalise_tag_refuses_other_commit_or_unverified_release(tmp_path):
         cr.finalise_tag(rel, "panel-v9", repo, "x")
 
 
+def _descendant_repo(tmp_path):
+    """source commit with calling code; docs-only descendant (tag docs-only); calling-change
+    descendant (tag calling-change); unrelated orphan commit (tag orphan)."""
+    repo = tmp_path / "drepo"
+    (repo / "workflow" / "scripts").mkdir(parents=True)
+    (repo / "config").mkdir()
+    (repo / "docs").mkdir()
+    (repo / "workflow" / "scripts" / "vcf_to_bed.py").write_text("print(1)\n")
+    (repo / "config" / "calling.yaml").write_text("cxsv_params: {bnd_window: 1}\n")
+    (repo / "docs" / "README.md").write_text("a\n")
+    c = ("-c", "user.name=t", "-c", "user.email=t@example.org")
+    _git(repo, "init", "-q")
+    _git(repo, "add", "-A")
+    _git(repo, *c, "commit", "-q", "-m", "source")
+    source = _git(repo, "rev-parse", "HEAD")
+    (repo / "docs" / "README.md").write_text("b\n")
+    _git(repo, *c, "commit", "-q", "-am", "docs only")
+    _git(repo, *c, "tag", "-a", "docs-only", "-m", "docs only")
+    (repo / "config" / "calling.yaml").write_text("cxsv_params: {bnd_window: 2}\n")
+    _git(repo, *c, "commit", "-q", "-am", "calling change")
+    _git(repo, *c, "tag", "-a", "calling-change", "-m", "calling change")
+    _git(repo, "checkout", "-q", "--orphan", "other")
+    _git(repo, *c, "commit", "-q", "-m", "orphan")
+    _git(repo, *c, "tag", "-a", "orphan", "-m", "orphan")
+    return repo, source
+
+
+@needs_git
+def test_finalise_tag_on_a_descendant_with_unchanged_calling_code(tmp_path):
+    import json
+    rel = make_release(tmp_path)
+    repo, source = _descendant_repo(tmp_path)
+    _with_source(rel, source)
+    with pytest.raises(ValueError, match="allow-descendant-tag"):        # default: refused as before
+        cr.finalise_tag(rel, "docs-only", repo, "x")
+    with pytest.raises(ValueError, match="differs between"):             # calling config changed
+        cr.finalise_tag(rel, "calling-change", repo, "x", allow_descendant=True)
+    with pytest.raises(ValueError, match="does not descend"):            # unrelated history
+        cr.finalise_tag(rel, "orphan", repo, "x", allow_descendant=True)
+    rows_before = (rel / cr.MANIFEST).read_text().splitlines()
+    res = cr.finalise_tag(rel, "docs-only", repo, "2026-11-13T00:00:00Z", allow_descendant=True)
+    assert res["changed"] and res["after"]["ok"]
+    src = json.loads((rel / cr.METADATA).read_text())["source"]
+    assert src["commit"] == source and src["git_tag"] == "docs-only"
+    assert src["git_tag_commit"] == _git(repo, "rev-parse", "docs-only^{commit}")
+    assert src["git_tag_relation"].startswith("descendant of source.commit")
+    rows_after = (rel / cr.MANIFEST).read_text().splitlines()
+    assert [a.split("\t")[0] for a, b in zip(rows_before, rows_after) if a != b] == [cr.METADATA]
+
+
+def test_calling_paths_cover_the_fingerprinted_code():
+    import cxsv_fingerprint as fp
+    paths = cr.calling_paths()
+    assert paths[-1] == "config/calling.yaml" and len(paths) == len(fp.CALLING_CODE) + 1
+    assert all((REPO / q).is_file() for q in paths)
+
+
 def test_release_runtime_records_image_ids_and_refuses_a_container_build_without_them():
     """release.json runtime: SIF sha256 + image id + their source; a non-test container build
     without either is refused (panel-v1.0 has both null), unless explicitly allowed."""

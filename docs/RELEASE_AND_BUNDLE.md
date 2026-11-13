@@ -106,6 +106,13 @@ instead; tagging a release is the PI's decision. The first real release,
 (on its source commit da6cb90), written into `release.json` by
 `write_release_metadata.py --finalise` (2026-11-03).
 
+`--finalise` refuses a tag that does not point at the release's `source.commit`. Since
+panel-v1.3 (2026-11-13), `--allow-descendant-tag` also accepts a tag on a later commit that
+descends from `source.commit` when no calling code (`cxsv_fingerprint.CALLING_CODE`) and no
+line of `config/calling.yaml` differs between the two (`cxsv_release.descendant_relation`).
+`source.commit` is kept; `source.git_tag_commit` and `source.git_tag_relation` record where the
+tag is. panel-v1.3 uses it: release source 1c9c80d, tag on the validated bundle commit.
+
 ### The patient workflow refuses a release that does not verify
 
 `workflow/lib/cxsv_release.py: verify` checks that every listed file exists
