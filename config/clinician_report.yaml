@@ -16,6 +16,12 @@ clinician_report:
   footer: "Research report \u2014 not for clinical decision-making without confirmation in an accredited laboratory"
   # Tier 1 points graphic: at most this many Tier 1 loci are drawn (highest total first)
   figure_max_rows: 15
+  # Structural reconstruction (lib/cxsv_recon.py): one panel per Tier 1 locus, highest score
+  # first, at most this many (the rest are in report/<sample>.tier1_reconstruction.tsv).
+  # Page rule: a report may take 2 pages + 1 per started group of
+  # reconstruction_panels_per_page panels (clinician_report.page_limit; warned in the log).
+  reconstruction_max_panels: 6
+  reconstruction_panels_per_page: 2
 
   # Meaning of each tier (manuscript table 6)
   tier_meaning:
