@@ -20,10 +20,18 @@ limitations, footer) from config/clinician_report.yaml. Structure (2 pages, PI-a
 No per-cohort or healthy-panel comparator text: a report describes one sample.
 Reports never state a diagnosis.
 
+Length: 2 pages without Tier 1 reconstructions; each reconstruction panel may add pages, up
+to page_limit() = 2 + ceil(panels / reconstruction_panels_per_page) (config; default 2 per
+page). The PDF page count and the limit are printed in the run log; over the limit the
+script warns (the report is still written).
+
   clinician_report.py --sample S --scores scoring/cxsv_scores.tsv --params scoring/scoring_params.json \
       --cn-stats cn/stats.json --cn-only cn/cn_only.tsv --library-qc qc/library_qc.tsv \
       --depth-summary cn/depth.mosdepth.summary.txt --compatibility panel_compatibility.txt \
-      --text config/clinician_report.yaml|text.json --out-docx X.docx --out-pdf X.pdf --out-figure X.png
+      --text config/clinician_report.yaml|text.json --out-docx X.docx --out-pdf X.pdf --out-figure X.png \
+      [--junctions junctions/junctions.tsv --cxsv-vcf cxsv/cxsv_only.vcf --caller-vcf Sniffles2=... \
+       --caller-vcf cuteSV=... --caller-vcf SVIM=... --locus-depth scoring/locus_depth.tsv \
+       --cn-segments cn/segments.tsv --genes genes.bed --out-recon-dir DIR --out-recon-tsv X.tsv]
 
 Bundle identity is read from the environment the bundle launcher sets (CXSV_BUNDLE_ID,
 CXSV_COMMIT; container/run_cxsv.sh); outside a bundle the report says so.
@@ -383,7 +391,7 @@ def result_box(D, t1):
     return text, tone
 
 
-def sample_blocks(D, figure=None):
+def sample_blocks(D, figure=None, recons=None):
     """The report as renderer-neutral blocks: (kind, ...)."""
     P, T, rows = D["P"], D["T"], D["scores"]
     t1 = sorted([r for r in rows if r.get("Tier") == TOP], key=lambda r: -float(r["Total_Score"]))
@@ -400,7 +408,7 @@ def sample_blocks(D, figure=None):
          "Background panel", f"{P.get('panel_release_id', 'NA')}; {n_panel} presumed-healthy individuals"],
         ["Calling fingerprint", f"{fp[:12] if fp else 'NA'} ({status or 'NA'} with panel)",
          "Report date", D["date"] + (f"; code {D['commit'][:12]}" if D["commit"] else "")],
-    ]))
+    ] + ([["Rendering", D["rendered_from"], "", ""]] if D.get("rendered_from") else [])))
     text, tone = result_box(D, t1)
     B.append(("box", "Result summary", text, tone))
 
@@ -434,6 +442,8 @@ def sample_blocks(D, figure=None):
             if figure["n_shown"] < figure["n_total"]:
                 cap += f" Showing the {figure['n_shown']} highest-scoring of {figure['n_total']} Tier 1 loci."
             B.append(("figure", figure, cap))
+        if recons:
+            B += recon_blocks(recons, D.get("recon_total", len(recons)))
     else:
         B.append(("p", "Tier 1: none. (No Tier 1 locus, so no Tier 1 points graphic.)"))
     if t2:
@@ -485,6 +495,138 @@ def sample_blocks(D, figure=None):
     return B
 
 
+# ─── structural reconstruction ───────────────────────────────────────────────
+RECON_CAPTION = "Inferred from split-read junctions and read depth in this sample; not orthogonally confirmed."
+
+
+def page_limit(n_panels, per_page=2, base_pages=2):
+    """Pages a report may take: the report without reconstructions (2 pages for the accepted
+    layout; more only when many Tier 1 loci are listed), plus one page per started group of
+    per_page reconstruction panels."""
+    return max(2, int(base_pages)) + (-(-int(n_panels) // max(1, int(per_page))) if n_panels else 0)
+
+
+def recon_title(k, row, res):
+    return f"Tier 1 #{k}  {coords(row)} (hs1)"
+
+
+def recon_subtitle(res):
+    genes = []
+    for n, gl in (res.get("segment_genes") or {}).items():
+        for g, _ in gl:
+            if g not in genes:
+                genes.append(g)
+    for g in res.get("broken_genes") or ():
+        if g not in genes:
+            genes.append(g)
+    return ", ".join(genes) if genes else "no gene in the reconstructed segments"
+
+
+def recon_rows(res):
+    """kv2 rows describing one reconstruction (segments, junctions with support, inference)."""
+    rows = []
+    paths = res.get("paths") or {}
+    rows.append(["Inferred structure", (res.get("summary") or "not determined") + "; derivative "
+                 + "; ".join(f"{k}: {' '.join(v)}" for k, v in paths.items()) if paths else
+                 (res.get("summary") or "not determined")])
+    segs = []
+    for s in res.get("segments") or ():
+        if s["kind"] != "internal":
+            continue
+        info = (res.get("segment_info") or {}).get(s["name"], {})
+        visits = None
+        if res.get("best"):
+            idx = [x["name"] for x in res["segments"]].index(s["name"])
+            visits = res["best"]["visits"][idx]
+        cn = (f"CN {info['cn']:.2f} ({info['source']})" if info.get("cn") is not None
+              else "CN not measurable (segment too short)")
+        fate = ("deleted" if visits == 0 else (f"{visits} copies" if visits and visits > 1 else "kept")) \
+            if visits is not None else "not placed"
+        gl = (res.get("segment_genes") or {}).get(s["name"], [])
+        gtxt = ", ".join(f"{g} ({w})" for g, w in gl) if gl else "no gene"
+        segs.append(f"{s['name']} {s['chrom']}:{s['start']:,}-{s['end']:,} ({size_txt(s['end'] - s['start'])}): "
+                    f"{cn}; on the derivative: {fate}; genes: {gtxt}")
+    if segs:
+        rows.append(["Segments", "; ".join(segs)])
+    js = []
+    for j in res.get("junctions") or ():
+        sup = ", ".join(f"{k} {v} reads" for k, v in sorted(j["callers"].items())) or "support not recorded"
+        types = "; ".join(f"{k} {'/'.join(v)}" for k, v in j["types"].items())
+        js.append(f"{j['id']} {j['end1']} | {j['end2']}: join {', '.join(j['orientations'])}"
+                  f"{'' if j['used'] else ' (not on the drawn derivative)'}; {sup}; types: {types}")
+    if js:
+        rows.append(["Junctions (support)", "; ".join(js)])
+    if res.get("status") != "resolved":
+        alts = res.get("alternatives") or []
+        txt = "; ".join(res.get("reasons") or [])
+        if alts:
+            txt += ". Alternatives: " + " || ".join(" | ".join(" ".join(p) for p in a) for a in alts)
+        rows.append(["Ambiguous" if res.get("status") == "ambiguous" else "Not reconstructed", txt])
+    if res.get("notes"):
+        rows.append(["Notes", "; ".join(res["notes"])])
+    return rows
+
+
+def make_reconstructions(a, D, t1):
+    """Reconstruct the Tier 1 loci (highest score first, at most reconstruction_max_panels) and
+    draw one panel each. Returns [{row, res, figure}] (empty without the inputs or Tier 1)."""
+    if not getattr(a, "junctions", None) or not t1:
+        return []
+    import cxsv_recon as R
+    import cxsv_recon_figure as RF
+    T = D["T"]
+    n_max = int(T.get("reconstruction_max_panels", 6))
+    rows = sorted(t1, key=lambda r: -float(r["Total_Score"]))
+    shown = rows[:n_max]
+    callers = dict(x.split("=", 1) for x in (a.caller_vcf or []))
+    P = D["P"]
+    par_bed = (P.get("scoring_resources") or {}).get("par_bed")
+    par = [(c, s, e) for c, s, e, _ in sc.read_bed(par_bed)] if par_bed and os.path.exists(par_bed) else []
+    sex = sample_sex(D)["sex"]
+    params = {**P, "copy_number": P.get("copy_number") or {}}
+    recs = R.reconstruct_run(shown, a.junctions, callers, a.cxsv_vcf, a.locus_depth, a.cn_segments, a.genes,
+                             params, sex, par)
+    out = []
+    if a.out_recon_dir:
+        os.makedirs(a.out_recon_dir, exist_ok=True)
+    for k, (row, res) in enumerate(zip(shown, recs), 1):
+        fig = None
+        if res.get("segments") and res.get("paths") and a.out_recon_dir:
+            ev = R.layout(res, title=recon_title(k, row, res), subtitle=recon_subtitle(res))
+            safe = re.sub(r"[^A-Za-z0-9]+", "_", row["Locus_ID"]).strip("_")
+            fig = RF.recon_figure(ev, os.path.join(a.out_recon_dir, f"{k:02d}_{safe}.png"))
+        out.append({"rank": k, "row": row, "res": res, "figure": fig})
+    if a.out_recon_tsv:
+        with open(a.out_recon_tsv, "w", newline="") as fh:
+            w = csv.DictWriter(fh, fieldnames=R.TSV_COLUMNS, delimiter="\t", lineterminator="\n")
+            w.writeheader()
+            for x in out:
+                w.writerows(R.flat_rows(D["sample"], x["rank"], x["res"]))
+    D["recon_total"] = len(rows)
+    return out
+
+
+def recon_blocks(recons, n_total):
+    B = [("h2", "Structural reconstruction of the Tier 1 loci")]
+    lead = ("For each Tier 1 locus the reference segments between its junction breakpoints are shown above the "
+            "rearranged sequence inferred from this run's junction calls and read depth (to scale; flanks "
+            "shortened; J1, J2 ... label the junctions listed under the panel).")
+    if n_total > len(recons):
+        lead += f" Shown: the {len(recons)} highest-scoring of {n_total} Tier 1 loci; all are in the reconstruction table."
+    B.append(("small_kwn", lead))
+    for x in recons:
+        res = x["res"]
+        cap = RECON_CAPTION
+        if res.get("status") == "ambiguous":
+            cap += " Ambiguous: " + "; ".join(res.get("reasons") or []) + "."
+        if x["figure"]:
+            B.append(("recon_figure", x["figure"], cap))
+        else:
+            B.append(("small", f"Tier 1 #{x['rank']} {coords(x['row'])}: no structure drawn. {cap}"))
+        B.append(("kv2", recon_rows(res)))
+    return B
+
+
 # ─── renderers ───────────────────────────────────────────────────────────────
 TONE = {"neutral": "E8F1F8", "caution": "FFF4D6", "alert": "FDE2D6"}
 
@@ -533,12 +675,12 @@ def to_docx(blocks, path, footer):
         elif k == "h2":
             r = doc.add_paragraph().add_run(b[1])
             r.bold, r.font.size = True, Pt(9.5)
-        elif k in ("p", "small"):
+        elif k in ("p", "small", "small_kwn"):
             p = doc.add_paragraph()
             for part in re.split(r"(<b>.*?</b>)", b[1]):
                 rr = p.add_run(part[3:-4] if part.startswith("<b>") else part)
                 rr.bold = part.startswith("<b>")
-                if k == "small":
+                if k in ("small", "small_kwn"):
                     rr.font.size = Pt(7.5)
         elif k == "interp":
             p = doc.add_paragraph()
@@ -559,8 +701,8 @@ def to_docx(blocks, path, footer):
             p.add_run(b[1] + ": ").bold = True
             p.add_run(b[2])
             doc.add_paragraph()
-        elif k == "figure":
-            doc.add_picture(b[1]["path"], width=Cm(16.0))
+        elif k in ("figure", "recon_figure"):
+            doc.add_picture(b[1]["path"], width=Cm(16.0 if k == "figure" else 17.5))
             r = doc.add_paragraph().add_run(b[2])
             r.font.size, r.italic = Pt(7.5), True
         elif k in ("kv", "kv2", "table"):
@@ -591,7 +733,7 @@ def to_pdf(blocks, path, footer):
     from reportlab.lib.pagesizes import letter
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import cm
-    from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    from reportlab.platypus import Image, KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
     ss = getSampleStyleSheet()
     base = ParagraphStyle("b", parent=ss["Normal"], fontName="Helvetica", fontSize=8.5, leading=10.5, alignment=TA_LEFT)
@@ -602,6 +744,7 @@ def to_pdf(blocks, path, footer):
     tcell = ParagraphStyle("tc", parent=base, fontSize=7, leading=8.4)        # multi-column tables
     tcellb = ParagraphStyle("tcb", parent=tcell, fontName="Helvetica-Bold")
     sbl = ParagraphStyle("sbl", parent=small, leftIndent=10, firstLineIndent=-7)
+    small_kwn = ParagraphStyle("skwn", parent=small, keepWithNext=1, spaceAfter=3)
     title = ParagraphStyle("t", parent=base, fontName="Helvetica-Bold", fontSize=12.5, leading=15, spaceAfter=4)
     h = ParagraphStyle("h", parent=base, fontName="Helvetica-Bold", fontSize=10, leading=12, spaceBefore=6,
                        spaceAfter=3, textColor=colors.HexColor("#1F3A5F"), keepWithNext=1)
@@ -623,6 +766,8 @@ def to_pdf(blocks, path, footer):
             story.append(Paragraph(esc(b[1]), h if k == "h" else h2))
         elif k in ("p", "small"):
             story += [Paragraph(esc(b[1]), base if k == "p" else small), Spacer(1, 3)]
+        elif k == "small_kwn":                     # stays on the page of the flowable after it
+            story.append(Paragraph(esc(b[1]), small_kwn))
         elif k == "interp":
             story += [Paragraph("<b>Interpretation:</b> " + esc(b[1]), base), Spacer(1, 3)]
         elif k in ("bullets", "small_bullets"):
@@ -640,6 +785,11 @@ def to_pdf(blocks, path, footer):
             fw = W * 0.8
             story += [Image(f["path"], width=fw, height=fw * f["height_px"] / f["width_px"]),
                       Paragraph(esc(b[2]), cap), Spacer(1, 5)]
+        elif k == "recon_figure":
+            f = b[1]
+            fw = W
+            story += [KeepTogether([Image(f["path"], width=fw, height=fw * f["height_px"] / f["width_px"]),
+                                    Paragraph(esc(b[2]), cap)]), Spacer(1, 3)]
         elif k in ("kv", "kv2", "table"):
             rows = b[1]
             if k == "table":
@@ -664,7 +814,10 @@ def to_pdf(blocks, path, footer):
             t.setStyle(TableStyle(sty))
             story += [t, Spacer(1, 5)]
 
+    pages = [0]
+
     def on_page(canvas, doc_):
+        pages[0] = max(pages[0], doc_.page)
         canvas.saveState()
         canvas.setFont("Helvetica-Oblique", 7)
         canvas.drawCentredString(letter[0] / 2, 0.8 * cm, footer)
@@ -674,6 +827,7 @@ def to_pdf(blocks, path, footer):
     SimpleDocTemplate(path, pagesize=letter, leftMargin=1.6 * cm, rightMargin=1.6 * cm, topMargin=1.3 * cm,
                       bottomMargin=1.4 * cm, title=strip_tags(blocks[0][1]), author="CxSV pipeline",
                       invariant=1).build(story, onFirstPage=on_page, onLaterPages=on_page)
+    return pages[0]
 
 
 # ─── main ────────────────────────────────────────────────────────────────────
@@ -681,20 +835,45 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     for k in ("sample", "scores", "params", "text", "out-docx", "out-pdf", "out-figure"):
         ap.add_argument(f"--{k}", required=True)
-    for k in ("cn-stats", "cn-only", "library-qc", "depth-summary", "compatibility", "date", "quarantine"):
+    for k in ("cn-stats", "cn-only", "library-qc", "depth-summary", "compatibility", "date", "quarantine",
+              "junctions", "cxsv-vcf", "locus-depth", "cn-segments", "genes", "out-recon-dir", "out-recon-tsv",
+              "rendered-from"):
         ap.add_argument(f"--{k}", default=None)
+    ap.add_argument("--caller-vcf", action="append", default=[], help="CALLER=filtered VCF (Sniffles2, cuteSV, SVIM)")
     a = ap.parse_args(argv)
     D = load(a)
+    D["rendered_from"] = a.rendered_from
     t1 = [r for r in D["scores"] if r.get("Tier") == TOP]
     fig = rfig.tier1_points_figure(t1, D["P"].get("tiers") or [], a.out_figure,
                                    max_rows=int(D["T"].get("figure_max_rows", 15)))
     if fig is None:                 # no Tier 1: the report prints a note; the figure file holds the same note
         rfig.no_tier1_note(a.out_figure)
-    blocks = sample_blocks(D, fig)
+    recons = make_reconstructions(a, D, t1)
+    if a.out_recon_dir:
+        os.makedirs(a.out_recon_dir, exist_ok=True)   # declared output even without Tier 1
+    if a.out_recon_tsv and not recons:
+        import cxsv_recon as R
+        with open(a.out_recon_tsv, "w") as fh:
+            fh.write("\t".join(R.TSV_COLUMNS) + "\n")
+    blocks = sample_blocks(D, fig, recons)
     footer = D["T"].get("footer", "Research report")
     to_docx(blocks, a.out_docx, footer)
-    to_pdf(blocks, a.out_pdf, footer)
-    print(json.dumps({"sample": a.sample, "tier1": len(t1), "figure_rows": fig["n_shown"] if fig else 0}))
+    pages = to_pdf(blocks, a.out_pdf, footer)
+    n_panels = sum(1 for x in recons if x["figure"])
+    base = pages
+    if recons:                       # the same report without the reconstruction section
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            base = to_pdf(sample_blocks(D, fig, None), os.path.join(td, "base.pdf"), footer)
+    per = D["T"].get("reconstruction_panels_per_page", 2)
+    limit = page_limit(n_panels, per, base)
+    if pages > limit:
+        print(f"WARNING: clinician report has {pages} pages, more than the limit {limit} "
+              f"({max(2, base)} without reconstructions + 1 per {per} reconstruction panels)", file=sys.stderr)
+    print(json.dumps({"sample": a.sample, "tier1": len(t1), "figure_rows": fig["n_shown"] if fig else 0,
+                      "reconstructions": len(recons), "reconstruction_panels": n_panels,
+                      "ambiguous": sum(1 for x in recons if x["res"].get("status") != "resolved"),
+                      "pages": pages, "pages_without_reconstruction": base, "page_limit": limit}))
 
 
 if __name__ == "__main__":

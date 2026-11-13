@@ -26,6 +26,10 @@ from pathlib import Path
 SLOP = 500      # breakpoint slop for the junction check (panel_match.tolerance)
 
 
+def n1_total(scores):
+    return sum(1 for r in scores if r.get("Tier") == "Tier1_high_priority")
+
+
 def main(expected_json, patient_root, run, sample):
     exp = json.loads(Path(expected_json).read_text())
     root = Path(patient_root)
@@ -165,6 +169,20 @@ def main(expected_json, patient_root, run, sample):
               and (n1 == 0 or "word/media/" in " ".join(zipfile.ZipFile(docx).namelist())),
               f"clinician report has its sections and, with {n1} Tier 1 loci, the Tier 1 points graphic")
     check(png.exists() and png.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n", f"Tier 1 points graphic written ({png.name})")
+    rtsv, rdir = rep / f"{sample}.tier1_reconstruction.tsv", rep / f"{sample}.reconstruction"
+    ok = rtsv.exists() and rtsv.read_text().startswith("sample\trank\tlocus") and rdir.is_dir()
+    if ok and n1_total(scores):
+        panels = list(rdir.glob("*.png"))
+        ok = len(panels) >= 1 and "segment" in rtsv.read_text()
+    check(ok, f"structural reconstruction table and panels written ({rtsv.name}; "
+              f"{len(list(rdir.glob('*.png'))) if rdir.is_dir() else 0} panel(s))")
+    log = sdir / "logs" / "clinician_report.log"
+    if log.exists():
+        last = [l for l in log.read_text().splitlines() if l.startswith("{")]
+        if last:
+            info = json.loads(last[-1])
+            check(info.get("pages", 0) <= info.get("page_limit", 0),
+                  f"clinician report within its page rule ({info.get('pages')} <= {info.get('page_limit')} pages)")
     chk = (sdir / "private" / "catalogue_check.tsv").read_text()
     check("VERIFIED" in chk and "MISMATCH" not in chk, "catalogue table verified against its manifest")
 
