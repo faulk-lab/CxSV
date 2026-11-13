@@ -23,6 +23,10 @@
 #   7. records identical: 4 vs 6 and 5 vs 6 (compare_patient_runs.py; files that
 #      differ only by the run's absolute paths are reported as such)
 #   8. tampered release refused: one byte changed / one unlisted file added
+#  10. locus ids well-formed (tests/lab/check_locus_ids.py): every locus id of the scored and
+#      reported tables of runs 4, 5 and 6 is chrom:start-end on a reference contig (.fai) with
+#      start < end <= contig length; loci on non-reference contigs must be in
+#      scoring/quarantined_loci.tsv instead (ROADMAP item 18)
 #   9. literature set shipped: bundle_site.yaml names literature_set.root inside the
 #      bundle, its MANIFEST.tsv verifies (sha256 of every listed file), the offline
 #      Singularity run wrote private/cxsv_literature_hits.tsv, and the lab copy used by
@@ -198,6 +202,20 @@ else
     if cmp -s "$LIT_DIR/MANIFEST.tsv" "$LIT_LAB/MANIFEST.tsv"; then pass "lab copy $LIT_LAB (check 6) has the same MANIFEST.tsv"
     else fail "lab copy $LIT_LAB differs from the bundle's literature set (check 6 compared unlike sets)"; fi
 fi
+
+hdr "10. locus ids well-formed (scored and reported tables)"
+FAI="$BUNDLE/reference/hs1.fa.fai"
+for x in offline_singularity offline_docker normal; do
+    tabs=$(find "$W/$x/results/patient/samples" \( -path '*/scoring/cxsv_scores.tsv' -o -path '*/scoring/cxsv_score_features.tsv' \
+           -o -path '*/cn/cn_loci.tsv' \) 2>/dev/null | sort)
+    if [ -z "$tabs" ]; then fail "$x: no scored tables found"; continue; fi
+    # shellcheck disable=SC2086
+    if out=$(python3 "$REPO/tests/lab/check_locus_ids.py" --fai "$FAI" $tabs 2>&1); then pass "$x: $(echo "$out" | tail -1)"
+    else fail "$x: malformed locus ids"; echo "$out" | head -20; fi
+done
+q=$(find "$W/offline_singularity/results/patient/samples" -path '*/scoring/quarantined_loci.tsv' | head -1)
+if [ -n "$q" ]; then pass "quarantine table written: $(( $(wc -l < "$q") - 1 )) row(s) in ${q#"$W"/}"
+else fail "offline Singularity run wrote no scoring/quarantined_loci.tsv"; fi
 
 hdr "summary"
 echo "failures: $FAILS"

@@ -115,6 +115,7 @@ def load(a):
     D = {"sample": a.sample, "T": T, "P": P, "scores": read_tsv(a.scores), "cn": read_json(a.cn_stats) or None,
          "cn_only": read_tsv(a.cn_only), "libqc": (read_tsv(a.library_qc) or [{}])[0],
          "coverage": mean_coverage(a.depth_summary), "fp": compatibility(a.compatibility),
+         "quarantine": read_tsv(a.quarantine) if getattr(a, "quarantine", None) else None,
          "bundle": os.environ.get("CXSV_BUNDLE_ID") or None, "commit": os.environ.get("CXSV_COMMIT") or None,
          "date": a.date or _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%d")}
     return D
@@ -319,6 +320,18 @@ def qc_rows(D):
     else:
         dv = dn["text"]
     rows.append(["Depth-profile noise", dv])
+    Q = D.get("quarantine")
+    if Q is None:
+        qv = "not checked (no scoring/quarantined_loci.tsv)"
+    else:
+        rem = [r for r in Q if r.get("action") == "removed"]
+        drp = [r for r in Q if r.get("action") == "junctions_dropped"]
+        contigs = sorted({c for r in Q for c in (r.get("nonref_contigs") or "").split(",") if c})
+        qv = (f"{len(rem)} locus/loci removed from scoring; {sum(int(r.get('nonref_junctions') or 0) for r in drp)} "
+              f"junction(s) dropped from {len(drp)} scored locus/loci")
+        if contigs:
+            qv += f" (contig(s) absent from the reference: {', '.join(contigs)}; caller artefact, not scored)"
+    rows.append(["Quarantined (non-reference contig)", qv])
     fp, status = D["fp"]
     rows.append(["Panel compatibility", f"{status or 'NA'} (calling fingerprint {fp[:12] if fp else 'NA'})"])
     return rows
@@ -668,7 +681,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     for k in ("sample", "scores", "params", "text", "out-docx", "out-pdf", "out-figure"):
         ap.add_argument(f"--{k}", required=True)
-    for k in ("cn-stats", "cn-only", "library-qc", "depth-summary", "compatibility", "date"):
+    for k in ("cn-stats", "cn-only", "library-qc", "depth-summary", "compatibility", "date", "quarantine"):
         ap.add_argument(f"--{k}", default=None)
     a = ap.parse_args(argv)
     D = load(a)

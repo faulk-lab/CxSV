@@ -233,7 +233,8 @@ rule score_cxsv:
     output:
         tsv      = f"{S}/scoring/cxsv_scores.tsv",
         features = f"{S}/scoring/cxsv_score_features.tsv",
-        report   = f"{S}/scoring/cxsv_score_report.md"
+        report   = f"{S}/scoring/cxsv_score_report.md",
+        quarantine = f"{S}/scoring/quarantined_loci.tsv"   # loci on non-reference contigs (ROADMAP item 18)
     params:
         parents = lambda wc: " ".join(f"--parent {k}={v}" for k, v in parent_junctions(wc).items()),
         literature = lambda wc: " ".join(f"--literature-hits {v}" for v in literature_hits_input(wc).values())
@@ -245,4 +246,5 @@ rule score_cxsv:
         "--caller-vcf SVIM={input.svim} --depth {input.depth} --params {input.params} "
         "--genes {input.genes} --exons {input.exons} --repeats {input.repeats} --segdups {input.segdups} "
         "--fai {input.fai} {params.parents} {params.literature} --library-qc {input.libqc} --cn-only {input.cn_only} --cn-stats {input.cn_stats} --sample {wildcards.sample} "
-        "--out-tsv {output.tsv} --out-features {output.features} --out-report {output.report} 2> {log}"
+        "--out-tsv {output.tsv} --out-features {output.features} --out-report {output.report} "
+        "--out-quarantine {output.quarantine} 2> {log}"
