@@ -153,6 +153,15 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
     ~165 kb deletion of 5′ *NF1* with read and copy-number support. It needs orthogonal
     confirmation in an accredited laboratory; inclusion in the manuscript and any return of
     results are for the PI and the IRB.
+21. **panel-v1.3 deployment held (new, 2026-11-12, item 16).** The release, the bundle, the
+    positive control, HG01868 and the nine test genomes pass every acceptance criterion but two:
+    a malformed locus id `chrN:62452837-62454007` (BOC_5883, Benign; Sniffles2 PAR artefact, item
+    18) and bundle validation check 7 (the clinician report's run-identity row, an intended
+    difference; fixed in the validator by PR #51). Per the stop rule nothing was tagged or
+    switched; patients stay on panel-v1.2. Options: (a) accept both, then tag panel-v1.3 on
+    1c9c80d, finalise, rebuild from the tag, switch; (b) fix item 18 in calling code first (new
+    release); (c) quarantine loci on contigs absent from the reference in the scorer (new bundle,
+    same release). Details: [panel_v1.3/README.md](panel_v1.3/README.md).
 
 ---
 
@@ -176,8 +185,9 @@ Each item below has a recommendation; nothing in it starts until the PI says so.
 | – | Small fixes 2026-11 (8 fixes from the panel-v1.0 validation) | done 2026-11-04; merged (PR #21) | `main`, below |
 | 14 | Library-chimerism QC (panel and patient) | **done 2026-11-06**: 24/1,619 panel libraries flagged; conservative mode on by default; no panel exclusion; bundle `cxsv-bundle-20261105-95126e14f036` validated 8/8, positive control unchanged; follow-ups (auto-detected QC group, wording, test-release ids) in bundle `cxsv-bundle-20261106-169503679a60` (commit 1695036), validated 8/8 | `main` (PR #28, #29), docs/LIBRARY_QC.md, docs/library_qc/DEPLOYMENT.md |
 | 15 | Copy-number-anchored detection of large DUP-TRP/INV-DUP and other CN-linked events | **Phase 2 done 2026-11-09**: panel-v1.2-r2 `cxsv-panel-20261108-fdac9ff80401` (sex-stratified chrX/chrY reference, PR #38), VERIFIED, healthy Tier 1 0.198 per genome, tagged `panel-v1.2` and finalised 2026-11-09; tagged bundle `cxsv-bundle-20261109-84d380e08cc4` validated 9/9 and **deployed for patients** (replaces 169503679a60 + panel-v1.1); the first candidate `6001d99ea4d4` was superseded (PC L01 failed) | docs/CN_LINKAGE.md, docs/panel_v1.2/README.md |
-| 16 | panel-v1.3 follow-ups: (a)–(d) from panel-v1.2, (e)–(o) from the nine-genome test run | queued; build plan drafted 2026-11-11 (decision 19) | below, docs/PLAN_panel_v1.3.md |
+| 16 | panel-v1.3 follow-ups: (a)–(d) from panel-v1.2, (e)–(o) from the nine-genome test run | **done 2026-11-12 (release + bundle; deployment held)**: (a)–(o) merged (PRs #43, #44, #47, #48; tooling #49, #50, #51); release `cxsv-panel-20261111-aa64baf08272` VERIFIED, healthy Tier 1 0.2075 per genome (R10 0.2551), 0 public Tier 1; bundle `cxsv-bundle-20261112-1c9c80d0e2c6` validated (PC 13/13 planted Tier 1 kept, L01 private at 1.12/1.18/1.25, HG01868 0 Tier 1, nine genomes 1 Tier 1 = *NF1*); **not tagged, patients not switched**: malformed locus id `chrN:…` (item 18) and validation check 7 (fixed by #51) failed the stop rule (decision 21) | docs/panel_v1.3/README.md, docs/design_check_v13/README.md |
 | 17 | Test run on nine de-identified genomes (monkey_meth children's blood) with clinician-style reports | **done 2026-11-11**: 9/9 offline runs with the tagged v1.2 bundle; 2 Tier 1 in 9 genomes (0.22 per genome; R10 healthy expectation 0.247): private *NF1* deletion (BOC_4433, needs confirmation) and a public *BRSK2* locus (scoring weakness, item 16 e) | below; NAS `patient_test_runs/monkeymeth_20261110/` |
+| 18 | Sniffles2 PAR BND mate contig `chrN` reaches junction tables and locus ids | **new 2026-11-12**: 266 panel junction sites and 18 panel loci on `chrN` (v1.3); BOC_5883 locus `chrN:62452837-62454007`; fix in calling code = new release | below, docs/panel_v1.3/README.md |
 
 ---
 
@@ -430,7 +440,20 @@ per fix, each with a test. None changes the calling fingerprint
 
 ## Queued
 
-### 16. panel-v1.3 follow-ups from panel-v1.2 — queued 2026-11-09 (PI)
+### 16. panel-v1.3 follow-ups from panel-v1.2 — done 2026-11-12 (release + bundle; deployment held, decision 21)
+
+**Outcome (2026-11-12).** (a)–(o) are implemented and merged. D1–D5 outcomes:
+
+- D1: public loci are capped at Tier 2.
+- D2: a chrX/chrY segment is public only with ≥ 2 sex-matched individuals, and sex-discordant individuals are excluded.
+- D3: per-stratum depth-noise sigma_max (R10 0.233).
+- D4: cuteSV stays at 100 kb.
+- D5: `nested_min_z` stays at 6.0.
+
+The PI accepted the subset LOFO rise (0.257 → 0.283 on the enriched 113-genome subset). The binding full-panel LOFO gave 0.2075 per genome (≤ 0.248). The R10 stratum is 0.255, above 0.248, but the gate applies to the overall rate.
+
+Release `cxsv-panel-20261111-aa64baf08272` is VERIFIED. Bundle `cxsv-bundle-20261112-1c9c80d0e2c6` was validated, with new image ddfe0617e229 for the clinician report. Deployment was held on two findings (decision 21). Record: [panel_v1.3/README.md](panel_v1.3/README.md). The v1.3 build also found a `link_upstream.py` gap (params-only outputs and cn/ side files hard-linked), fixed in PR #50.
+
 
 From the panel-v1.2 build record ([panel_v1.2/README.md](panel_v1.2/README.md)). (a)–(c)
 change fingerprinted code or the patient report and need a new release.
@@ -477,6 +500,16 @@ Added 2026-11-11 from the nine-genome test run (item 17); details and evidence i
 - **(m) SVIM memory** (`std::bad_alloc` once on athena).
 - **(n) `bundle.json`** to record the git tag and release-manifest sha256.
 - **(o) `docs/PANEL_BUILD.md`** panel-v1.2 measurements (edit blocked 2026-11-08, pending approval).
+
+### 18. Sniffles2 PAR BND mate contig `chrN` — new 2026-11-12
+
+Sniffles2 2.8.1 writes some BNDs near the chrY PAR with ALT mate contig `chrN` while `CHR2=chrY`, and SURVIVOR keeps `chrN`. The panel-v1.0 fix (locus_segments.py) only drops depth intervals on contigs absent from the reference. The artefact still reaches:
+
+- `junctions.tsv` and the merged VCF of 5 of the 9 test genomes;
+- one scored locus id in BOC_5883 (`chrN:62452837-62454007`, BND_cluster, Benign_likely);
+- 266 junction sites and 18 panel CxSV loci of the v1.3 release (v1.2: 266 / 21).
+
+Proposed fix: in `vcf_to_bed.py`, set the mate contig of a BND from `CHR2` when the ALT contig is not in the reference, or drop the record, and test this on a PAR fixture. That changes fingerprinted calling code, so it needs a new release. A scorer-level quarantine of such loci would keep the release.
 
 ### 17. Test run on nine de-identified genomes — done 2026-11-11
 
